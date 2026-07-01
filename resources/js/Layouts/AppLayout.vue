@@ -21,6 +21,7 @@ const nav = [
     { name: 'Контрагенты', route: 'clients.index', icon: '☺' },
     { name: 'Номенклатура', route: 'products.index', icon: '⛃' },
     { name: 'Отделы', route: 'departments.index', icon: '⌂' },
+    { name: 'Настройки', route: 'custom-fields.index', icon: '⚙' },
 ];
 
 const isActive = (name) => {

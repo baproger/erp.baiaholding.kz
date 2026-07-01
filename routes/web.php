@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\CustomFieldController;
+use App\Http\Controllers\CustomFieldValueController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DepartmentController;
@@ -84,6 +86,13 @@ Route::middleware('auth')->group(function () {
     // Notifications
     Route::patch('notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
     Route::patch('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.readAll');
+
+    // Custom fields
+    Route::get('settings/custom-fields', [CustomFieldController::class, 'index'])->name('custom-fields.index');
+    Route::post('settings/custom-fields', [CustomFieldController::class, 'store'])->name('custom-fields.store');
+    Route::put('settings/custom-fields/{customField}', [CustomFieldController::class, 'update'])->name('custom-fields.update');
+    Route::delete('settings/custom-fields/{customField}', [CustomFieldController::class, 'destroy'])->name('custom-fields.destroy');
+    Route::post('custom-field-values', [CustomFieldValueController::class, 'sync'])->name('custom-field-values.sync');
 
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');

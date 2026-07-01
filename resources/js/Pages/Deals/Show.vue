@@ -8,8 +8,9 @@ import TaskPanel from '@/Components/TaskPanel.vue';
 import FinancePanel from '@/Components/FinancePanel.vue';
 import DocumentPanel from '@/Components/DocumentPanel.vue';
 import CommentPanel from '@/Components/CommentPanel.vue';
+import CustomFieldsPanel from '@/Components/CustomFieldsPanel.vue';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, can: Object });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, customFields: Array, can: Object });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
 const tab = ref('info');
@@ -49,6 +50,7 @@ const destroy = () => {
                         <button :class="tab==='finance' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='finance'">Финансы</button>
                         <button :class="tab==='docs' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='docs'">Документы ({{ deal.documents.length }})</button>
                         <button :class="tab==='comments' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='comments'">Комментарии ({{ deal.comments.length }})</button>
+                        <button :class="tab==='custom' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='custom'">Доп. поля</button>
                     </div>
 
                     <div v-if="tab==='info'" class="space-y-3 text-sm">
@@ -66,7 +68,9 @@ const destroy = () => {
 
                     <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
 
-                    <CommentPanel v-else :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
+                    <CommentPanel v-else-if="tab==='comments'" :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
+
+                    <CustomFieldsPanel v-else :fields="customFields" entity-type="deal" :entity-id="deal.id" />
                 </div>
             </div>
 

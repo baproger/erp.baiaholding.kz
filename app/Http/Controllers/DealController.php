@@ -84,6 +84,7 @@ class DealController extends Controller
             'stages' => DealStage::where('is_active', true)->orderBy('order')
                 ->get(['id', 'name', 'color', 'order', 'is_won', 'checklist']),
             'finance' => $finance->summaryFor($deal),
+            'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             'can' => [
                 'update' => request()->user()->can('update', $deal),
                 'delete' => request()->user()->can('delete', $deal),
