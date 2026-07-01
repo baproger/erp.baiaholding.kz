@@ -5,6 +5,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CustomFieldController;
 use App\Http\Controllers\CustomFieldValueController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DepartmentController;
@@ -103,6 +104,12 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/custom-fields/{customField}', [CustomFieldController::class, 'update'])->name('custom-fields.update');
     Route::delete('settings/custom-fields/{customField}', [CustomFieldController::class, 'destroy'])->name('custom-fields.destroy');
     Route::post('custom-field-values', [CustomFieldValueController::class, 'sync'])->name('custom-field-values.sync');
+
+    // Chat
+    Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
+    Route::post('chat', [ChatController::class, 'store'])->name('chat.store');
+    Route::get('chat/{chat}/messages', [ChatController::class, 'messages'])->name('chat.messages');
+    Route::post('chat/{chat}/messages', [ChatController::class, 'sendMessage'])->name('chat.send');
 
     // Analytics
     Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
