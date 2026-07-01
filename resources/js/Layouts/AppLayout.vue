@@ -25,6 +25,7 @@ const nav = [
     { name: 'Контрагенты', route: 'clients.index', icon: '☺' },
     { name: 'Номенклатура', route: 'products.index', icon: '⛃' },
     { name: 'Отделы', route: 'departments.index', icon: '⌂' },
+    { name: 'Сотрудники', route: 'users.index', icon: '☻' },
     { name: 'Настройки', route: 'settings.index', icon: '⚙' },
 ];
 
