@@ -59,11 +59,34 @@ class AnalyticsController extends Controller
         $total = Deal::count();
         $won = Deal::whereIn('deal_stage_id', $wonStageIds)->count();
 
+        // ABC analysis: rank deals by budget, A≤80% / B≤95% / C rest of cumulative value.
+        $ranked = Deal::query()->where('budget', '>', 0)->orderByDesc('budget')
+            ->get(['number', 'name', 'budget']);
+        $totalBudget = (float) $ranked->sum('budget');
+        $cumulative = 0.0;
+        $abc = $ranked->map(function ($d) use (&$cumulative, $totalBudget) {
+            $value = (float) $d->budget;
+            $share = $totalBudget > 0 ? $value / $totalBudget * 100 : 0;
+            $cumulative += $share;
+            $class = $cumulative <= 80 ? 'A' : ($cumulative <= 95 ? 'B' : 'C');
+
+            return [
+                'number' => $d->number, 'name' => $d->name, 'value' => $value,
+                'share' => round($share, 1), 'cumulative' => round($cumulative, 1), 'class' => $class,
+            ];
+        });
+        $abcSummary = collect(['A', 'B', 'C'])->mapWithKeys(fn ($c) => [$c => [
+            'count' => $abc->where('class', $c)->count(),
+            'value' => round($abc->where('class', $c)->sum('value'), 2),
+        ]]);
+
         return Inertia::render('Analytics/Index', [
             'funnel' => $funnel,
             'byStatus' => $byStatus,
             'monthly' => $monthly,
             'topClients' => $topClients,
+            'abc' => $abc->take(20)->values(),
+            'abcSummary' => $abcSummary,
             'conversion' => [
                 'total' => $total,
                 'won' => $won,

@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ funnel: Array, byStatus: Object, monthly: Array, topClients: Array, conversion: Object, totals: Object });
+const props = defineProps({ funnel: Array, byStatus: Object, monthly: Array, topClients: Array, abc: Array, abcSummary: Object, conversion: Object, totals: Object });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 const maxFunnel = computed(() => Math.max(1, ...props.funnel.map((f) => f.count)));
@@ -78,6 +78,32 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                     </div>
                     <div v-if="!topClients.length" class="py-4 text-center text-gray-400">Нет данных</div>
                 </div>
+            </div>
+        </div>
+
+        <div class="mt-6 rounded-lg bg-white p-6 shadow">
+            <h3 class="mb-1 font-semibold text-gray-700">ABC-анализ сделок</h3>
+            <p class="mb-4 text-xs text-gray-400">A — приносят ~80% суммы, B — следующие ~15%, C — остальные ~5%</p>
+            <div class="mb-4 grid grid-cols-3 gap-3">
+                <div v-for="(s, cls) in abcSummary" :key="cls" class="rounded-lg p-3" :class="{ A: 'bg-green-50', B: 'bg-amber-50', C: 'bg-gray-100' }[cls]">
+                    <div class="flex items-center gap-2"><span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white" :class="{ A: 'bg-green-600', B: 'bg-amber-500', C: 'bg-gray-500' }[cls]">{{ cls }}</span><span class="text-sm text-gray-600">{{ s.count }} сделок</span></div>
+                    <div class="mt-1 text-lg font-bold text-gray-800">{{ money(s.value) }}</div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="text-left text-xs uppercase text-gray-400"><tr><th class="py-2 pr-4">Класс</th><th class="py-2 pr-4">Сделка</th><th class="py-2 pr-4">Сумма</th><th class="py-2 pr-4">Доля</th><th class="py-2">Накопл.</th></tr></thead>
+                    <tbody>
+                        <tr v-for="row in abc" :key="row.number" class="border-t">
+                            <td class="py-2 pr-4"><span class="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white" :class="{ A: 'bg-green-600', B: 'bg-amber-500', C: 'bg-gray-500' }[row.class]">{{ row.class }}</span></td>
+                            <td class="py-2 pr-4"><span class="text-gray-400">{{ row.number }}</span> {{ row.name }}</td>
+                            <td class="py-2 pr-4 font-medium">{{ money(row.value) }}</td>
+                            <td class="py-2 pr-4 text-gray-500">{{ row.share }}%</td>
+                            <td class="py-2 text-gray-400">{{ row.cumulative }}%</td>
+                        </tr>
+                        <tr v-if="!abc.length"><td colspan="5" class="py-6 text-center text-gray-400">Нет сделок с суммой</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </AppLayout>
