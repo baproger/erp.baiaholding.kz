@@ -1,0 +1,75 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Project;
+use App\Models\ProjectStage;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class ProjectController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $this->authorize('viewAny', Project::class);
+
+        $view = $request->string('view', 'kanban')->toString();
+
+        $base = Project::query()
+            ->with(['client:id,name', 'responsible:id,name', 'stage:id,name,color,order'])
+            ->when($request->string('search')->toString(), fn ($q, $s) => $q
+                ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"));
+
+        $stages = ProjectStage::where('is_active', true)->orderBy('order')
+            ->get(['id', 'name', 'color', 'order', 'is_completed']);
+
+        $projects = $view === 'list'
+            ? (clone $base)->latest()->paginate(20)->withQueryString()
+            : (clone $base)->latest()->get();
+
+        return Inertia::render('Projects/Index', [
+            'projects' => $projects,
+            'stages' => $stages,
+            'view' => $view,
+            'filters' => $request->only('search'),
+        ]);
+    }
+
+    public function show(Project $project): Response
+    {
+        $this->authorize('view', $project);
+
+        $project->load([
+            'client', 'responsible:id,name', 'department:id,name',
+            'stage', 'deal:id,number,name',
+            'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
+        ]);
+
+        return Inertia::render('Projects/Show', [
+            'project' => $project,
+            'stages' => ProjectStage::where('is_active', true)->orderBy('order')
+                ->get(['id', 'name', 'color', 'order', 'is_completed']),
+        ]);
+    }
+
+    public function updateStage(Request $request, Project $project): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('update', $project);
+
+        $validated = $request->validate([
+            'project_stage_id' => ['required', 'exists:project_stages,id'],
+        ]);
+
+        $stage = ProjectStage::findOrFail($validated['project_stage_id']);
+        $project->project_stage_id = $stage->id;
+
+        if ($stage->is_completed) {
+            $project->status = 'completed';
+            $project->completed_at = now();
+        }
+        $project->save();
+
+        return back()->with('success', 'Этап проекта обновлён.');
+    }
+}
