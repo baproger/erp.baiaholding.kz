@@ -56,6 +56,14 @@ class FinanceService
         $profit = $income - $expense;
         $margin = $income > 0 ? round($profit / $income * 100, 2) : 0.0;
 
-        return compact('income', 'invoiced', 'expense', 'profit', 'margin');
+        // Planned figures use the deal/project budget (won sum) as expected revenue.
+        $budget = (float) ($entity->budget ?? 0);
+        $plannedProfit = $budget - $expense;
+        $plannedMargin = $budget > 0 ? round($plannedProfit / $budget * 100, 2) : 0.0;
+        // Markup = profit relative to costs; expenseRatio = costs share of income.
+        $markup = $expense > 0 ? round($profit / $expense * 100, 2) : 0.0;
+        $expenseRatio = $income > 0 ? round($expense / $income * 100, 2) : 0.0;
+
+        return compact('income', 'invoiced', 'expense', 'profit', 'margin', 'budget', 'plannedProfit', 'plannedMargin', 'markup', 'expenseRatio');
     }
 }

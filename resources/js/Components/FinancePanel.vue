@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -15,6 +15,8 @@ const props = defineProps({
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
+const barIncome = computed(() => { const t = (props.finance.income ?? 0) + (props.finance.expense ?? 0); return t > 0 ? (props.finance.income / t * 100) : 0; });
+const barExpense = computed(() => { const t = (props.finance.income ?? 0) + (props.finance.expense ?? 0); return t > 0 ? (props.finance.expense / t * 100) : 0; });
 
 const showInvoice = ref(false);
 const invoiceForm = useForm({
@@ -41,11 +43,36 @@ const delExpense = (e) => { if (confirm('Удалить расход?')) router.
 <template>
     <div class="space-y-6">
         <!-- Summary -->
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div class="rounded-lg bg-green-50 p-3"><div class="text-xs text-green-700">Доход</div><div class="text-lg font-bold text-green-700">{{ money(finance.income) }}</div></div>
-            <div class="rounded-lg bg-red-50 p-3"><div class="text-xs text-red-700">Расходы</div><div class="text-lg font-bold text-red-700">{{ money(finance.expense) }}</div></div>
-            <div class="rounded-lg bg-indigo-50 p-3"><div class="text-xs text-indigo-700">Прибыль</div><div class="text-lg font-bold text-indigo-700">{{ money(finance.profit) }}</div></div>
-            <div class="rounded-lg bg-gray-100 p-3"><div class="text-xs text-gray-600">Маржа</div><div class="text-lg font-bold text-gray-800">{{ finance.margin }}%</div></div>
+        <div class="space-y-4">
+            <div class="grid grid-cols-3 gap-3">
+                <div class="rounded-lg bg-indigo-50 p-3"><div class="text-xs text-indigo-700">Сумма сделки</div><div class="text-lg font-bold text-indigo-700">{{ money(finance.budget) }}</div></div>
+                <div class="rounded-lg bg-green-50 p-3"><div class="text-xs text-green-700">Доход (оплачено)</div><div class="text-lg font-bold text-green-700">{{ money(finance.income) }}</div></div>
+                <div class="rounded-lg bg-red-50 p-3"><div class="text-xs text-red-700">Расходы</div><div class="text-lg font-bold text-red-700">{{ money(finance.expense) }}</div></div>
+            </div>
+
+            <!-- income vs expense bar -->
+            <div>
+                <div class="mb-1 flex justify-between text-xs text-gray-500"><span>Доход vs Расходы</span><span>наценка {{ finance.markup }}%</span></div>
+                <div class="flex h-3 overflow-hidden rounded bg-gray-100">
+                    <div class="bg-green-500" :style="{ width: barIncome + '%' }"></div>
+                    <div class="bg-red-400" :style="{ width: barExpense + '%' }"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-lg border p-3">
+                    <div class="text-xs font-semibold uppercase text-gray-400">Факт (по оплатам)</div>
+                    <div class="mt-1 flex justify-between text-sm"><span class="text-gray-500">Прибыль</span><span class="font-bold" :class="finance.profit >= 0 ? 'text-green-600' : 'text-red-600'">{{ money(finance.profit) }}</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-gray-500">Маржа</span><span class="font-bold">{{ finance.margin }}%</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-gray-500">Доля расходов</span><span>{{ finance.expenseRatio }}%</span></div>
+                </div>
+                <div class="rounded-lg border p-3">
+                    <div class="text-xs font-semibold uppercase text-gray-400">План (по сумме сделки)</div>
+                    <div class="mt-1 flex justify-between text-sm"><span class="text-gray-500">Выгода</span><span class="font-bold" :class="finance.plannedProfit >= 0 ? 'text-green-600' : 'text-red-600'">{{ money(finance.plannedProfit) }}</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-gray-500">Маржа</span><span class="font-bold">{{ finance.plannedMargin }}%</span></div>
+                    <div v-if="finance.plannedProfit < 0" class="mt-1 text-xs text-red-600">⚠ Расходы превысили сумму сделки</div>
+                </div>
+            </div>
         </div>
 
         <!-- Invoices -->
