@@ -41,7 +41,11 @@ class TaskController extends Controller
         $data['priority'] ??= 'medium';
         $data['status'] ??= 'new';
 
-        Task::create($data);
+        $task = Task::create($data);
+
+        if ($task->assignee_id && $task->assignee_id !== $request->user()->id) {
+            $task->assignee?->notify(new \App\Notifications\TaskAssigned($task));
+        }
 
         return back()->with('success', 'Задача создана.');
     }

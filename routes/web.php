@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CommentController;
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DepartmentController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -78,6 +80,13 @@ Route::middleware('auth')->group(function () {
     Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
     Route::get('documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
     Route::delete('documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+
+    // Notifications
+    Route::patch('notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+    Route::patch('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.readAll');
+
+    // Audit log
+    Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
 
     // Comments
     Route::post('comments', [CommentController::class, 'store'])->name('comments.store');

@@ -47,6 +47,10 @@ class StageTransitionService
 
             $deal->save();
 
+            if ($deal->responsible_user_id) {
+                $deal->responsible?->notify(new \App\Notifications\DealStageChanged($deal, $target->name));
+            }
+
             // Auto-create the execution project when the deal is won.
             if ($target->is_won && config('baia.auto_create_project', true)) {
                 $this->projects->createFromDeal($deal);
