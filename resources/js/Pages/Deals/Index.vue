@@ -18,47 +18,34 @@ const props = defineProps({
     view: String,
     filters: Object,
     users: Array,
-    clients: Array,
-    departments: Array,
     can: Object,
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
-
-// Kanban grouping
 const list = computed(() => Array.isArray(props.deals) ? props.deals : props.deals.data);
-const byStage = (stageId) => list.value.filter((d) => d.deal_stage_id === stageId);
-const stageTotal = (stageId) => byStage(stageId).reduce((s, d) => s + Number(d.budget), 0);
+const byStage = (id) => list.value.filter((d) => d.deal_stage_id === id);
+const stageTotal = (id) => byStage(id).reduce((s, d) => s + Number(d.budget), 0);
+const wonStageId = computed(() => props.stages.find((s) => s.is_won)?.id);
 
 // Drag & drop
 const draggingId = ref(null);
-const onDragStart = (deal) => (draggingId.value = deal.id);
 const onDrop = (stage) => {
-    const id = draggingId.value;
-    draggingId.value = null;
+    const id = draggingId.value; draggingId.value = null;
     if (!id) return;
     const deal = list.value.find((d) => d.id === id);
     if (!deal || deal.deal_stage_id === stage.id) return;
-    router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, {
-        preserveScroll: true,
-        preserveState: false,
-    });
+    router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
 };
 
-const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
 const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { preserveScroll: true, preserveState: false });
+const toWorkshop = (deal) => router.post(route('deals.toWorkshop', deal.id), {}, { preserveScroll: true, preserveState: false });
+const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
 
 // Create modal
 const showModal = ref(false);
-const form = useForm({
-    name: '', client_id: '', responsible_user_id: '', department_id: '',
-    budget: 0, deadline: '', description: '',
-});
+const form = useForm({ name: '', client_name: '', responsible_user_id: '', budget: 0, deadline: '', description: '' });
 const openCreate = () => { form.reset(); showModal.value = true; };
-const submit = () => form.post(route('deals.store'), {
-    preserveScroll: true,
-    onSuccess: () => (showModal.value = false),
-});
+const submit = () => form.post(route('deals.store'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
 </script>
 
 <template>
@@ -68,25 +55,18 @@ const submit = () => form.post(route('deals.store'), {
 
         <div class="mb-4 flex items-center justify-between gap-3">
             <div class="inline-flex rounded-md bg-white shadow-sm ring-1 ring-gray-200">
-                <button
-                    :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-600'"
-                    class="rounded-l-md px-4 py-1.5 text-sm" @click="switchView('kanban')">Канбан</button>
-                <button
-                    :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600'"
-                    class="rounded-r-md px-4 py-1.5 text-sm" @click="switchView('list')">Список</button>
+                <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-l-md px-4 py-1.5 text-sm" @click="switchView('kanban')">Канбан</button>
+                <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-r-md px-4 py-1.5 text-sm" @click="switchView('list')">Список</button>
             </div>
-            <PrimaryButton v-if="can.create" @click="openCreate">+ Новая сделка</PrimaryButton>
+            <button class="rounded-md bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700" @click="openCreate">
+                + Новая сделка
+            </button>
         </div>
 
         <!-- KANBAN -->
         <div v-if="view === 'kanban'" class="flex gap-4 overflow-x-auto pb-4">
-            <div
-                v-for="stage in stages"
-                :key="stage.id"
-                class="flex w-72 flex-shrink-0 flex-col rounded-lg bg-gray-200/60"
-                @dragover.prevent
-                @drop="onDrop(stage)"
-            >
+            <div v-for="stage in stages" :key="stage.id" class="flex w-72 flex-shrink-0 flex-col rounded-lg bg-gray-200/60"
+                @dragover.prevent @drop="onDrop(stage)">
                 <div class="flex items-center justify-between px-3 py-2">
                     <div class="flex items-center gap-2">
                         <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: stage.color }"></span>
@@ -96,24 +76,23 @@ const submit = () => form.post(route('deals.store'), {
                     <span class="text-xs font-medium text-gray-500">{{ money(stageTotal(stage.id)) }}</span>
                 </div>
                 <div class="flex-1 space-y-2 px-2 pb-2">
-                    <Link
-                        v-for="deal in byStage(stage.id)"
-                        :key="deal.id"
-                        :href="route('deals.show', deal.id)"
-                        draggable="true"
-                        @dragstart="onDragStart(deal)"
-                        class="block cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300"
-                    >
-                        <div class="text-xs text-gray-400">{{ deal.number }}</div>
-                        <div class="font-medium text-gray-800">{{ deal.name }}</div>
-                        <div class="mt-1 text-sm font-semibold text-indigo-600">{{ money(deal.budget) }}</div>
-                        <div class="mt-1 flex items-center justify-between text-xs text-gray-400">
-                            <span>{{ deal.client?.name ?? '—' }}</span>
-                            <span>{{ deal.responsible?.name ?? '' }}</span>
-                        </div>
-                        <div v-if="deal.deadline" class="mt-1 text-xs" :class="deadlineClass(deal.deadline, deal.status==='closed')">⏰ {{ deal.deadline }}</div>
-                        <button @click.prevent.stop="advance(deal)" class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
-                    </Link>
+                    <div v-for="deal in byStage(stage.id)" :key="deal.id" draggable="true" @dragstart="draggingId = deal.id"
+                        class="cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300">
+                        <Link :href="route('deals.show', deal.id)" class="block">
+                            <div class="text-xs text-gray-400">{{ deal.number }}</div>
+                            <div class="font-medium text-gray-800">{{ deal.name }}</div>
+                            <div class="mt-1 text-sm font-semibold text-indigo-600">{{ money(deal.budget) }}</div>
+                            <div class="mt-1 flex items-center justify-between text-xs text-gray-400">
+                                <span>{{ deal.client_name || deal.client?.name || '—' }}</span>
+                                <span>{{ deal.responsible?.name ?? '' }}</span>
+                            </div>
+                            <div v-if="deal.deadline" class="mt-1 text-xs" :class="deadlineClass(deal.deadline, deal.status==='closed')">⏰ {{ deal.deadline }}</div>
+                        </Link>
+                        <button v-if="deal.deal_stage_id === wonStageId" @click="toWorkshop(deal)"
+                            class="mt-2 w-full rounded bg-emerald-600 py-1 text-xs font-semibold text-white hover:bg-emerald-700">📦 Отправить в цех</button>
+                        <button v-else @click="advance(deal)"
+                            class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
+                    </div>
                     <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-gray-400">Пусто</div>
                 </div>
             </div>
@@ -124,23 +103,18 @@ const submit = () => form.post(route('deals.store'), {
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
                     <tr>
-                        <th class="px-4 py-3">Номер</th>
-                        <th class="px-4 py-3">Название</th>
-                        <th class="px-4 py-3">Клиент</th>
-                        <th class="px-4 py-3">Этап</th>
-                        <th class="px-4 py-3">Бюджет</th>
-                        <th class="px-4 py-3">Статус</th>
-                        <th class="px-4 py-3">Ответственный</th>
+                        <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Клиент</th>
+                        <th class="px-4 py-3">Этап</th><th class="px-4 py-3">Бюджет</th><th class="px-4 py-3">Срок</th><th class="px-4 py-3">Ответственный</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer hover:bg-gray-50" @click="router.get(route('deals.show', deal.id))">
                         <td class="px-4 py-3 text-gray-400">{{ deal.number }}</td>
                         <td class="px-4 py-3 font-medium text-gray-900">{{ deal.name }}</td>
-                        <td class="px-4 py-3 text-gray-500">{{ deal.client?.name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-gray-500">{{ deal.client_name || deal.client?.name || '—' }}</td>
                         <td class="px-4 py-3"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
                         <td class="px-4 py-3">{{ money(deal.budget) }}</td>
-                        <td class="px-4 py-3"><StatusBadge :status="deal.status" /></td>
+                        <td class="px-4 py-3" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ deal.deadline ?? '—' }}</td>
                         <td class="px-4 py-3 text-gray-500">{{ deal.responsible?.name ?? '—' }}</td>
                     </tr>
                 </tbody>
@@ -154,16 +128,13 @@ const submit = () => form.post(route('deals.store'), {
                 <h2 class="mb-4 text-lg font-semibold">Новая сделка</h2>
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">
-                        <InputLabel value="Название" />
+                        <InputLabel value="Название сделки" />
                         <TextInput v-model="form.name" class="mt-1 w-full" />
                         <InputError :message="form.errors.name" class="mt-1" />
                     </div>
                     <div>
                         <InputLabel value="Клиент" />
-                        <select v-model="form.client_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
-                            <option value="">—</option>
-                            <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                        </select>
+                        <TextInput v-model="form.client_name" class="mt-1 w-full" placeholder="Имя клиента / компании" />
                     </div>
                     <div>
                         <InputLabel value="Ответственный" />
@@ -173,14 +144,7 @@ const submit = () => form.post(route('deals.store'), {
                         </select>
                     </div>
                     <div>
-                        <InputLabel value="Отдел" />
-                        <select v-model="form.department_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
-                            <option value="">—</option>
-                            <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
-                        </select>
-                    </div>
-                    <div>
-                        <InputLabel value="Бюджет" />
+                        <InputLabel value="Общая сумма (бюджет)" />
                         <TextInput v-model="form.budget" type="number" step="0.01" class="mt-1 w-full" />
                         <InputError :message="form.errors.budget" class="mt-1" />
                     </div>

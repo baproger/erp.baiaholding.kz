@@ -22,7 +22,6 @@ const nav = [
     { name: 'Чат', route: 'chat.index', icon: '✉' },
     { name: 'Финансы', route: 'finance.index', icon: '₸' },
     { name: 'Аудит', route: 'audit.index', icon: '❑' },
-    { name: 'Контрагенты', route: 'clients.index', icon: '☺' },
     { name: 'Номенклатура', route: 'products.index', icon: '⛃' },
     { name: 'Отделы', route: 'departments.index', icon: '⌂' },
     { name: 'Сотрудники', route: 'users.index', icon: '☻' },

@@ -26,6 +26,7 @@ class DealController extends Controller
 
         $base = Deal::query()
             ->with(['client:id,name', 'responsible:id,name', 'stage:id,name,color,order'])
+            ->where('status', '!=', 'closed')
             ->when($request->string('search')->toString(), fn ($q, $s) => $q
                 ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"))
             ->when($request->string('responsible')->toString(), fn ($q, $r) => $q->where('responsible_user_id', $r));

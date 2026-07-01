@@ -50,7 +50,7 @@ class SettingsTest extends TestCase
 
         $this->actingAs($u)->patch(route('deals.stage', $deal), ['deal_stage_id' => $won->id])->assertRedirect();
 
-        $this->assertEquals('closed', $deal->fresh()->status);
+        $this->assertEquals('active', $deal->fresh()->status);
         $this->assertEquals(0, Project::count()); // no auto project
     }
 }

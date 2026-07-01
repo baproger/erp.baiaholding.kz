@@ -24,8 +24,8 @@ class Task extends Model
 
     protected $casts = [
         'checklist' => 'array',
-        'start_date' => 'date',
-        'due_date' => 'date',
+        'start_date' => 'datetime',
+        'due_date' => 'datetime',
         'completed_at' => 'datetime',
     ];
 

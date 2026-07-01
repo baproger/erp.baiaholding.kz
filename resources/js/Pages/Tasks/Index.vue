@@ -1,7 +1,14 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { Head, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import Modal from '@/Components/Modal.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/InputError.vue';
+import { deadlineClass } from '@/utils/deadline';
 
 const props = defineProps({ tasks: Array, users: Array });
 
@@ -21,13 +28,25 @@ const onDrop = (col) => {
     if (!t || t.status === col.key) return;
     router.patch(route('tasks.status', id), { status: col.key }, { preserveScroll: true, preserveState: false });
 };
-const label = (t) => t.taskable_type === 'deal' ? 'Сделка' : t.taskable_type === 'project' ? 'Проект' : 'Личная';
+const label = (t) => t.taskable_type === 'deal' ? 'Сделка' : t.taskable_type === 'project' ? 'Цех' : 'Личная';
+const fmt = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+
+// Create task
+const show = ref(false);
+const form = useForm({ title: '', description: '', assignee_id: '', priority: 'medium', status: 'new', due_date: '' });
+const openCreate = () => { form.reset(); show.value = true; };
+const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onSuccess: () => (show.value = false) });
 </script>
 
 <template>
-    <Head title="Мои задачи" />
+    <Head title="Задачи" />
     <AppLayout>
-        <template #header>Мои задачи</template>
+        <template #header>Задачи</template>
+
+        <div class="mb-4 flex justify-end">
+            <PrimaryButton @click="openCreate">+ Новая задача</PrimaryButton>
+        </div>
+
         <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div v-for="col in columns" :key="col.key" class="rounded-lg bg-gray-200/60 p-2" @dragover.prevent @drop="onDrop(col)">
                 <div class="mb-2 flex items-center gap-2 px-2 py-1">
@@ -39,11 +58,54 @@ const label = (t) => t.taskable_type === 'deal' ? 'Сделка' : t.taskable_ty
                     <div v-for="t in byStatus(col.key)" :key="t.id" draggable="true" @dragstart="dragId = t.id"
                         class="cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100">
                         <div class="font-medium text-gray-800">{{ t.title }}</div>
-                        <div class="mt-1 text-xs text-gray-400">{{ label(t) }}<span v-if="t.due_date"> · {{ t.due_date }}</span></div>
+                        <div class="mt-1 flex items-center justify-between text-xs text-gray-400">
+                            <span>{{ label(t) }}</span>
+                            <span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')">⏰ {{ fmt(t.due_date) }}</span>
+                        </div>
                     </div>
                     <div v-if="!byStatus(col.key).length" class="py-4 text-center text-xs text-gray-400">Пусто</div>
                 </div>
             </div>
         </div>
+
+        <Modal :show="show" @close="show = false">
+            <div class="p-6">
+                <h2 class="mb-4 text-lg font-semibold">Новая задача</h2>
+                <div class="space-y-4">
+                    <div>
+                        <InputLabel value="Название" />
+                        <TextInput v-model="form.title" class="mt-1 w-full" />
+                        <InputError :message="form.errors.title" class="mt-1" />
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <InputLabel value="Исполнитель" />
+                            <select v-model="form.assignee_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
+                                <option value="">— я —</option>
+                                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <InputLabel value="Приоритет" />
+                            <select v-model="form.priority" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
+                                <option value="low">Низкий</option><option value="medium">Средний</option><option value="high">Высокий</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <InputLabel value="Срок (дата и время)" />
+                        <TextInput v-model="form.due_date" type="datetime-local" class="mt-1 w-full" />
+                    </div>
+                    <div>
+                        <InputLabel value="Описание" />
+                        <textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="show = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="form.processing" @click="submit">Создать</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
     </AppLayout>
 </template>

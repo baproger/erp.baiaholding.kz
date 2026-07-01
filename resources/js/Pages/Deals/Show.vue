@@ -76,7 +76,7 @@ const destroy = () => {
                     </div>
 
                     <div v-if="tab==='info'" class="space-y-3 text-sm">
-                        <div class="flex justify-between border-b py-2"><span class="text-gray-500">Клиент</span><span class="font-medium">{{ deal.client?.name ?? '—' }}</span></div>
+                        <div class="flex justify-between border-b py-2"><span class="text-gray-500">Клиент</span><span class="font-medium">{{ deal.client_name || deal.client?.name || '—' }}</span></div>
                         <div class="flex justify-between border-b py-2"><span class="text-gray-500">Ответственный</span><span class="font-medium">{{ deal.responsible?.name ?? '—' }}</span></div>
                         <div class="flex justify-between border-b py-2"><span class="text-gray-500">Отдел</span><span class="font-medium">{{ deal.department?.name ?? '—' }}</span></div>
                         <div class="flex justify-between border-b py-2">

@@ -19,6 +19,7 @@ class DealRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'client_name' => ['nullable', 'string', 'max:255'],
             'client_id' => ['nullable', 'exists:clients,id'],
             'responsible_user_id' => ['nullable', 'exists:users,id'],
             'department_id' => ['nullable', 'exists:departments,id'],

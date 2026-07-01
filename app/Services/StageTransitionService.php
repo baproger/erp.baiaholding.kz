@@ -40,11 +40,6 @@ class StageTransitionService
 
             $deal->deal_stage_id = $target->id;
 
-            if ($target->is_won) {
-                $deal->status = 'closed';
-                $deal->closed_at = now();
-            }
-
             $deal->save();
 
             if ($deal->responsible_user_id) {

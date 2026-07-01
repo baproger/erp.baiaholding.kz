@@ -55,7 +55,7 @@ const remove = (t) => { if (confirm('Удалить задачу?')) router.dele
                     <option value="low">Низкий</option><option value="medium">Средний</option><option value="high">Высокий</option>
                 </select>
             </div>
-            <TextInput v-model="form.due_date" type="date" class="mb-2 w-full" />
+            <TextInput v-model="form.due_date" type="datetime-local" class="mb-2 w-full" />
             <div class="flex gap-2">
                 <PrimaryButton :disabled="form.processing || !form.title" @click="add">Добавить</PrimaryButton>
                 <button class="text-sm text-gray-500" @click="adding = false">Отмена</button>

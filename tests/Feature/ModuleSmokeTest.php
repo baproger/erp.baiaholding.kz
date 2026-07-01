@@ -70,8 +70,7 @@ class ModuleSmokeTest extends TestCase
             ->assertRedirect();
 
         $deal->refresh();
-        $this->assertEquals('closed', $deal->status);
-        $this->assertNotNull($deal->closed_at);
+        $this->assertEquals('active', $deal->status);
         $this->assertEquals(0, Project::where('deal_id', $deal->id)->count());
     }
 
