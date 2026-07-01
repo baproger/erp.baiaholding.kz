@@ -15,6 +15,7 @@ const sidebarOpen = ref(true);
 
 const nav = [
     { name: 'Дашборд', route: 'dashboard', icon: '▧' },
+    { name: 'Аналитика', route: 'analytics.index', icon: '◊' },
     { name: 'Сделки', route: 'deals.index', icon: '◈' },
     { name: 'Проекты', route: 'projects.index', icon: '◇' },
     { name: 'Задачи', route: 'tasks.index', icon: '✓' },

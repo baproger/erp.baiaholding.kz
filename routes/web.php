@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CommentController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CustomFieldController;
 use App\Http\Controllers\CustomFieldValueController;
@@ -102,6 +103,9 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/custom-fields/{customField}', [CustomFieldController::class, 'update'])->name('custom-fields.update');
     Route::delete('settings/custom-fields/{customField}', [CustomFieldController::class, 'destroy'])->name('custom-fields.destroy');
     Route::post('custom-field-values', [CustomFieldValueController::class, 'sync'])->name('custom-field-values.sync');
+
+    // Analytics
+    Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
 
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
