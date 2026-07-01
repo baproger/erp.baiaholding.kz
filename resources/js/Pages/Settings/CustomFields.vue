@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -37,6 +37,10 @@ const needsOptions = () => form.type === 'select' || form.type === 'radio';
     <Head title="Доп. поля" />
     <AppLayout>
         <template #header>Настройки · Дополнительные поля</template>
+        <div class="mb-4 flex gap-2 border-b">
+            <Link :href="route('settings.index')" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">Общие</Link>
+            <Link :href="route('custom-fields.index')" class="border-b-2 border-indigo-600 px-3 py-2 text-sm font-medium text-indigo-600">Доп. поля</Link>
+        </div>
         <div class="mb-4 flex justify-end"><PrimaryButton @click="openCreate">+ Новое поле</PrimaryButton></div>
 
         <div class="overflow-hidden rounded-lg bg-white shadow">

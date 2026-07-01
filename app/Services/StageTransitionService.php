@@ -52,7 +52,7 @@ class StageTransitionService
             }
 
             // Auto-create the execution project when the deal is won.
-            if ($target->is_won && config('baia.auto_create_project', true)) {
+            if ($target->is_won && \App\Models\Setting::get('auto_create_project', true)) {
                 $this->projects->createFromDeal($deal);
             }
 
