@@ -24,8 +24,8 @@ class ProjectController extends Controller
             ->when($request->string('search')->toString(), fn ($q, $s) => $q
                 ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"));
 
-        $stages = ProjectStage::where('is_active', true)->orderBy('order')
-            ->get(['id', 'name', 'color', 'order', 'is_completed']);
+        $stages = ProjectStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]);
 
         $projects = $view === 'list'
             ? (clone $base)->latest()->paginate(20)->withQueryString()
@@ -57,8 +57,8 @@ class ProjectController extends Controller
         return Inertia::render('Projects/Show', [
             'project' => $project,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'stages' => ProjectStage::where('is_active', true)->orderBy('order')
-                ->get(['id', 'name', 'color', 'order', 'is_completed']),
+            'stages' => ProjectStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+                ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
             'finance' => $finance->summaryFor($project),
         ]);
     }

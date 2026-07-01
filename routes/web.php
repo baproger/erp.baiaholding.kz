@@ -9,6 +9,7 @@ use App\Http\Controllers\DealController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\NotificationController;
@@ -87,6 +88,9 @@ Route::middleware('auth')->group(function () {
     // Notifications
     Route::patch('notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
     Route::patch('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.readAll');
+
+    // Locale
+    Route::patch('locale', [LocaleController::class, 'update'])->name('locale.update');
 
     // Settings
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');

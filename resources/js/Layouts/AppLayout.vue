@@ -8,6 +8,8 @@ const page = usePage();
 const user = computed(() => page.props.auth.user);
 const flash = computed(() => page.props.flash || {});
 const notifications = computed(() => page.props.notifications || { unread: 0, items: [] });
+const locale = computed(() => page.props.locale || 'ru');
+const setLocale = (l) => router.patch(route('locale.update'), { locale: l }, { preserveScroll: true });
 
 const sidebarOpen = ref(true);
 
@@ -61,6 +63,11 @@ const fmt = (t) => new Date(t).toLocaleString('ru-RU');
                 <header class="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white px-6 shadow-sm">
                     <h1 class="text-lg font-semibold text-gray-800"><slot name="header">Панель управления</slot></h1>
                     <div class="flex items-center gap-3">
+                        <div class="flex items-center rounded-md bg-gray-100 p-0.5 text-xs">
+                            <button v-for="l in ['ru','kk']" :key="l" @click="setLocale(l)"
+                                :class="locale === l ? 'bg-white shadow text-indigo-600' : 'text-gray-500'"
+                                class="rounded px-2 py-1 font-medium uppercase">{{ l }}</button>
+                        </div>
                         <!-- Notifications bell -->
                         <Dropdown align="right" width="60">
                             <template #trigger>

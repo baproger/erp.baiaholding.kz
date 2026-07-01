@@ -30,8 +30,8 @@ class DealController extends Controller
                 ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"))
             ->when($request->string('responsible')->toString(), fn ($q, $r) => $q->where('responsible_user_id', $r));
 
-        $stages = DealStage::where('is_active', true)->orderBy('order')
-            ->get(['id', 'name', 'color', 'order', 'is_won']);
+        $stages = DealStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won]);
 
         $deals = $view === 'list'
             ? (clone $base)->latest()->paginate(20)->withQueryString()
@@ -81,8 +81,8 @@ class DealController extends Controller
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'stages' => DealStage::where('is_active', true)->orderBy('order')
-                ->get(['id', 'name', 'color', 'order', 'is_won', 'checklist']),
+            'stages' => DealStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+                ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),
             'finance' => $finance->summaryFor($deal),
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             'can' => [
