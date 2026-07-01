@@ -26,6 +26,7 @@ class CustomFieldService
             'name' => $f->name,
             'type' => $f->type,
             'required' => $f->required,
+            'is_visible' => $f->is_visible,
             'options' => $f->options ?? [],
             'value' => $values[$f->id] ?? null,
         ])->all();

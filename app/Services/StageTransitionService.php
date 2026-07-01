@@ -51,11 +51,6 @@ class StageTransitionService
                 $deal->responsible?->notify(new \App\Notifications\DealStageChanged($deal, $target->name));
             }
 
-            // Auto-create the execution project when the deal is won.
-            if ($target->is_won && \App\Models\Setting::get('auto_create_project', true)) {
-                $this->projects->createFromDeal($deal);
-            }
-
             return $deal->fresh(['stage', 'project']);
         });
     }

@@ -14,12 +14,12 @@ const typeLabels = { text: 'Текст', number: 'Число', date: 'Дата',
 const show = ref(false);
 const editing = ref(null);
 const optionsText = ref('');
-const form = useForm({ entity_type: 'deal', name: '', type: 'text', required: false, unique: false, options: [], order: 0 });
+const form = useForm({ entity_type: 'deal', name: '', type: 'text', required: false, unique: false, is_visible: true, options: [], order: 0 });
 
 const openCreate = () => { editing.value = null; form.reset(); optionsText.value = ''; show.value = true; };
 const openEdit = (f) => {
     editing.value = f;
-    Object.assign(form, { entity_type: f.entity_type, name: f.name, type: f.type, required: f.required, unique: f.unique, options: f.options ?? [], order: f.order });
+    Object.assign(form, { entity_type: f.entity_type, name: f.name, type: f.type, required: f.required, unique: f.unique, is_visible: f.is_visible, options: f.options ?? [], order: f.order });
     optionsText.value = (f.options ?? []).join(', ');
     show.value = true;
 };
@@ -39,6 +39,7 @@ const needsOptions = () => form.type === 'select' || form.type === 'radio';
         <template #header>Настройки · Дополнительные поля</template>
         <div class="mb-4 flex gap-2 border-b">
             <Link :href="route('settings.index')" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">Общие</Link>
+            <Link :href="route('stages.index')" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">Этапы</Link>
             <Link :href="route('custom-fields.index')" class="border-b-2 border-indigo-600 px-3 py-2 text-sm font-medium text-indigo-600">Доп. поля</Link>
         </div>
         <div class="mb-4 flex justify-end"><PrimaryButton @click="openCreate">+ Новое поле</PrimaryButton></div>
@@ -89,6 +90,9 @@ const needsOptions = () => form.type === 'select' || form.type === 'radio';
                     </div>
                     <label class="flex items-center gap-2 text-sm">
                         <input type="checkbox" v-model="form.required" class="rounded border-gray-300 text-indigo-600" /> Обязательное
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" v-model="form.is_visible" class="rounded border-gray-300 text-indigo-600" /> Показывать в карточке всегда
                     </label>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">

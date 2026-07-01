@@ -18,6 +18,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StageController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserController;
@@ -63,10 +64,13 @@ Route::middleware('auth')->group(function () {
     // Deals
     Route::resource('deals', DealController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage');
+    Route::patch('deals/{deal}/advance', [DealController::class, 'advance'])->name('deals.advance');
+    Route::post('deals/{deal}/to-workshop', [DealController::class, 'sendToWorkshop'])->name('deals.toWorkshop');
 
     // Projects
     Route::resource('projects', ProjectController::class)->only(['index', 'show']);
     Route::patch('projects/{project}/stage', [ProjectController::class, 'updateStage'])->name('projects.stage');
+    Route::patch('projects/{project}/advance', [ProjectController::class, 'advance'])->name('projects.advance');
 
     // Tasks
     Route::get('tasks', [TaskController::class, 'index'])->name('tasks.index');
@@ -101,6 +105,10 @@ Route::middleware('auth')->group(function () {
     // Settings
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::get('settings/stages', [StageController::class, 'index'])->name('stages.index');
+    Route::post('settings/stages', [StageController::class, 'store'])->name('stages.store');
+    Route::put('settings/stages/{kind}/{id}', [StageController::class, 'update'])->name('stages.update');
+    Route::delete('settings/stages/{kind}/{id}', [StageController::class, 'destroy'])->name('stages.destroy');
 
     // Custom fields
     Route::get('settings/custom-fields', [CustomFieldController::class, 'index'])->name('custom-fields.index');

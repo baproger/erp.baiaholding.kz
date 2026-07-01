@@ -51,8 +51,10 @@ class ModuleSmokeTest extends TestCase
         $this->assertStringStartsWith('BAIA-'.now()->year.'-', $deal->number);
     }
 
-    public function test_moving_deal_to_won_stage_creates_project(): void
+    public function test_moving_deal_to_won_stage_closes_it(): void
     {
+        // Project creation is now explicit via "Отправить в цех" (see WorkflowTest);
+        // reaching a won stage just closes the deal.
         $user = $this->admin();
         $wonStage = DealStage::where('is_won', true)->first();
         $deal = Deal::create([
@@ -70,7 +72,7 @@ class ModuleSmokeTest extends TestCase
         $deal->refresh();
         $this->assertEquals('closed', $deal->status);
         $this->assertNotNull($deal->closed_at);
-        $this->assertEquals(1, Project::where('deal_id', $deal->id)->count());
+        $this->assertEquals(0, Project::where('deal_id', $deal->id)->count());
     }
 
     public function test_deal_show_renders(): void

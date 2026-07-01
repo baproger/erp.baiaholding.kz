@@ -118,4 +118,26 @@ class DealController extends Controller
 
         return back()->with('success', 'Сделка удалена.');
     }
+
+    public function advance(Request $request, Deal $deal, StageTransitionService $transitions): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        $next = DealStage::where('is_active', true)->where('order', '>', optional($deal->stage)->order ?? 0)->orderBy('order')->first();
+        if ($next) {
+            $transitions->moveToStage($deal, $next);
+            return back()->with('success', 'Сделка переведена на этап «'.$next->name.'».');
+        }
+        return back()->with('error', 'Это последний этап.');
+    }
+
+    public function sendToWorkshop(Request $request, Deal $deal, \App\Services\ProjectService $projects): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        if ($deal->project) {
+            return back()->with('error', 'Заказ уже отправлен в цех.');
+        }
+        $project = $projects->createFromDeal($deal);
+        $deal->update(['status' => 'closed', 'closed_at' => now()]);
+        return back()->with('success', 'Отправлено в цех: '.$project->number.'.');
+    }
 }

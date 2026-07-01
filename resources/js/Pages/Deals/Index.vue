@@ -10,6 +10,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { deadlineClass } from '@/utils/deadline';
 
 const props = defineProps({
     deals: [Array, Object],
@@ -45,6 +46,7 @@ const onDrop = (stage) => {
 };
 
 const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
+const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { preserveScroll: true, preserveState: false });
 
 // Create modal
 const showModal = ref(false);
@@ -109,6 +111,8 @@ const submit = () => form.post(route('deals.store'), {
                             <span>{{ deal.client?.name ?? '—' }}</span>
                             <span>{{ deal.responsible?.name ?? '' }}</span>
                         </div>
+                        <div v-if="deal.deadline" class="mt-1 text-xs" :class="deadlineClass(deal.deadline, deal.status==='closed')">⏰ {{ deal.deadline }}</div>
+                        <button @click.prevent.stop="advance(deal)" class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>
                     <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-gray-400">Пусто</div>
                 </div>

@@ -22,6 +22,7 @@ const save = () => form.put(route('settings.update'), { preserveScroll: true });
 
         <div class="mb-4 flex gap-2 border-b">
             <Link :href="route('settings.index')" class="border-b-2 border-indigo-600 px-3 py-2 text-sm font-medium text-indigo-600">Общие</Link>
+            <Link :href="route('stages.index')" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">Этапы</Link>
             <Link :href="route('custom-fields.index')" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">Доп. поля</Link>
         </div>
 

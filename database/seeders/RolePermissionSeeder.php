@@ -35,6 +35,7 @@ class RolePermissionSeeder extends Seeder
 
         $employee = Role::findOrCreate('employee', 'web');
         $employee->syncPermissions([
+            'deal.create', 'deal.update',
             'deal.viewAny', 'deal.view',
             'project.viewAny', 'project.view',
             'task.viewAny', 'task.view', 'task.update',

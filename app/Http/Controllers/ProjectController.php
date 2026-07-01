@@ -79,4 +79,20 @@ class ProjectController extends Controller
 
         return back()->with('success', 'Этап проекта обновлён.');
     }
+
+    public function advance(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorize('update', $project);
+        $next = ProjectStage::where('is_active', true)->where('order', '>', optional($project->stage)->order ?? 0)->orderBy('order')->first();
+        if (! $next) {
+            return back()->with('error', 'Это последний этап.');
+        }
+        $project->project_stage_id = $next->id;
+        if ($next->is_completed) {
+            $project->status = 'completed';
+            $project->completed_at = now();
+        }
+        $project->save();
+        return back()->with('success', 'Цех: этап «'.$next->name.'».');
+    }
 }

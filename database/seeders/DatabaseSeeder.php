@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolePermissionSeeder::class,
             StageSeeder::class,
+            DealCustomFieldSeeder::class,
         ]);
 
         $department = Department::firstOrCreate(

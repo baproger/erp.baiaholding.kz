@@ -20,12 +20,13 @@ const onDrop = (stage) => {
     router.patch(route('projects.stage', id), { project_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
 };
 const switchView = (v) => router.get(route('projects.index'), { ...props.filters, view: v }, { preserveState: true });
+const advance = (p) => router.patch(route('projects.advance', p.id), {}, { preserveScroll: true, preserveState: false });
 </script>
 
 <template>
     <Head title="Проекты" />
     <AppLayout>
-        <template #header>Проекты</template>
+        <template #header>Цех</template>
 
         <div class="mb-4 inline-flex rounded-md bg-white shadow-sm ring-1 ring-gray-200">
             <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-l-md px-4 py-1.5 text-sm" @click="switchView('kanban')">Канбан</button>
@@ -48,6 +49,7 @@ const switchView = (v) => router.get(route('projects.index'), { ...props.filters
                         <div class="font-medium text-gray-800">{{ p.name }}</div>
                         <div class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
                         <div class="mt-1 text-xs text-gray-400">{{ p.client?.name ?? '—' }}</div>
+                        <button @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>
                     <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-gray-400">Пусто</div>
                 </div>

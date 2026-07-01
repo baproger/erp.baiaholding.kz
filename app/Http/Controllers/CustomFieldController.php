@@ -62,6 +62,7 @@ class CustomFieldController extends Controller
             'type' => ['required', Rule::in(['text', 'number', 'date', 'boolean', 'select', 'radio', 'email', 'phone', 'url'])],
             'required' => ['boolean'],
             'unique' => ['boolean'],
+            'is_visible' => ['boolean'],
             'options' => ['nullable', 'array'],
             'order' => ['nullable', 'integer'],
         ]);

@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CustomField extends Model
 {
-    protected $fillable = ['entity_type', 'name', 'type', 'required', 'unique', 'options', 'order'];
+    protected $fillable = ['entity_type', 'name', 'type', 'required', 'unique', 'is_visible', 'options', 'order'];
 
     protected $casts = [
         'required' => 'boolean',
         'unique' => 'boolean',
+        'is_visible' => 'boolean',
         'options' => 'array',
     ];
 

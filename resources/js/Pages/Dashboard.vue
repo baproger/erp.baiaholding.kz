@@ -22,7 +22,7 @@ const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
                 <div class="mt-1 text-2xl font-bold text-indigo-600">{{ money(stats.deals_budget) }}</div>
             </div>
             <Link :href="route('projects.index')" class="rounded-lg bg-white p-5 shadow transition hover:shadow-md">
-                <div class="text-xs uppercase text-gray-400">Проекты</div>
+                <div class="text-xs uppercase text-gray-400">Цех (заказы)</div>
                 <div class="mt-1 text-3xl font-bold text-gray-800">{{ stats.projects }}</div>
             </Link>
             <Link :href="route('clients.index')" class="rounded-lg bg-white p-5 shadow transition hover:shadow-md">

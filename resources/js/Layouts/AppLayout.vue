@@ -17,7 +17,7 @@ const nav = [
     { name: 'Дашборд', route: 'dashboard', icon: '▧' },
     { name: 'Аналитика', route: 'analytics.index', icon: '◊' },
     { name: 'Сделки', route: 'deals.index', icon: '◈' },
-    { name: 'Проекты', route: 'projects.index', icon: '◇' },
+    { name: 'Цех', route: 'projects.index', icon: '◇' },
     { name: 'Задачи', route: 'tasks.index', icon: '✓' },
     { name: 'Чат', route: 'chat.index', icon: '✉' },
     { name: 'Финансы', route: 'finance.index', icon: '₸' },

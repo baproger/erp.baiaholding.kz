@@ -4,6 +4,7 @@ import { useForm, router } from '@inertiajs/vue3';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import { deadlineClass } from '@/utils/deadline';
 
 const props = defineProps({
     tasks: { type: Array, default: () => [] },
@@ -33,7 +34,7 @@ const remove = (t) => { if (confirm('Удалить задачу?')) router.dele
             <div class="min-w-0">
                 <div class="font-medium text-gray-800">{{ t.title }}</div>
                 <div class="text-xs text-gray-400">
-                    {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date"> · до {{ t.due_date }}</span>
+                    {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')"> · до {{ t.due_date }}</span>
                 </div>
             </div>
             <div class="flex items-center gap-2">
