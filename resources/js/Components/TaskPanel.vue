@@ -8,6 +8,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import { deadlineClass, isPastDue } from '@/utils/deadline';
+import { formatDateTime } from '@/utils/format';
 
 const props = defineProps({
     tasks: { type: Array, default: () => [] },
@@ -51,7 +52,7 @@ const saveEdit = () => editForm.put(route('tasks.update', editing.value.id), { p
             <div class="min-w-0">
                 <div class="font-medium text-gray-800">{{ t.title }}</div>
                 <div class="text-xs text-gray-400">
-                    {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')"> · {{ isPastDue(t.due_date, t.status==='done') ? '⚠ просрочено ' : '' }}{{ t.due_date }}</span>
+                    {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')"> · {{ isPastDue(t.due_date, t.status==='done') ? '⚠ просрочено ' : '' }}{{ formatDateTime(t.due_date) }}</span>
                 </div>
             </div>
             <div class="flex items-center gap-2">

@@ -19,7 +19,7 @@ class Task extends Model
     protected $fillable = [
         'taskable_type', 'taskable_id', 'title', 'description',
         'assignee_id', 'creator_id', 'priority', 'status',
-        'start_date', 'due_date', 'parent_task_id', 'checklist', 'completed_at',
+        'start_date', 'due_date', 'parent_task_id', 'checklist', 'completed_at', 'overdue_notified_at',
     ];
 
     protected $casts = [
@@ -27,6 +27,7 @@ class Task extends Model
         'start_date' => 'datetime',
         'due_date' => 'datetime',
         'completed_at' => 'datetime',
+        'overdue_notified_at' => 'datetime',
     ];
 
     public function taskable(): MorphTo

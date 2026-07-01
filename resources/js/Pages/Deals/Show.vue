@@ -16,6 +16,7 @@ import CommentPanel from '@/Components/CommentPanel.vue';
 import CustomFieldsPanel from '@/Components/CustomFieldsPanel.vue';
 import HistoryPanel from '@/Components/HistoryPanel.vue';
 import { deadlineClass, isPastDue } from '@/utils/deadline';
+import { formatDate } from '@/utils/format';
 
 const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, customFields: Array, history: Array, can: Object });
 
@@ -102,7 +103,7 @@ const saveEdit = () => editForm.put(route('deals.update', props.deal.id), { pres
                         <div class="flex justify-between border-b py-2">
                             <span class="text-gray-500">Срок</span>
                             <span class="font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed')">
-                                {{ deal.deadline ?? '—' }}<span v-if="overdue"> · просрочено</span>
+                                {{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span>
                             </span>
                         </div>
                         <div v-for="f in visibleFields" :key="f.id" class="flex justify-between border-b py-2"><span class="text-gray-500">{{ f.name }}</span><span class="font-medium">{{ f.value }}</span></div>

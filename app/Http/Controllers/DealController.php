@@ -25,7 +25,9 @@ class DealController extends Controller
         $view = $request->string('view', 'kanban')->toString();
 
         $base = Deal::query()
-            ->with(['client:id,name', 'responsible:id,name', 'stage:id,name,color,order'])
+            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order'])
+            ->withCount('tasks')
+            ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             ->where('status', '!=', 'closed')
             ->when($request->string('search')->toString(), fn ($q, $s) => $q
                 ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"))

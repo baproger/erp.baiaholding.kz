@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { formatDate } from '@/utils/format';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
@@ -66,7 +67,7 @@ const advance = () => router.patch(route('projects.advance', props.project.id), 
                             <span class="text-gray-500">Из сделки</span>
                             <Link :href="route('deals.show', project.deal.id)" class="text-indigo-600 hover:underline">{{ project.deal.number }}</Link>
                         </div>
-                        <div class="flex justify-between border-b py-2"><span class="text-gray-500">Срок</span><span class="font-medium">{{ project.deadline ?? '—' }}</span></div>
+                        <div class="flex justify-between border-b py-2"><span class="text-gray-500">Срок</span><span class="font-medium">{{ formatDate(project.deadline) }}</span></div>
                         <div class="py-2"><div class="mb-1 text-gray-500">Описание</div><p class="whitespace-pre-line text-gray-700">{{ project.description ?? '—' }}</p></div>
                     </div>
 
