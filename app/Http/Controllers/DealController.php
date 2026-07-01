@@ -142,4 +142,13 @@ class DealController extends Controller
         $deal->update(['status' => 'closed', 'closed_at' => now()]);
         return back()->with('success', 'Отправлено в цех: '.$project->number.'.');
     }
+
+    public function updateResponsible(Request $request, Deal $deal): RedirectResponse
+    {
+        // Any authenticated user may (re)assign the responsible person.
+        $validated = $request->validate(['responsible_user_id' => ['nullable', 'exists:users,id']]);
+        $deal->update(['responsible_user_id' => $validated['responsible_user_id'] ?: null]);
+
+        return back()->with('success', 'Ответственный изменён.');
+    }
 }

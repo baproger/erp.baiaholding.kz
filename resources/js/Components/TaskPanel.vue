@@ -4,7 +4,7 @@ import { useForm, router } from '@inertiajs/vue3';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { deadlineClass } from '@/utils/deadline';
+import { deadlineClass, isPastDue } from '@/utils/deadline';
 
 const props = defineProps({
     tasks: { type: Array, default: () => [] },
@@ -30,7 +30,7 @@ const remove = (t) => { if (confirm('Удалить задачу?')) router.dele
 
 <template>
     <div class="space-y-2">
-        <div v-for="t in tasks" :key="t.id" class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm">
+        <div v-for="t in tasks" :key="t.id" class="flex items-center justify-between rounded-md px-3 py-2 text-sm" :class="isPastDue(t.due_date, t.status==='done') ? 'bg-red-50 ring-1 ring-red-200' : 'bg-gray-50'">
             <div class="min-w-0">
                 <div class="font-medium text-gray-800">{{ t.title }}</div>
                 <div class="text-xs text-gray-400">

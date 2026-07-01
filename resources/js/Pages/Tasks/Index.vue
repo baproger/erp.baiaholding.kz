@@ -8,7 +8,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
-import { deadlineClass } from '@/utils/deadline';
+import { deadlineClass, isPastDue } from '@/utils/deadline';
 
 const props = defineProps({ tasks: Array, users: Array });
 
@@ -56,11 +56,12 @@ const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onS
                 </div>
                 <div class="space-y-2">
                     <div v-for="t in byStatus(col.key)" :key="t.id" draggable="true" @dragstart="dragId = t.id"
-                        class="cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100">
+                        class="cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100"
+                        :class="isPastDue(t.due_date, t.status==='done') ? 'ring-2 ring-red-400' : ''">
                         <div class="font-medium text-gray-800">{{ t.title }}</div>
                         <div class="mt-1 flex items-center justify-between text-xs text-gray-400">
                             <span>{{ label(t) }}</span>
-                            <span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')">⏰ {{ fmt(t.due_date) }}</span>
+                            <span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')">{{ isPastDue(t.due_date, t.status==='done') ? '⚠ Просрочено ' : '⏰ ' }}{{ fmt(t.due_date) }}</span>
                         </div>
                     </div>
                     <div v-if="!byStatus(col.key).length" class="py-4 text-center text-xs text-gray-400">Пусто</div>

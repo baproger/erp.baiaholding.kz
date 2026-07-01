@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage');
     Route::patch('deals/{deal}/advance', [DealController::class, 'advance'])->name('deals.advance');
     Route::post('deals/{deal}/to-workshop', [DealController::class, 'sendToWorkshop'])->name('deals.toWorkshop');
+    Route::patch('deals/{deal}/responsible', [DealController::class, 'updateResponsible'])->name('deals.responsible');
 
     // Projects
     Route::resource('projects', ProjectController::class)->only(['index', 'show']);
