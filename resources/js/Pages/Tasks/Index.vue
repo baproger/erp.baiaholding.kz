@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
@@ -30,12 +31,32 @@ const onDrop = (col) => {
 };
 const label = (t) => t.taskable_type === 'deal' ? 'Сделка' : t.taskable_type === 'project' ? 'Цех' : 'Личная';
 const fmt = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+const forInput = (v) => v ? new Date(v).toISOString().slice(0, 16) : '';
 
-// Create task
+// Create / edit
 const show = ref(false);
+const editing = ref(null);
 const form = useForm({ title: '', description: '', assignee_id: '', priority: 'medium', status: 'new', due_date: '' });
-const openCreate = () => { form.reset(); show.value = true; };
-const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onSuccess: () => (show.value = false) });
+
+const openCreate = () => { editing.value = null; form.reset(); show.value = true; };
+const openEdit = (t) => {
+    editing.value = t;
+    Object.assign(form, {
+        title: t.title, description: t.description ?? '', assignee_id: t.assignee_id ?? '',
+        priority: t.priority, status: t.status, due_date: forInput(t.due_date),
+    });
+    show.value = true;
+};
+const submit = () => {
+    const opts = { preserveScroll: true, onSuccess: () => (show.value = false) };
+    if (editing.value) form.put(route('tasks.update', editing.value.id), opts);
+    else form.post(route('tasks.store'), opts);
+};
+const destroy = () => {
+    if (editing.value && confirm('Удалить задачу?')) {
+        router.delete(route('tasks.destroy', editing.value.id), { preserveScroll: true, onSuccess: () => (show.value = false) });
+    }
+};
 </script>
 
 <template>
@@ -43,7 +64,8 @@ const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onS
     <AppLayout>
         <template #header>Задачи</template>
 
-        <div class="mb-4 flex justify-end">
+        <div class="mb-4 flex items-center justify-between">
+            <p class="text-sm text-gray-500">Нажмите на задачу, чтобы отредактировать</p>
             <PrimaryButton @click="openCreate">+ Новая задача</PrimaryButton>
         </div>
 
@@ -55,12 +77,12 @@ const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onS
                     <span class="text-xs text-gray-400">{{ byStatus(col.key).length }}</span>
                 </div>
                 <div class="space-y-2">
-                    <div v-for="t in byStatus(col.key)" :key="t.id" draggable="true" @dragstart="dragId = t.id"
-                        class="cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100"
+                    <div v-for="t in byStatus(col.key)" :key="t.id" draggable="true" @dragstart="dragId = t.id" @click="openEdit(t)"
+                        class="cursor-pointer rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300"
                         :class="isPastDue(t.due_date, t.status==='done') ? 'ring-2 ring-red-400' : ''">
                         <div class="font-medium text-gray-800">{{ t.title }}</div>
                         <div class="mt-1 flex items-center justify-between text-xs text-gray-400">
-                            <span>{{ label(t) }}</span>
+                            <span>{{ label(t) }}<span v-if="t.assignee"> · {{ t.assignee.name }}</span></span>
                             <span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')">{{ isPastDue(t.due_date, t.status==='done') ? '⚠ Просрочено ' : '⏰ ' }}{{ fmt(t.due_date) }}</span>
                         </div>
                     </div>
@@ -71,14 +93,14 @@ const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onS
 
         <Modal :show="show" @close="show = false">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold">Новая задача</h2>
+                <h2 class="mb-4 text-lg font-semibold">{{ editing ? 'Редактировать задачу' : 'Новая задача' }}</h2>
                 <div class="space-y-4">
                     <div>
                         <InputLabel value="Название" />
                         <TextInput v-model="form.title" class="mt-1 w-full" />
                         <InputError :message="form.errors.title" class="mt-1" />
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
                             <InputLabel value="Исполнитель" />
                             <select v-model="form.assignee_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
@@ -92,6 +114,13 @@ const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onS
                                 <option value="low">Низкий</option><option value="medium">Средний</option><option value="high">Высокий</option>
                             </select>
                         </div>
+                        <div>
+                            <InputLabel value="Статус" />
+                            <select v-model="form.status" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
+                                <option value="new">Новая</option><option value="in_progress">В работе</option>
+                                <option value="review">Проверка</option><option value="done">Готово</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <InputLabel value="Срок (дата и время)" />
@@ -102,9 +131,12 @@ const submit = () => form.post(route('tasks.store'), { preserveScroll: true, onS
                         <textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></textarea>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-2">
-                    <SecondaryButton @click="show = false">Отмена</SecondaryButton>
-                    <PrimaryButton :disabled="form.processing" @click="submit">Создать</PrimaryButton>
+                <div class="mt-6 flex items-center justify-between">
+                    <DangerButton v-if="editing" @click="destroy">Удалить</DangerButton>
+                    <div class="ml-auto flex gap-2">
+                        <SecondaryButton @click="show = false">Отмена</SecondaryButton>
+                        <PrimaryButton :disabled="form.processing" @click="submit">Сохранить</PrimaryButton>
+                    </div>
                 </div>
             </div>
         </Modal>
