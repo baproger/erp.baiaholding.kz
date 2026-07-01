@@ -64,4 +64,14 @@ class Project extends Model
     {
         return $this->morphMany(Expense::class, 'expenseable');
     }
+
+    public function documents(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Document::class, 'documentable');
+    }
+
+    public function comments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Comment::class, 'commentable');
+    }
 }

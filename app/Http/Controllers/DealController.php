@@ -74,6 +74,8 @@ class DealController extends Controller
             'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')
                 ->with('payments')->latest(),
             'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
+            'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
+            'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
 
         return Inertia::render('Deals/Show', [

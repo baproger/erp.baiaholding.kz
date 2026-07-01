@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
@@ -71,6 +73,16 @@ Route::middleware('auth')->group(function () {
     Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
     Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
     Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+
+    // Documents
+    Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
+    Route::get('documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
+    Route::delete('documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+
+    // Comments
+    Route::post('comments', [CommentController::class, 'store'])->name('comments.store');
+    Route::put('comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
+    Route::delete('comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
 });
 
 require __DIR__.'/auth.php';

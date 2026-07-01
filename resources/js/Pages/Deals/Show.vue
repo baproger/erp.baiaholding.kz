@@ -6,6 +6,8 @@ import StatusBadge from '@/Components/StatusBadge.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import TaskPanel from '@/Components/TaskPanel.vue';
 import FinancePanel from '@/Components/FinancePanel.vue';
+import DocumentPanel from '@/Components/DocumentPanel.vue';
+import CommentPanel from '@/Components/CommentPanel.vue';
 
 const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, can: Object });
 
@@ -45,6 +47,8 @@ const destroy = () => {
                         <button :class="tab==='info' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='info'">Информация</button>
                         <button :class="tab==='tasks' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='tasks'">Задачи ({{ deal.tasks.length }})</button>
                         <button :class="tab==='finance' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='finance'">Финансы</button>
+                        <button :class="tab==='docs' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='docs'">Документы ({{ deal.documents.length }})</button>
+                        <button :class="tab==='comments' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='comments'">Комментарии ({{ deal.comments.length }})</button>
                     </div>
 
                     <div v-if="tab==='info'" class="space-y-3 text-sm">
@@ -57,8 +61,12 @@ const destroy = () => {
 
                     <TaskPanel v-else-if="tab==='tasks'" :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
 
-                    <FinancePanel v-else :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id"
+                    <FinancePanel v-else-if="tab==='finance'" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id"
                         :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" />
+
+                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
+
+                    <CommentPanel v-else :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
                 </div>
             </div>
 

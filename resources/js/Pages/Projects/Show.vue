@@ -5,6 +5,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import TaskPanel from '@/Components/TaskPanel.vue';
 import FinancePanel from '@/Components/FinancePanel.vue';
+import DocumentPanel from '@/Components/DocumentPanel.vue';
+import CommentPanel from '@/Components/CommentPanel.vue';
 
 const props = defineProps({ project: Object, stages: Array, users: Array, finance: Object });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
@@ -39,6 +41,8 @@ const moveStage = (id) => router.patch(route('projects.stage', props.project.id)
                         <button :class="tab==='info' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='info'">Информация</button>
                         <button :class="tab==='tasks' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='tasks'">Задачи ({{ project.tasks.length }})</button>
                         <button :class="tab==='finance' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='finance'">Финансы</button>
+                        <button :class="tab==='docs' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='docs'">Документы ({{ project.documents.length }})</button>
+                        <button :class="tab==='comments' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='comments'">Комментарии ({{ project.comments.length }})</button>
                     </div>
 
                     <div v-if="tab==='info'" class="space-y-3 text-sm">
@@ -55,8 +59,12 @@ const moveStage = (id) => router.patch(route('projects.stage', props.project.id)
 
                     <TaskPanel v-else-if="tab==='tasks'" :tasks="project.tasks" taskable-type="project" :taskable-id="project.id" :users="users" />
 
-                    <FinancePanel v-else :entity-type="'project'" :entity-id="project.id" :client-id="project.client_id"
+                    <FinancePanel v-else-if="tab==='finance'" :entity-type="'project'" :entity-id="project.id" :client-id="project.client_id"
                         :invoices="project.invoices" :expenses="project.expenses" :finance="finance" />
+
+                    <DocumentPanel v-else-if="tab==='docs'" :documents="project.documents" entity-type="project" :entity-id="project.id" />
+
+                    <CommentPanel v-else :comments="project.comments" entity-type="project" :entity-id="project.id" />
                 </div>
             </div>
             <div class="rounded-lg bg-white p-6 shadow self-start">
