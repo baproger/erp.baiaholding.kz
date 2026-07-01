@@ -4,19 +4,16 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import DangerButton from '@/Components/DangerButton.vue';
+import TaskPanel from '@/Components/TaskPanel.vue';
 
-const props = defineProps({ deal: Object, stages: Array, can: Object });
+const props = defineProps({ deal: Object, stages: Array, users: Array, can: Object });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
 const tab = ref('info');
 
-const moveStage = (stageId) => {
-    router.patch(route('deals.stage', props.deal.id), { deal_stage_id: stageId }, { preserveScroll: true });
-};
+const moveStage = (stageId) => router.patch(route('deals.stage', props.deal.id), { deal_stage_id: stageId }, { preserveScroll: true });
 const destroy = () => {
-    if (confirm('Удалить сделку?')) router.delete(route('deals.destroy', props.deal.id), {
-        onSuccess: () => router.get(route('deals.index')),
-    });
+    if (confirm('Удалить сделку?')) router.delete(route('deals.destroy', props.deal.id), { onSuccess: () => router.get(route('deals.index')) });
 };
 </script>
 
@@ -31,25 +28,16 @@ const destroy = () => {
             </div>
         </template>
 
-        <!-- Stage pipeline -->
         <div class="mb-6 flex items-center gap-1 overflow-x-auto rounded-lg bg-white p-3 shadow">
-            <button
-                v-for="stage in stages"
-                :key="stage.id"
-                @click="moveStage(stage.id)"
-                :disabled="!can.update"
-                :class="stage.id === deal.deal_stage_id
-                    ? 'text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+            <button v-for="stage in stages" :key="stage.id" @click="moveStage(stage.id)" :disabled="!can.update"
+                :class="stage.id === deal.deal_stage_id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
                 :style="stage.id === deal.deal_stage_id ? { backgroundColor: stage.color } : {}"
-                class="whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed"
-            >
+                class="whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed">
                 {{ stage.name }}
             </button>
         </div>
 
         <div class="grid grid-cols-3 gap-6">
-            <!-- Main -->
             <div class="col-span-2 space-y-6">
                 <div class="rounded-lg bg-white p-6 shadow">
                     <div class="mb-4 flex gap-4 border-b text-sm">
@@ -65,20 +53,10 @@ const destroy = () => {
                         <div class="py-2"><div class="mb-1 text-gray-500">Описание</div><p class="whitespace-pre-line text-gray-700">{{ deal.description ?? '—' }}</p></div>
                     </div>
 
-                    <div v-else class="space-y-2">
-                        <div v-for="t in deal.tasks" :key="t.id" class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 text-sm">
-                            <div>
-                                <div class="font-medium text-gray-800">{{ t.title }}</div>
-                                <div class="text-xs text-gray-400">{{ t.assignee?.name ?? 'Без исполнителя' }}</div>
-                            </div>
-                            <StatusBadge :status="t.status" />
-                        </div>
-                        <div v-if="!deal.tasks.length" class="py-6 text-center text-sm text-gray-400">Задач пока нет</div>
-                    </div>
+                    <TaskPanel v-else :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
                 </div>
             </div>
 
-            <!-- Aside -->
             <div class="space-y-6">
                 <div class="rounded-lg bg-white p-6 shadow">
                     <div class="text-xs uppercase text-gray-400">Бюджет</div>
@@ -91,11 +69,9 @@ const destroy = () => {
                         </div>
                     </div>
                 </div>
-
                 <div v-if="deal.project" class="rounded-lg bg-green-50 p-4 text-sm text-green-800 ring-1 ring-green-200">
                     ✓ Сделка выиграна — автоматически создан проект <strong>{{ deal.project.number }}</strong>.
                 </div>
-
                 <DangerButton v-if="can.delete" @click="destroy">Удалить сделку</DangerButton>
             </div>
         </div>

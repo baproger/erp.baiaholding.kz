@@ -79,6 +79,7 @@ class DealController extends Controller
 
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
+            'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => DealStage::where('is_active', true)->orderBy('order')
                 ->get(['id', 'name', 'color', 'order', 'is_won', 'checklist']),
             'can' => [

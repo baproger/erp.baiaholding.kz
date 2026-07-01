@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\ProjectStage;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -48,6 +49,7 @@ class ProjectController extends Controller
 
         return Inertia::render('Projects/Show', [
             'project' => $project,
+            'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => ProjectStage::where('is_active', true)->orderBy('order')
                 ->get(['id', 'name', 'color', 'order', 'is_completed']),
         ]);
