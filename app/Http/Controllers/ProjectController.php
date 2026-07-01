@@ -60,6 +60,7 @@ class ProjectController extends Controller
             'stages' => ProjectStage::with('translations')->where('is_active', true)->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
             'finance' => $finance->summaryFor($project),
+            'history' => \App\Models\AuditLog::where('table_name', 'projects')->where('record_id', $project->id)->with('user:id,name')->latest()->limit(100)->get(),
         ]);
     }
 
