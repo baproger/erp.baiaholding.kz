@@ -53,4 +53,14 @@ class Deal extends Model
     {
         return $this->morphMany(Task::class, 'taskable');
     }
+
+    public function invoices(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Invoice::class, 'invoiceable');
+    }
+
+    public function expenses(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Expense::class, 'expenseable');
+    }
 }

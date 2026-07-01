@@ -5,8 +5,9 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import TaskPanel from '@/Components/TaskPanel.vue';
+import FinancePanel from '@/Components/FinancePanel.vue';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, can: Object });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, can: Object });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
 const tab = ref('info');
@@ -43,6 +44,7 @@ const destroy = () => {
                     <div class="mb-4 flex gap-4 border-b text-sm">
                         <button :class="tab==='info' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='info'">Информация</button>
                         <button :class="tab==='tasks' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='tasks'">Задачи ({{ deal.tasks.length }})</button>
+                        <button :class="tab==='finance' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='finance'">Финансы</button>
                     </div>
 
                     <div v-if="tab==='info'" class="space-y-3 text-sm">
@@ -53,7 +55,10 @@ const destroy = () => {
                         <div class="py-2"><div class="mb-1 text-gray-500">Описание</div><p class="whitespace-pre-line text-gray-700">{{ deal.description ?? '—' }}</p></div>
                     </div>
 
-                    <TaskPanel v-else :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
+                    <TaskPanel v-else-if="tab==='tasks'" :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
+
+                    <FinancePanel v-else :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id"
+                        :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" />
                 </div>
             </div>
 
@@ -63,6 +68,8 @@ const destroy = () => {
                     <div class="mt-1 text-2xl font-bold text-indigo-600">{{ money(deal.budget) }}</div>
                     <div class="mt-4 space-y-2 text-sm">
                         <div class="flex justify-between"><span class="text-gray-500">Статус</span><StatusBadge :status="deal.status" /></div>
+                        <div class="flex justify-between"><span class="text-gray-500">Доход</span><span class="font-medium text-green-600">{{ money(finance.income) }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500">Маржа</span><span class="font-medium">{{ finance.margin }}%</span></div>
                         <div v-if="deal.project" class="flex justify-between">
                             <span class="text-gray-500">Проект</span>
                             <Link :href="route('projects.show', deal.project.id)" class="text-indigo-600 hover:underline">{{ deal.project.number }}</Link>

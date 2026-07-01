@@ -1,11 +1,14 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import TaskPanel from '@/Components/TaskPanel.vue';
+import FinancePanel from '@/Components/FinancePanel.vue';
 
-const props = defineProps({ project: Object, stages: Array, users: Array });
+const props = defineProps({ project: Object, stages: Array, users: Array, finance: Object });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
+const tab = ref('info');
 const moveStage = (id) => router.patch(route('projects.stage', props.project.id), { project_stage_id: id }, { preserveScroll: true });
 </script>
 
@@ -32,8 +35,13 @@ const moveStage = (id) => router.patch(route('projects.stage', props.project.id)
         <div class="grid grid-cols-3 gap-6">
             <div class="col-span-2 space-y-6">
                 <div class="rounded-lg bg-white p-6 shadow">
-                    <h3 class="mb-4 font-semibold text-gray-700">Информация</h3>
-                    <div class="space-y-3 text-sm">
+                    <div class="mb-4 flex gap-4 border-b text-sm">
+                        <button :class="tab==='info' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='info'">Информация</button>
+                        <button :class="tab==='tasks' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='tasks'">Задачи ({{ project.tasks.length }})</button>
+                        <button :class="tab==='finance' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2" @click="tab='finance'">Финансы</button>
+                    </div>
+
+                    <div v-if="tab==='info'" class="space-y-3 text-sm">
                         <div class="flex justify-between border-b py-2"><span class="text-gray-500">Клиент</span><span class="font-medium">{{ project.client?.name ?? '—' }}</span></div>
                         <div class="flex justify-between border-b py-2"><span class="text-gray-500">Ответственный</span><span class="font-medium">{{ project.responsible?.name ?? '—' }}</span></div>
                         <div class="flex justify-between border-b py-2"><span class="text-gray-500">Отдел</span><span class="font-medium">{{ project.department?.name ?? '—' }}</span></div>
@@ -44,16 +52,21 @@ const moveStage = (id) => router.patch(route('projects.stage', props.project.id)
                         <div class="flex justify-between border-b py-2"><span class="text-gray-500">Срок</span><span class="font-medium">{{ project.deadline ?? '—' }}</span></div>
                         <div class="py-2"><div class="mb-1 text-gray-500">Описание</div><p class="whitespace-pre-line text-gray-700">{{ project.description ?? '—' }}</p></div>
                     </div>
-                </div>
-                <div class="rounded-lg bg-white p-6 shadow">
-                    <h3 class="mb-4 font-semibold text-gray-700">Задачи ({{ project.tasks.length }})</h3>
-                    <TaskPanel :tasks="project.tasks" taskable-type="project" :taskable-id="project.id" :users="users" />
+
+                    <TaskPanel v-else-if="tab==='tasks'" :tasks="project.tasks" taskable-type="project" :taskable-id="project.id" :users="users" />
+
+                    <FinancePanel v-else :entity-type="'project'" :entity-id="project.id" :client-id="project.client_id"
+                        :invoices="project.invoices" :expenses="project.expenses" :finance="finance" />
                 </div>
             </div>
             <div class="rounded-lg bg-white p-6 shadow self-start">
                 <div class="text-xs uppercase text-gray-400">Бюджет</div>
                 <div class="mt-1 text-2xl font-bold text-indigo-600">{{ money(project.budget) }}</div>
-                <div class="mt-4 flex justify-between text-sm"><span class="text-gray-500">Статус</span><StatusBadge :status="project.status" /></div>
+                <div class="mt-4 space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-500">Статус</span><StatusBadge :status="project.status" /></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Доход</span><span class="font-medium text-green-600">{{ money(finance.income) }}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Маржа</span><span class="font-medium">{{ finance.margin }}%</span></div>
+                </div>
             </div>
         </div>
     </AppLayout>

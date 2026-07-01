@@ -15,6 +15,7 @@ const nav = [
     { name: 'Сделки', route: 'deals.index', icon: '◈' },
     { name: 'Проекты', route: 'projects.index', icon: '◇' },
     { name: 'Задачи', route: 'tasks.index', icon: '✓' },
+    { name: 'Финансы', route: 'finance.index', icon: '₸' },
     { name: 'Контрагенты', route: 'clients.index', icon: '☺' },
     { name: 'Номенклатура', route: 'products.index', icon: '⛃' },
     { name: 'Отделы', route: 'departments.index', icon: '⌂' },

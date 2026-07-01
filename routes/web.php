@@ -3,6 +3,9 @@
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -57,6 +60,17 @@ Route::middleware('auth')->group(function () {
     Route::put('tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])->name('tasks.status');
     Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
+
+    // Finance
+    Route::get('finance', [InvoiceController::class, 'index'])->name('finance.index');
+    Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+    Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
+    Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+    Route::post('payments', [PaymentController::class, 'store'])->name('payments.store');
+    Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+    Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+    Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
+    Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
 });
 
 require __DIR__.'/auth.php';

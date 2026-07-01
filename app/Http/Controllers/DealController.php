@@ -9,6 +9,7 @@ use App\Models\DealStage;
 use App\Models\Department;
 use App\Models\User;
 use App\Services\DealNumberService;
+use App\Services\FinanceService;
 use App\Services\StageTransitionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,12 +33,9 @@ class DealController extends Controller
         $stages = DealStage::where('is_active', true)->orderBy('order')
             ->get(['id', 'name', 'color', 'order', 'is_won']);
 
-        if ($view === 'list') {
-            $deals = (clone $base)->latest()->paginate(20)->withQueryString();
-        } else {
-            // Kanban: all matching deals grouped client-side by stage.
-            $deals = (clone $base)->latest()->get();
-        }
+        $deals = $view === 'list'
+            ? (clone $base)->latest()->paginate(20)->withQueryString()
+            : (clone $base)->latest()->get();
 
         return Inertia::render('Deals/Index', [
             'deals' => $deals,
@@ -47,9 +45,7 @@ class DealController extends Controller
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'can' => [
-                'create' => $request->user()->can('create', Deal::class),
-            ],
+            'can' => ['create' => $request->user()->can('create', Deal::class)],
         ]);
     }
 
@@ -67,7 +63,7 @@ class DealController extends Controller
         return back()->with('success', 'Сделка создана.');
     }
 
-    public function show(Deal $deal): Response
+    public function show(Deal $deal, FinanceService $finance): Response
     {
         $this->authorize('view', $deal);
 
@@ -75,6 +71,9 @@ class DealController extends Controller
             'client', 'responsible:id,name', 'department:id,name',
             'stage', 'project:id,number,name,status',
             'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
+            'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')
+                ->with('payments')->latest(),
+            'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
         ]);
 
         return Inertia::render('Deals/Show', [
@@ -82,6 +81,7 @@ class DealController extends Controller
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => DealStage::where('is_active', true)->orderBy('order')
                 ->get(['id', 'name', 'color', 'order', 'is_won', 'checklist']),
+            'finance' => $finance->summaryFor($deal),
             'can' => [
                 'update' => request()->user()->can('update', $deal),
                 'delete' => request()->user()->can('delete', $deal),
@@ -101,10 +101,7 @@ class DealController extends Controller
     {
         $this->authorize('update', $deal);
 
-        $validated = $request->validate([
-            'deal_stage_id' => ['required', 'exists:deal_stages,id'],
-        ]);
-
+        $validated = $request->validate(['deal_stage_id' => ['required', 'exists:deal_stages,id']]);
         $target = DealStage::findOrFail($validated['deal_stage_id']);
         $transitions->moveToStage($deal, $target);
 

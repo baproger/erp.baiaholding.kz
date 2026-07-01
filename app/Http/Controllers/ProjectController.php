@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\ProjectStage;
 use App\Models\User;
+use App\Services\FinanceService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,7 +39,7 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function show(Project $project): Response
+    public function show(Project $project, FinanceService $finance): Response
     {
         $this->authorize('view', $project);
 
@@ -45,6 +47,9 @@ class ProjectController extends Controller
             'client', 'responsible:id,name', 'department:id,name',
             'stage', 'deal:id,number,name',
             'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
+            'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')
+                ->with('payments')->latest(),
+            'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
         ]);
 
         return Inertia::render('Projects/Show', [
@@ -52,17 +57,15 @@ class ProjectController extends Controller
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => ProjectStage::where('is_active', true)->orderBy('order')
                 ->get(['id', 'name', 'color', 'order', 'is_completed']),
+            'finance' => $finance->summaryFor($project),
         ]);
     }
 
-    public function updateStage(Request $request, Project $project): \Illuminate\Http\RedirectResponse
+    public function updateStage(Request $request, Project $project): RedirectResponse
     {
         $this->authorize('update', $project);
 
-        $validated = $request->validate([
-            'project_stage_id' => ['required', 'exists:project_stages,id'],
-        ]);
-
+        $validated = $request->validate(['project_stage_id' => ['required', 'exists:project_stages,id']]);
         $stage = ProjectStage::findOrFail($validated['project_stage_id']);
         $project->project_stage_id = $stage->id;
 
