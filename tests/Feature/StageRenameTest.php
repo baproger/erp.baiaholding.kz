@@ -41,4 +41,18 @@ class StageRenameTest extends TestCase
         $stage = DealStage::with('translations')->where('name', 'Аванс')->first();
         $this->assertEquals('Аванс', $stage->translatedName('ru'));
     }
+
+    public function test_delete_reindexes_remaining_stages(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(StageSeeder::class);
+        $admin = User::factory()->create();
+        $admin->assignRole("admin");
+
+        $second = DealStage::orderBy("order")->skip(1)->first();
+        $this->actingAs($admin)->delete(route("stages.destroy", ["deal", $second->id]))->assertRedirect();
+
+        $orders = DealStage::orderBy("order")->pluck("order")->all();
+        $this->assertEquals(range(1, count($orders)), $orders);
+    }
 }

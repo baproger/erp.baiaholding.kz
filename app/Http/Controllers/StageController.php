@@ -74,7 +74,11 @@ class StageController extends Controller
     public function destroy(Request $request, string $kind, int $id): RedirectResponse
     {
         $this->guard($request);
-        $this->model($kind)::findOrFail($id)->delete();
+        $model = $this->model($kind);
+        $model::findOrFail($id)->delete();
+
+        // Re-index remaining stages to keep order sequential (1..N, no gaps/zeros).
+        $model::orderBy('order')->orderBy('id')->get()->each(fn ($s, $i) => $s->update(['order' => $i + 1]));
 
         return back()->with('success', 'Этап удалён.');
     }
