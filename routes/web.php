@@ -15,6 +15,7 @@ use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StageController;
@@ -84,6 +85,7 @@ Route::middleware('auth')->group(function () {
 
     // Finance
     Route::get('finance', [InvoiceController::class, 'index'])->name('finance.index');
+    Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
     Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');

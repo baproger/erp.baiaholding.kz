@@ -11,6 +11,7 @@ const form = useForm({
     currency: props.settings.currency,
     auto_create_project: !!props.settings.auto_create_project,
     default_locale: props.settings.default_locale,
+    bonus_percent: props.settings.bonus_percent,
 });
 const save = () => form.put(route('settings.update'), { preserveScroll: true });
 </script>
@@ -43,6 +44,10 @@ const save = () => form.put(route('settings.update'), { preserveScroll: true });
                         <option value="kk">Қазақша</option>
                     </select>
                 </div>
+            </div>
+            <div>
+                <InputLabel value="Бонус сотруднику, % от чистой прибыли" />
+                <TextInput v-model="form.bonus_percent" type="number" step="0.1" class="mt-1 w-full" />
             </div>
             <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" v-model="form.auto_create_project" class="rounded border-gray-300 text-indigo-600" />

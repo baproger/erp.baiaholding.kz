@@ -22,6 +22,7 @@ const allNav = [
     { name: 'Задачи', route: 'tasks.index', icon: '✓', perm: 'task.viewAny' },
     { name: 'Чат', route: 'chat.index', icon: '✉' },
     { name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny' },
+    { name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },
     { name: 'Аудит', route: 'audit.index', icon: '❑', perm: 'setting.viewAny' },
     { name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny' },
     { name: 'Сотрудники', route: 'users.index', icon: '☻', perm: 'user.viewAny' },

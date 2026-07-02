@@ -30,7 +30,7 @@ class SettingsTest extends TestCase
         $u = $this->admin();
 
         $this->actingAs($u)->put(route('settings.update'), [
-            'company_name' => 'BAIA', 'currency' => '$', 'auto_create_project' => false, 'default_locale' => 'kk',
+            'company_name' => 'BAIA', 'currency' => '$', 'auto_create_project' => false, 'default_locale' => 'kk', 'bonus_percent' => 10,
         ])->assertRedirect();
 
         $this->assertFalse(Setting::get('auto_create_project'));

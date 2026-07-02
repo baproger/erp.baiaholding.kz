@@ -23,6 +23,8 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
+        Permission::findOrCreate('payroll.view', 'web');
+
         $admin = Role::findOrCreate('admin', 'web');
         $admin->syncPermissions(Permission::all());
 
@@ -37,6 +39,7 @@ class RolePermissionSeeder extends Seeder
             'deal.viewAny', 'deal.view',
             'project.viewAny', 'project.view',
             'client.viewAny', 'client.view',
+            'payroll.view',
         ])->get());
 
         $manager = Role::findOrCreate('manager', 'web');
@@ -61,6 +64,7 @@ class RolePermissionSeeder extends Seeder
             }
         }
         $abilities[] = 'department.viewAny';
+        $abilities[] = 'payroll.view';
 
         return $abilities;
     }

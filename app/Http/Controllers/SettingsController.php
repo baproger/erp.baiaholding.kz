@@ -15,6 +15,7 @@ class SettingsController extends Controller
         'currency' => '₸',
         'auto_create_project' => true,
         'default_locale' => 'ru',
+        'bonus_percent' => 10,
     ];
 
     private function authorizeManage(Request $request): void
@@ -43,6 +44,7 @@ class SettingsController extends Controller
             'currency' => ['required', 'string', 'max:10'],
             'auto_create_project' => ['boolean'],
             'default_locale' => ['required', 'in:ru,kk'],
+            'bonus_percent' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 
         foreach ($validated as $key => $value) {
