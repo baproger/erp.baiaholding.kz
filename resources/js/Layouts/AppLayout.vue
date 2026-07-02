@@ -23,7 +23,6 @@ const allNav = [
     { name: 'Чат', route: 'chat.index', icon: '✉' },
     { name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny' },
     { name: 'Аудит', route: 'audit.index', icon: '❑', perm: 'setting.viewAny' },
-    { name: 'Номенклатура', route: 'products.index', icon: '⛃', perm: 'product.viewAny' },
     { name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny' },
     { name: 'Сотрудники', route: 'users.index', icon: '☻', perm: 'user.viewAny' },
     { name: 'Настройки', route: 'settings.index', icon: '⚙', perm: 'setting.update' },

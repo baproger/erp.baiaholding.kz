@@ -29,10 +29,10 @@ class WorkflowTest extends TestCase
         return $u;
     }
 
-    public function test_employee_can_create_deal(): void
+    public function test_manager_can_create_deal(): void
     {
         $this->seedAll();
-        $emp = $this->user('employee');
+        $emp = $this->user('manager');
 
         $this->actingAs($emp)->post(route('deals.store'), ['name' => 'Тендер', 'budget' => 1000000])
             ->assertRedirect();

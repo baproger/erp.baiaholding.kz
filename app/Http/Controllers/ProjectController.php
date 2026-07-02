@@ -85,7 +85,7 @@ class ProjectController extends Controller
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
             'finance' => $canSeeMoney ? $finance->summaryFor($project) : null,
             'canSeeMoney' => $canSeeMoney,
-            'history' => \App\Models\AuditLog::where('table_name', 'projects')->where('record_id', $project->id)->with('user:id,name')->latest()->limit(100)->get(),
+            'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'projects')->where('record_id', $project->id)->with('user:id,name')->latest()->limit(100)->get(), ['project_stage_id' => ProjectStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
         ]);
     }
 

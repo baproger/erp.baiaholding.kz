@@ -15,7 +15,6 @@ use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StageController;
@@ -59,7 +58,6 @@ Route::middleware('auth')->group(function () {
     // Reference data
     Route::resource('departments', DepartmentController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('clients', ClientController::class)->only(['index', 'store', 'update', 'destroy']);
-    Route::resource('products', ProductController::class)->only(['index', 'store', 'update', 'destroy']);
 
     // Deals
     Route::resource('deals', DealController::class)->only(['index', 'show', 'store', 'update', 'destroy']);

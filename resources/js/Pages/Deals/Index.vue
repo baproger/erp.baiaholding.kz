@@ -18,7 +18,7 @@ const props = defineProps({ deals: [Array, Object], stages: Array, view: String,
 const list = computed(() => Array.isArray(props.deals) ? props.deals : props.deals.data);
 const byStage = (id) => list.value.filter((d) => d.deal_stage_id === id);
 const stageTotal = (id) => byStage(id).reduce((s, d) => s + Number(d.budget), 0);
-const wonStageId = computed(() => props.stages[props.stages.length - 1]?.id);
+const lastStageId = computed(() => props.stages[props.stages.length - 1]?.id);
 
 const draggingId = ref(null);
 const onDrop = (stage) => {
@@ -44,74 +44,64 @@ const submit = () => form.post(route('deals.store'), { preserveScroll: true, onS
         <template #header>Сделки</template>
 
         <div class="mb-4 flex items-center justify-between gap-3">
-            <div class="inline-flex rounded-md bg-white shadow-sm ring-1 ring-gray-200">
-                <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-l-md px-4 py-1.5 text-sm" @click="switchView('kanban')">Канбан</button>
-                <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-r-md px-4 py-1.5 text-sm" @click="switchView('list')">Список</button>
+            <div class="inline-flex rounded-lg bg-white shadow-sm ring-1 ring-gray-200">
+                <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-l-lg px-4 py-1.5 text-sm transition-colors" @click="switchView('kanban')">Канбан</button>
+                <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-r-lg px-4 py-1.5 text-sm transition-colors" @click="switchView('list')">Список</button>
             </div>
-            <button class="rounded-md bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700" @click="openCreate">+ Новая сделка</button>
+            <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:scale-[1.02] hover:bg-indigo-700 active:scale-95" @click="openCreate">+ Новая сделка</button>
         </div>
 
         <!-- KANBAN -->
-        <div v-if="view === 'kanban'" class="flex gap-4 overflow-x-auto pb-4">
-            <div v-for="stage in stages" :key="stage.id" class="flex w-80 flex-shrink-0 flex-col rounded-lg bg-gray-200/60" @dragover.prevent @drop="onDrop(stage)">
+        <div v-if="view === 'kanban'" class="flex gap-3 overflow-x-auto pb-4">
+            <div v-for="stage in stages" :key="stage.id" class="flex w-64 flex-shrink-0 flex-col rounded-xl bg-gray-100/80" @dragover.prevent @drop="onDrop(stage)">
                 <div class="flex items-center justify-between px-3 py-2">
                     <div class="flex items-center gap-2">
-                        <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: stage.color }"></span>
+                        <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: stage.color }"></span>
                         <span class="text-sm font-semibold text-gray-700">{{ stage.name }}</span>
                         <span class="text-xs text-gray-400">{{ byStage(stage.id).length }}</span>
                     </div>
-                    <span class="text-xs font-medium text-gray-500">{{ money(stageTotal(stage.id)) }}</span>
+                    <span class="text-[11px] font-medium text-gray-400">{{ money(stageTotal(stage.id)) }}</span>
                 </div>
-                <div class="flex-1 space-y-3 px-2 pb-2">
+                <div class="flex-1 space-y-2 px-2 pb-2">
                     <div v-for="deal in byStage(stage.id)" :key="deal.id" draggable="true" @dragstart="draggingId = deal.id"
-                        class="cursor-move rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300">
+                        class="cursor-move rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-gray-100 transition-all hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200">
                         <Link :href="route('deals.show', deal.id)" class="block">
                             <div class="flex items-start justify-between">
-                                <span class="text-base font-bold text-gray-900">{{ deal.number }}</span>
-                                <span v-if="deal.tasks_count" class="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">{{ deal.tasks_count }}</span>
+                                <div>
+                                    <div class="text-[11px] text-gray-400">{{ deal.number }}</div>
+                                    <div class="text-base font-bold leading-tight text-gray-900">{{ money(deal.budget) }}</div>
+                                </div>
+                                <span v-if="deal.overdue_count" class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
+                                <span v-else-if="deal.tasks_count" class="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{{ deal.tasks_count }}</span>
                             </div>
-                            <div class="mt-1 text-xl font-bold text-gray-900">{{ money(deal.budget) }}</div>
-
-                            <div class="mt-3 text-xs text-gray-400">Дата завершения</div>
-                            <div class="text-sm font-semibold" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-gray-800'">{{ formatDate(deal.deadline) }}</div>
-
-                            <div class="mt-2 text-xs text-gray-400">Ответственный</div>
-                            <div class="flex items-center gap-2">
-                                <span class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-indigo-500 text-xs font-bold text-white">
+                            <div class="mt-1.5 flex items-center gap-1.5">
+                                <span class="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-indigo-500 text-[10px] font-bold text-white">
                                     <img v-if="deal.responsible?.avatar" :src="deal.responsible.avatar" class="h-full w-full object-cover" />
                                     <template v-else>{{ deal.responsible?.name?.charAt(0) ?? '—' }}</template>
                                 </span>
-                                <span class="text-sm font-medium text-indigo-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
+                                <span class="truncate text-xs text-gray-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
                             </div>
-
-                            <div class="mt-2 text-xs text-gray-400">Дата начала</div>
-                            <div class="text-sm font-semibold text-gray-800">{{ formatDate(deal.created_at) }}</div>
-
-                            <div class="mt-2 text-xs text-gray-400">Задача</div>
-                            <span v-if="deal.overdue_count" class="inline-block rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">ПРОСРОЧЕНА</span>
-                            <span v-else-if="deal.tasks_count" class="inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">в срок</span>
-                            <span v-else class="text-sm text-gray-400">—</span>
+                            <div v-if="deal.deadline" class="mt-1 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-gray-400'">⏰ {{ formatDate(deal.deadline) }}</div>
                         </Link>
-
-                        <div class="mt-3 flex items-center justify-between border-t pt-2">
-                            <Link :href="route('deals.show', deal.id)" class="text-sm text-gray-500 hover:text-indigo-600">+ Дело</Link>
-                            <button v-if="deal.deal_stage_id === wonStageId" @click="toWorkshop(deal)" class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">📦 В цех</button>
-                            <button v-else @click="advance(deal)" class="rounded bg-gray-100 px-3 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
+                        <div class="mt-2 flex items-center justify-between border-t pt-1.5">
+                            <Link :href="route('deals.show', deal.id)" class="text-[11px] text-gray-400 hover:text-indigo-600">+ Дело</Link>
+                            <button v-if="deal.deal_stage_id === lastStageId" @click="toWorkshop(deal)" class="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">📦 В цех</button>
+                            <button v-else @click="advance(deal)" class="rounded bg-gray-100 px-2.5 py-1 text-[11px] text-gray-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                         </div>
                     </div>
-                    <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-gray-400">Пусто</div>
+                    <div v-if="!byStage(stage.id).length" class="py-5 text-center text-[11px] text-gray-400">Пусто</div>
                 </div>
             </div>
         </div>
 
         <!-- LIST -->
-        <div v-else class="overflow-hidden rounded-lg bg-white shadow">
+        <div v-else class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Клиент</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer hover:bg-gray-50" @click="router.get(route('deals.show', deal.id))">
+                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors hover:bg-gray-50" @click="router.get(route('deals.show', deal.id))">
                         <td class="px-4 py-3 text-gray-400">{{ deal.number }}</td>
                         <td class="px-4 py-3 font-medium text-gray-900">{{ deal.name }}</td>
                         <td class="px-4 py-3 text-gray-500">{{ deal.client_name || deal.client?.name || '—' }}</td>

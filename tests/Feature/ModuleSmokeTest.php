@@ -30,7 +30,7 @@ class ModuleSmokeTest extends TestCase
     {
         $user = $this->admin();
 
-        foreach (['dashboard', 'deals.index', 'projects.index', 'clients.index', 'products.index', 'departments.index'] as $name) {
+        foreach (['dashboard', 'deals.index', 'projects.index', 'clients.index', 'departments.index'] as $name) {
             $this->actingAs($user)->get(route($name))->assertOk();
         }
     }

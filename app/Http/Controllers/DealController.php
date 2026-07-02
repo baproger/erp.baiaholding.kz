@@ -88,7 +88,7 @@ class DealController extends Controller
             'stages' => DealStage::with('translations')->where('is_active', true)->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),
             'finance' => $finance->summaryFor($deal),
-            'history' => \App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(),
+            'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => DealStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             'can' => [
                 'update' => request()->user()->can('update', $deal),
