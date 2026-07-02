@@ -83,7 +83,7 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
 
         <div class="mt-6 rounded-lg bg-white p-6 shadow">
             <h3 class="mb-1 font-semibold text-gray-700">ABC-анализ сделок</h3>
-            <p class="mb-4 text-xs text-gray-400">A — приносят ~80% суммы, B — следующие ~15%, C — остальные ~5%</p>
+            <p class="mb-4 text-xs text-gray-400">По фактическому доходу (оплачено): A — дают ~80% выручки, B — ~15%, C — ~5%</p>
             <div class="mb-4 grid grid-cols-3 gap-3">
                 <div v-for="(s, cls) in abcSummary" :key="cls" class="rounded-lg p-3" :class="{ A: 'bg-green-50', B: 'bg-amber-50', C: 'bg-gray-100' }[cls]">
                     <div class="flex items-center gap-2"><span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white" :class="{ A: 'bg-green-600', B: 'bg-amber-500', C: 'bg-gray-500' }[cls]">{{ cls }}</span><span class="text-sm text-gray-600">{{ s.count }} сделок</span></div>
@@ -101,7 +101,7 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                             <td class="py-2 pr-4 text-gray-500">{{ row.share }}%</td>
                             <td class="py-2 text-gray-400">{{ row.cumulative }}%</td>
                         </tr>
-                        <tr v-if="!abc.length"><td colspan="5" class="py-6 text-center text-gray-400">Нет сделок с суммой</td></tr>
+                        <tr v-if="!abc.length"><td colspan="5" class="py-6 text-center text-gray-400">Пока нет оплат</td></tr>
                     </tbody>
                 </table>
             </div>

@@ -59,19 +59,28 @@ class AnalyticsController extends Controller
         $total = Deal::count();
         $won = Deal::whereIn('deal_stage_id', $wonStageIds)->count();
 
-        // ABC analysis: rank deals by budget, A≤80% / B≤95% / C rest of cumulative value.
-        $ranked = Deal::query()->where('budget', '>', 0)->orderByDesc('budget')
-            ->get(['number', 'name', 'budget']);
-        $totalBudget = (float) $ranked->sum('budget');
+        // ABC analysis by ACTUAL income (paid), A≤80% / B≤95% / C rest of cumulative value.
+        $dealIncome = Payment::query()
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->where('invoices.invoiceable_type', 'deal')
+            ->whereNotNull('invoices.invoiceable_id')
+            ->groupBy('invoices.invoiceable_id')
+            ->selectRaw('invoices.invoiceable_id as deal_id, SUM(payments.amount) as income')
+            ->pluck('income', 'deal_id');
+
+        $ranked = Deal::whereIn('id', $dealIncome->keys())->get(['id', 'number', 'name'])
+            ->map(fn ($d) => ['number' => $d->number, 'name' => $d->name, 'value' => (float) $dealIncome[$d->id]])
+            ->sortByDesc('value')->values();
+        $totalIncome = (float) $ranked->sum('value');
         $cumulative = 0.0;
-        $abc = $ranked->map(function ($d) use (&$cumulative, $totalBudget) {
-            $value = (float) $d->budget;
-            $share = $totalBudget > 0 ? $value / $totalBudget * 100 : 0;
+        $abc = $ranked->map(function ($row) use (&$cumulative, $totalIncome) {
+            $value = (float) $row['value'];
+            $share = $totalIncome > 0 ? $value / $totalIncome * 100 : 0;
             $cumulative += $share;
             $class = $cumulative <= 80 ? 'A' : ($cumulative <= 95 ? 'B' : 'C');
 
             return [
-                'number' => $d->number, 'name' => $d->name, 'value' => $value,
+                'number' => $row['number'], 'name' => $row['name'], 'value' => $value,
                 'share' => round($share, 1), 'cumulative' => round($cumulative, 1), 'class' => $class,
             ];
         });
