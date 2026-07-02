@@ -42,6 +42,8 @@ class ModuleSmokeTest extends TestCase
 
         $this->actingAs($user)->post(route('deals.store'), [
             'name' => 'Test Deal',
+            'client_name' => 'Иван',
+            'company_name' => 'ТОО Тест',
             'client_id' => $client->id,
             'budget' => 100000,
         ])->assertRedirect();

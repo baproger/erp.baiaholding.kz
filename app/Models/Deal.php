@@ -17,8 +17,8 @@ class Deal extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'number', 'name', 'client_name', 'client_id', 'responsible_user_id', 'department_id',
-        'deal_stage_id', 'budget', 'deadline', 'description', 'status', 'closed_at',
+        'number', 'name', 'client_name', 'company_name', 'lot_number', 'client_id', 'responsible_user_id', 'department_id',
+        'deal_stage_id', 'budget', 'deadline', 'description', 'note', 'status', 'closed_at',
     ];
 
     protected $casts = [

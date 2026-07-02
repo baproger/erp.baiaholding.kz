@@ -33,7 +33,7 @@ const toWorkshop = (deal) => router.post(route('deals.toWorkshop', deal.id), {},
 const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
 
 const showModal = ref(false);
-const form = useForm({ name: '', client_name: '', responsible_user_id: '', budget: 0, deadline: '', description: '' });
+const form = useForm({ name: '', company_name: '', client_name: '', lot_number: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
 const openCreate = () => { form.reset(); showModal.value = true; };
 const submit = () => form.post(route('deals.store'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
 </script>
@@ -121,7 +121,9 @@ const submit = () => form.post(route('deals.store'), { preserveScroll: true, onS
                 <h2 class="mb-4 text-lg font-semibold">Новая сделка</h2>
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2"><InputLabel value="Название сделки" /><TextInput v-model="form.name" class="mt-1 w-full" /><InputError :message="form.errors.name" class="mt-1" /></div>
-                    <div><InputLabel value="Клиент" /><TextInput v-model="form.client_name" class="mt-1 w-full" placeholder="Имя клиента / компании" /></div>
+                    <div><InputLabel value="Название компании *" /><TextInput v-model="form.company_name" class="mt-1 w-full" /><InputError :message="form.errors.company_name" class="mt-1" /></div>
+                    <div><InputLabel value="Имя клиента *" /><TextInput v-model="form.client_name" class="mt-1 w-full" /><InputError :message="form.errors.client_name" class="mt-1" /></div>
+                    <div><InputLabel value="Номер лота" /><TextInput v-model="form.lot_number" class="mt-1 w-full" /></div>
                     <div>
                         <InputLabel value="Ответственный" />
                         <select v-model="form.responsible_user_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
@@ -132,6 +134,7 @@ const submit = () => form.post(route('deals.store'), { preserveScroll: true, onS
                     <div><InputLabel value="Общая сумма (бюджет)" /><TextInput v-model="form.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="form.errors.budget" class="mt-1" /></div>
                     <div><InputLabel value="Срок" /><TextInput v-model="form.deadline" type="date" class="mt-1 w-full" /></div>
                     <div class="col-span-2"><InputLabel value="Описание" /><textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></textarea></div>
+                    <div class="col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-gray-300 shadow-sm" placeholder="Коротко и чётко по сделке"></textarea></div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showModal = false">Отмена</SecondaryButton>

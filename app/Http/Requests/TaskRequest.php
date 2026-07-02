@@ -20,6 +20,7 @@ class TaskRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'note' => ['nullable', 'string'],
             'taskable_type' => ['nullable', Rule::in(['deal', 'project', 'user'])],
             'taskable_id' => ['nullable', 'integer'],
             'assignee_id' => ['nullable', 'exists:users,id'],

@@ -34,7 +34,7 @@ class WorkflowTest extends TestCase
         $this->seedAll();
         $emp = $this->user('manager');
 
-        $this->actingAs($emp)->post(route('deals.store'), ['name' => 'Тендер', 'budget' => 1000000])
+        $this->actingAs($emp)->post(route('deals.store'), ['name' => 'Тендер', 'client_name' => 'Иван', 'company_name' => 'ТОО Тендер', 'budget' => 1000000])
             ->assertRedirect();
         $this->assertEquals(1, Deal::count());
     }

@@ -38,7 +38,7 @@ class DealPermissionTest extends TestCase
         $deal = $this->deal($user->id);
 
         $this->actingAs($user)->put(route('deals.update', $deal), [
-            'name' => 'Отредактировано', 'budget' => 2000,
+            'name' => 'Отредактировано', 'client_name' => 'Иван', 'company_name' => 'ТОО', 'budget' => 2000,
         ])->assertRedirect();
 
         $this->assertEquals('Отредактировано', $deal->fresh()->name);
@@ -51,7 +51,7 @@ class DealPermissionTest extends TestCase
         $deal = $this->deal($owner->id);
 
         $this->actingAs($stranger)->put(route('deals.update', $deal), [
-            'name' => 'Хакнуто', 'budget' => 1,
+            'name' => 'Хакнуто', 'client_name' => 'И', 'company_name' => 'Х', 'budget' => 1,
         ])->assertForbidden();
     }
 

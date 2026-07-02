@@ -19,9 +19,13 @@ class TaskController extends Controller
         // Personal board: tasks assigned to (or created by) the current user.
         $tasks = Task::query()
             ->with(['assignee:id,name', 'taskable'])
-            ->where(fn ($q) => $q
-                ->where('assignee_id', $request->user()->id)
-                ->orWhere('creator_id', $request->user()->id))
+            ->when(! $request->user()->hasAnyRole(['admin', 'director']), function ($query) use ($request) {
+                $uid = $request->user()->id;
+                $query->where(fn ($q) => $q
+                    ->where('assignee_id', $uid)
+                    ->orWhere('creator_id', $uid)
+                    ->orWhereHasMorph('taskable', [\App\Models\Deal::class, \App\Models\Project::class], fn ($m) => $m->where('responsible_user_id', $uid)));
+            })
             ->when($request->string('assignee')->toString(), fn ($q, $a) => $q->where('assignee_id', $a))
             ->latest()
             ->get();

@@ -19,7 +19,9 @@ class DealRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'client_name' => ['nullable', 'string', 'max:255'],
+            'client_name' => ['required', 'string', 'max:255'],
+            'company_name' => ['required', 'string', 'max:255'],
+            'lot_number' => ['nullable', 'string', 'max:100'],
             'client_id' => ['nullable', 'exists:clients,id'],
             'responsible_user_id' => ['nullable', 'exists:users,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
@@ -27,6 +29,7 @@ class DealRequest extends FormRequest
             'budget' => ['required', 'numeric', 'min:0'],
             'deadline' => ['nullable', 'date'],
             'description' => ['nullable', 'string'],
+            'note' => ['nullable', 'string'],
             'status' => ['nullable', Rule::in(['draft', 'active', 'closed', 'cancelled'])],
         ];
     }

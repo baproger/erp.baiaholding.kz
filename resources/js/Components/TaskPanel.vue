@@ -34,12 +34,12 @@ const forInput = (v) => v ? new Date(v).toISOString().slice(0, 16) : '';
 
 // Edit
 const editing = ref(null);
-const editForm = useForm({ title: '', assignee_id: '', priority: 'medium', status: 'new', due_date: '', description: '' });
+const editForm = useForm({ title: '', assignee_id: '', priority: 'medium', status: 'new', due_date: '', note: '', description: '' });
 const openEdit = (t) => {
     editing.value = t;
     Object.assign(editForm, {
         title: t.title, assignee_id: t.assignee_id ?? '', priority: t.priority, status: t.status,
-        due_date: forInput(t.due_date), description: t.description ?? '',
+        due_date: forInput(t.due_date), note: t.note ?? '', description: t.description ?? '',
     });
 };
 const saveEdit = () => editForm.put(route('tasks.update', editing.value.id), { preserveScroll: true, onSuccess: () => (editing.value = null) });
@@ -111,6 +111,7 @@ const saveEdit = () => editForm.put(route('tasks.update', editing.value.id), { p
                         </div>
                     </div>
                     <div><InputLabel value="Срок (дата и время)" /><TextInput v-model="editForm.due_date" type="datetime-local" class="mt-1 w-full" /></div>
+                    <div><InputLabel value="Заметка" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-md border-gray-300 text-sm"></textarea></div>
                     <div><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-md border-gray-300 text-sm"></textarea></div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">

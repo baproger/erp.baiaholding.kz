@@ -17,7 +17,7 @@ class Task extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'taskable_type', 'taskable_id', 'title', 'description',
+        'taskable_type', 'taskable_id', 'title', 'description', 'note',
         'assignee_id', 'creator_id', 'priority', 'status',
         'start_date', 'due_date', 'parent_task_id', 'checklist', 'completed_at', 'overdue_notified_at',
     ];

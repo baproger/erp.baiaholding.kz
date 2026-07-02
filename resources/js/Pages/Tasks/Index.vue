@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -10,6 +10,7 @@ import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import { deadlineClass, isPastDue } from '@/utils/deadline';
+import { formatDateTime } from '@/utils/format';
 
 const props = defineProps({ tasks: Array, users: Array });
 
@@ -29,22 +30,18 @@ const onDrop = (col) => {
     if (!t || t.status === col.key) return;
     router.patch(route('tasks.status', id), { status: col.key }, { preserveScroll: true, preserveState: false });
 };
-const label = (t) => t.taskable_type === 'deal' ? 'Сделка' : t.taskable_type === 'project' ? 'Цех' : 'Личная';
-const fmt = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+const sourceLabel = (t) => t.taskable_type === 'deal' ? 'Сделка' : t.taskable_type === 'project' ? 'Цех' : 'Личная';
+const sourceLink = (t) => t.taskable_type === 'deal' ? route('deals.show', t.taskable_id) : t.taskable_type === 'project' ? route('projects.show', t.taskable_id) : null;
 const forInput = (v) => v ? new Date(v).toISOString().slice(0, 16) : '';
 
-// Create / edit
 const show = ref(false);
 const editing = ref(null);
-const form = useForm({ title: '', description: '', assignee_id: '', priority: 'medium', status: 'new', due_date: '' });
+const form = useForm({ title: '', description: '', note: '', assignee_id: '', priority: 'medium', status: 'new', due_date: '' });
 
 const openCreate = () => { editing.value = null; form.reset(); show.value = true; };
 const openEdit = (t) => {
     editing.value = t;
-    Object.assign(form, {
-        title: t.title, description: t.description ?? '', assignee_id: t.assignee_id ?? '',
-        priority: t.priority, status: t.status, due_date: forInput(t.due_date),
-    });
+    Object.assign(form, { title: t.title, description: t.description ?? '', note: t.note ?? '', assignee_id: t.assignee_id ?? '', priority: t.priority, status: t.status, due_date: forInput(t.due_date) });
     show.value = true;
 };
 const submit = () => {
@@ -52,11 +49,7 @@ const submit = () => {
     if (editing.value) form.put(route('tasks.update', editing.value.id), opts);
     else form.post(route('tasks.store'), opts);
 };
-const destroy = () => {
-    if (editing.value && confirm('Удалить задачу?')) {
-        router.delete(route('tasks.destroy', editing.value.id), { preserveScroll: true, onSuccess: () => (show.value = false) });
-    }
-};
+const destroy = () => { if (editing.value && confirm('Удалить задачу?')) router.delete(route('tasks.destroy', editing.value.id), { preserveScroll: true, onSuccess: () => (show.value = false) }); };
 </script>
 
 <template>
@@ -65,26 +58,34 @@ const destroy = () => {
         <template #header>Задачи</template>
 
         <div class="mb-4 flex items-center justify-between">
-            <p class="text-sm text-gray-500">Нажмите на задачу, чтобы отредактировать</p>
+            <p class="text-sm text-gray-500">Задачи из сделок и цеха — все здесь. Нажмите для редактирования.</p>
             <PrimaryButton @click="openCreate">+ Новая задача</PrimaryButton>
         </div>
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div v-for="col in columns" :key="col.key" class="rounded-lg bg-gray-200/60 p-2" @dragover.prevent @drop="onDrop(col)">
+            <div v-for="col in columns" :key="col.key" class="rounded-xl bg-gray-100/80 p-2" @dragover.prevent @drop="onDrop(col)">
                 <div class="mb-2 flex items-center gap-2 px-2 py-1">
-                    <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: col.color }"></span>
+                    <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: col.color }"></span>
                     <span class="text-sm font-semibold text-gray-700">{{ col.label }}</span>
                     <span class="text-xs text-gray-400">{{ byStatus(col.key).length }}</span>
                 </div>
                 <div class="space-y-2">
-                    <div v-for="t in byStatus(col.key)" :key="t.id" draggable="true" @dragstart="dragId = t.id" @click="openEdit(t)"
-                        class="cursor-pointer rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300"
+                    <div v-for="t in byStatus(col.key)" :key="t.id" draggable="true" @dragstart="dragId = t.id"
+                        class="rounded-lg bg-white p-3 shadow-sm ring-1 ring-gray-100 transition-all hover:-translate-y-0.5 hover:shadow-md"
                         :class="isPastDue(t.due_date, t.status==='done') ? 'ring-2 ring-red-400' : ''">
-                        <div class="font-medium text-gray-800">{{ t.title }}</div>
-                        <div class="mt-1 flex items-center justify-between text-xs text-gray-400">
-                            <span>{{ label(t) }}<span v-if="t.assignee"> · {{ t.assignee.name }}</span></span>
-                            <span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')">{{ isPastDue(t.due_date, t.status==='done') ? '⚠ Просрочено ' : '⏰ ' }}{{ fmt(t.due_date) }}</span>
+                        <div class="flex cursor-pointer items-start justify-between" @click="openEdit(t)">
+                            <div class="font-medium text-gray-800">{{ t.title }}</div>
+                            <span v-if="isPastDue(t.due_date, t.status==='done')" class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
                         </div>
+                        <div class="mt-1 flex items-center justify-between text-xs">
+                            <Link v-if="sourceLink(t)" :href="sourceLink(t)" class="text-indigo-500 hover:underline" @click.stop>{{ sourceLabel(t) }} {{ t.taskable?.number }}</Link>
+                            <span v-else class="text-gray-400">{{ sourceLabel(t) }}</span>
+                            <span class="flex items-center gap-1 text-gray-500">
+                                <span class="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white">{{ t.assignee?.name?.charAt(0) ?? '—' }}</span>
+                                {{ t.assignee?.name ?? 'нет' }}
+                            </span>
+                        </div>
+                        <div v-if="t.due_date" class="mt-1 text-[11px]" :class="deadlineClass(t.due_date, t.status==='done')">{{ isPastDue(t.due_date, t.status==='done') ? '⚠ ' : '⏰ ' }}{{ formatDateTime(t.due_date) }}</div>
                     </div>
                     <div v-if="!byStatus(col.key).length" class="py-4 text-center text-xs text-gray-400">Пусто</div>
                 </div>
@@ -102,7 +103,7 @@ const destroy = () => {
                     </div>
                     <div class="grid grid-cols-3 gap-4">
                         <div>
-                            <InputLabel value="Исполнитель" />
+                            <InputLabel value="Ответственный" />
                             <select v-model="form.assignee_id" class="mt-1 w-full rounded-md border-gray-300 shadow-sm">
                                 <option value="">— я —</option>
                                 <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
@@ -125,6 +126,10 @@ const destroy = () => {
                     <div>
                         <InputLabel value="Срок (дата и время)" />
                         <TextInput v-model="form.due_date" type="datetime-local" class="mt-1 w-full" />
+                    </div>
+                    <div>
+                        <InputLabel value="Заметка (кратко)" />
+                        <textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-gray-300 shadow-sm" placeholder="Коротко по задаче"></textarea>
                     </div>
                     <div>
                         <InputLabel value="Описание" />
