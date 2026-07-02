@@ -31,7 +31,6 @@ class RolePermissionSeeder extends Seeder
 
         $financist = Role::findOrCreate('financist', 'web');
         $financist->syncPermissions(Permission::whereIn('name', [
-            'report.viewAny',
             'invoice.viewAny', 'invoice.view', 'invoice.create', 'invoice.update', 'invoice.delete',
             'payment.viewAny', 'payment.view', 'payment.create', 'payment.update', 'payment.delete',
             'expense.viewAny', 'expense.view', 'expense.create', 'expense.update', 'expense.delete',
@@ -61,7 +60,6 @@ class RolePermissionSeeder extends Seeder
                 $abilities[] = "{$module}.{$ability}";
             }
         }
-        $abilities[] = 'report.viewAny';
         $abilities[] = 'department.viewAny';
 
         return $abilities;

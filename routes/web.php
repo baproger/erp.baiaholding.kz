@@ -34,15 +34,19 @@ Route::get('/', function () {
     ]);
 });
 
-Route::get('/dashboard', function () {
+Route::get('/dashboard', function (\Illuminate\Http\Request $request) {
+    $u = $request->user();
+    $mgr = $u->hasRole('manager') && ! $u->hasAnyRole(['admin', 'director', 'financist']);
+    $deal = fn () => \App\Models\Deal::query()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id));
+
     return Inertia::render('Dashboard', [
         'stats' => [
-            'deals' => \App\Models\Deal::count(),
-            'deals_active' => \App\Models\Deal::where('status', 'active')->count(),
-            'deals_budget' => (float) \App\Models\Deal::whereIn('status', ['active', 'draft'])->sum('budget'),
-            'projects' => \App\Models\Project::count(),
-            'clients' => \App\Models\Client::count(),
-            'tasks_open' => \App\Models\Task::where('status', '!=', 'done')->count(),
+            'deals' => $deal()->count(),
+            'deals_active' => $deal()->where('status', 'active')->count(),
+            'deals_budget' => (float) $deal()->whereIn('status', ['active', 'draft'])->sum('budget'),
+            'projects' => \App\Models\Project::query()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id))->count(),
+            'clients' => \App\Models\Client::query()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id))->count(),
+            'tasks_open' => \App\Models\Task::where('status', '!=', 'done')->when($mgr, fn ($q) => $q->where('assignee_id', $u->id))->count(),
         ],
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');

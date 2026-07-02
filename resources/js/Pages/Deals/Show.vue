@@ -16,10 +16,11 @@ import DocumentPanel from '@/Components/DocumentPanel.vue';
 import CommentPanel from '@/Components/CommentPanel.vue';
 import CustomFieldsPanel from '@/Components/CustomFieldsPanel.vue';
 import HistoryPanel from '@/Components/HistoryPanel.vue';
+import DealChat from '@/Components/DealChat.vue';
 import { deadlineClass, isPastDue } from '@/utils/deadline';
 import { formatDate, money } from '@/utils/format';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, customFields: Array, history: Array, can: Object });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, customFields: Array, history: Array, chatId: Number, can: Object });
 
 const tab = ref('info');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
@@ -90,6 +91,7 @@ const saveEdit = () => editForm.put(route('deals.update', props.deal.id), { pres
                         <button :class="tab==='comments' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2 transition-colors" @click="tab='comments'">Комментарии ({{ deal.comments.length }})</button>
                         <button :class="tab==='custom' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2 transition-colors" @click="tab='custom'">Доп. поля</button>
                         <button :class="tab==='history' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2 transition-colors" @click="tab='history'">История</button>
+                        <button :class="tab==='chat' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'" class="pb-2 transition-colors" @click="tab='chat'">💬 Чат</button>
                     </div>
 
                     <div v-if="tab==='info'" class="space-y-3 text-sm">
@@ -120,6 +122,7 @@ const saveEdit = () => editForm.put(route('deals.update', props.deal.id), { pres
                     <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
                     <CommentPanel v-else-if="tab==='comments'" :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
+                    <DealChat v-else-if="tab==='chat'" :chat-id="chatId" />
                     <HistoryPanel v-else :history="history" />
                 </div>
             </div>

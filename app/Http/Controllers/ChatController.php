@@ -114,6 +114,11 @@ class ChatController extends Controller
         if ($chat->type === 'global') {
             return;
         }
+        if ($chat->deal_id) {
+            $deal = \App\Models\Deal::find($chat->deal_id);
+            abort_unless($deal && $request->user()->can('view', $deal), 403);
+            return;
+        }
         abort_unless($chat->participants()->where('users.id', $request->user()->id)->exists(), 403);
     }
 }

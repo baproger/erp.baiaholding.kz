@@ -82,8 +82,14 @@ class DealController extends Controller
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
 
+        $dealChat = \App\Models\Chat::firstOrCreate(
+            ['deal_id' => $deal->id],
+            ['type' => 'group', 'name' => 'Чат ' . $deal->number, 'is_active' => true]
+        );
+
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
+            'chatId' => $dealChat->id,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => DealStage::with('translations')->where('is_active', true)->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),

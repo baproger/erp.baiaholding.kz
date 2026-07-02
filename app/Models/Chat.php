@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Chat extends Model
 {
-    protected $fillable = ['type', 'name', 'is_active'];
+    protected $fillable = ['type', 'deal_id', 'name', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
 
