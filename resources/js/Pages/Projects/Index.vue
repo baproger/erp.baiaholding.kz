@@ -5,7 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
 
-const props = defineProps({ projects: [Array, Object], stages: Array, view: String, filters: Object });
+const props = defineProps({ projects: [Array, Object], stages: Array, view: String, filters: Object, canSeeMoney: Boolean });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
 const list = computed(() => Array.isArray(props.projects) ? props.projects : props.projects.data);
@@ -47,7 +47,7 @@ const advance = (p) => router.patch(route('projects.advance', p.id), {}, { prese
                         class="block cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300">
                         <div class="text-xs text-gray-400">{{ p.number }}</div>
                         <div class="font-medium text-gray-800">{{ p.name }}</div>
-                        <div class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
+                        <div v-if="canSeeMoney" class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
                         <div class="mt-1 text-xs text-gray-400">{{ p.client?.name ?? '—' }}</div>
                         <button @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>

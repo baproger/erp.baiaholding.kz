@@ -41,7 +41,9 @@ class ChatTest extends TestCase
 
     public function test_non_participant_cannot_read_group_chat(): void
     {
-        $owner = $this->user();
+        $this->seed(RolePermissionSeeder::class);
+        $owner = User::factory()->create();
+        $owner->assignRole('admin');
         $outsider = User::factory()->create();
         $outsider->assignRole('employee');
 

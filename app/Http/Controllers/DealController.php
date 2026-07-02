@@ -29,6 +29,7 @@ class DealController extends Controller
             ->withCount('tasks')
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             ->where('status', '!=', 'closed')
+            ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
             ->when($request->string('search')->toString(), fn ($q, $s) => $q
                 ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"))
             ->when($request->string('responsible')->toString(), fn ($q, $r) => $q->where('responsible_user_id', $r));

@@ -18,7 +18,7 @@ const props = defineProps({ deals: [Array, Object], stages: Array, view: String,
 const list = computed(() => Array.isArray(props.deals) ? props.deals : props.deals.data);
 const byStage = (id) => list.value.filter((d) => d.deal_stage_id === id);
 const stageTotal = (id) => byStage(id).reduce((s, d) => s + Number(d.budget), 0);
-const wonStageId = computed(() => props.stages.find((s) => s.is_won)?.id);
+const wonStageId = computed(() => props.stages[props.stages.length - 1]?.id);
 
 const draggingId = ref(null);
 const onDrop = (stage) => {

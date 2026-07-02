@@ -85,6 +85,9 @@ class ChatController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        if ($request->input('type') === 'group') {
+            abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403, 'Группы создаёт только администратор или директор.');
+        }
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'type' => ['required', 'in:personal,group'],

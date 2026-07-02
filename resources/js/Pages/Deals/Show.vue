@@ -127,9 +127,8 @@ const saveEdit = () => editForm.put(route('deals.update', props.deal.id), { pres
                         <div class="flex justify-between"><span class="text-gray-500">Статус</span><StatusBadge :status="deal.status" /></div>
                         <div class="flex justify-between"><span class="text-gray-500">Доход</span><span class="font-medium text-green-600">{{ money(finance.income) }}</span></div>
                         <div class="flex justify-between"><span class="text-gray-500">Расходы</span><span class="font-medium text-red-600">{{ money(finance.expense) }}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Прибыль</span><span class="font-medium">{{ money(finance.profit) }}</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Маржа</span><span class="font-medium">{{ finance.margin }}%</span></div>
-                        <div class="flex justify-between"><span class="text-gray-500">Выгода (план)</span><span class="font-medium" :class="finance.plannedProfit >= 0 ? 'text-green-600' : 'text-red-600'">{{ money(finance.plannedProfit) }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500">Прибыль</span><span class="font-medium" :class="finance.plannedProfit >= 0 ? 'text-green-600' : 'text-red-600'">{{ money(finance.plannedProfit) }}</span></div>
+                        <div class="flex justify-between"><span class="text-gray-500">Маржа</span><span class="font-bold">{{ finance.plannedMargin }}% · {{ money(finance.plannedProfit) }}</span></div>
                     </div>
                 </div>
                 <DangerButton v-if="can.delete" @click="destroy">Удалить сделку</DangerButton>

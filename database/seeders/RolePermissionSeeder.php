@@ -10,7 +10,6 @@ class RolePermissionSeeder extends Seeder
 {
     public function run(): void
     {
-        // Permissions grouped by module (viewAny/view/create/update/delete).
         $modules = [
             'department', 'client', 'product', 'deal', 'project',
             'task', 'invoice', 'payment', 'expense', 'document',
@@ -24,19 +23,29 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        // Roles.
         $admin = Role::findOrCreate('admin', 'web');
         $admin->syncPermissions(Permission::all());
 
+        $director = Role::findOrCreate('director', 'web');
+        $director->syncPermissions(Permission::all());
+
+        $financist = Role::findOrCreate('financist', 'web');
+        $financist->syncPermissions(Permission::whereIn('name', [
+            'report.viewAny',
+            'invoice.viewAny', 'invoice.view', 'invoice.create', 'invoice.update', 'invoice.delete',
+            'payment.viewAny', 'payment.view', 'payment.create', 'payment.update', 'payment.delete',
+            'expense.viewAny', 'expense.view', 'expense.create', 'expense.update', 'expense.delete',
+            'deal.viewAny', 'deal.view',
+            'project.viewAny', 'project.view',
+            'client.viewAny', 'client.view',
+        ])->get());
+
         $manager = Role::findOrCreate('manager', 'web');
-        $manager->syncPermissions(
-            Permission::whereIn('name', $this->managerAbilities())->get()
-        );
+        $manager->syncPermissions(Permission::whereIn('name', $this->managerAbilities())->get());
 
         $employee = Role::findOrCreate('employee', 'web');
         $employee->syncPermissions([
-            'deal.create', 'deal.update',
-            'deal.viewAny', 'deal.view',
+            'deal.create', 'deal.update', 'deal.viewAny', 'deal.view',
             'project.viewAny', 'project.view',
             'task.viewAny', 'task.view', 'task.update',
             'client.viewAny', 'client.view',
