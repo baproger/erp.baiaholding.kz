@@ -11,7 +11,7 @@ const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
     <AppLayout>
         <template #header>Дашборд</template>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Link :href="route('deals.index')" class="rounded-lg bg-white p-5 shadow transition hover:shadow-md">
                 <div class="text-xs uppercase text-gray-400">Сделки</div>
                 <div class="mt-1 text-3xl font-bold text-gray-800">{{ stats.deals }}</div>
@@ -20,6 +20,11 @@ const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
             <div class="rounded-lg bg-white p-5 shadow">
                 <div class="text-xs uppercase text-gray-400">Сумма в работе</div>
                 <div class="mt-1 text-2xl font-bold text-indigo-600">{{ money(stats.deals_budget) }}</div>
+            </div>
+            <div class="rounded-lg bg-white p-5 shadow">
+                <div class="text-xs uppercase text-gray-400">Заработано (факт)</div>
+                <div class="mt-1 text-2xl font-bold text-green-600">{{ money(stats.earned) }}</div>
+                <div class="mt-1 text-sm text-gray-500">Успешных сделок: {{ stats.deals_won }}</div>
             </div>
             <Link :href="route('projects.index')" class="rounded-lg bg-white p-5 shadow transition hover:shadow-md">
                 <div class="text-xs uppercase text-gray-400">Цех (заказы)</div>

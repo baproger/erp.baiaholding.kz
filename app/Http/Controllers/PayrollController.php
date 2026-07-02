@@ -20,22 +20,25 @@ class PayrollController extends Controller
 
         $leadership = $user->hasAnyRole(['admin', 'director', 'financist']);
         $rate = ((float) Setting::get('bonus_percent', 10)) / 100;
+        $wonIds = Deal::won()->pluck('id');
 
         // Actual income (paid) per responsible manager.
         $incomeByUser = Payment::query()
             ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
             ->join('deals', fn ($j) => $j->on('invoices.invoiceable_id', '=', 'deals.id')->where('invoices.invoiceable_type', 'deal'))
+            ->whereIn('deals.id', $wonIds)
             ->groupBy('deals.responsible_user_id')
             ->selectRaw('deals.responsible_user_id as uid, SUM(payments.amount) as v')->pluck('v', 'uid');
 
         // Confirmed expenses per manager.
         $expenseByUser = Expense::query()
             ->join('deals', fn ($j) => $j->on('expenses.expenseable_id', '=', 'deals.id')->where('expenses.expenseable_type', 'deal'))
+            ->whereIn('deals.id', $wonIds)
             ->where('expenses.status', 'confirmed')
             ->groupBy('deals.responsible_user_id')
             ->selectRaw('deals.responsible_user_id as uid, SUM(expenses.amount) as v')->pluck('v', 'uid');
 
-        $closedByUser = Deal::where('status', 'closed')->whereNotNull('responsible_user_id')
+        $closedByUser = Deal::won()->whereNotNull('responsible_user_id')
             ->groupBy('responsible_user_id')->selectRaw('responsible_user_id as uid, count(*) as c')->pluck('c', 'uid');
         $totalByUser = Deal::whereNotNull('responsible_user_id')
             ->groupBy('responsible_user_id')->selectRaw('responsible_user_id as uid, count(*) as c')->pluck('c', 'uid');

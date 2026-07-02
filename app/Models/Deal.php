@@ -76,4 +76,18 @@ class Deal extends Model
     {
         return $this->morphMany(Comment::class, 'commentable');
     }
+
+    /**
+     * Successful deals: won stage reached OR already sent to Цех (has project),
+     * excluding cancelled. Used for factual money (payroll/analytics/dashboard).
+     */
+    public function scopeWon($query)
+    {
+        return $query->where("status", "!=", "cancelled")
+            ->where(function ($w) {
+                $w->whereHas("stage", fn ($s) => $s->where("is_won", true))
+                    ->orWhereHas("project")
+                    ->orWhere("status", "closed");
+            });
+    }
 }

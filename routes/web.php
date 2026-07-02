@@ -39,12 +39,15 @@ Route::get('/dashboard', function (\Illuminate\Http\Request $request) {
     $u = $request->user();
     $mgr = $u->hasRole('manager') && ! $u->hasAnyRole(['admin', 'director', 'financist']);
     $deal = fn () => \App\Models\Deal::query()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id));
+    $wonIds = \App\Models\Deal::won()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id))->pluck('id');
 
     return Inertia::render('Dashboard', [
         'stats' => [
             'deals' => $deal()->count(),
             'deals_active' => $deal()->where('status', 'active')->count(),
             'deals_budget' => (float) $deal()->whereIn('status', ['active', 'draft'])->sum('budget'),
+            'deals_won' => $wonIds->count(),
+            'earned' => (float) \App\Models\Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $wonIds))->sum('amount'),
             'projects' => \App\Models\Project::query()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id))->count(),
             'clients' => \App\Models\Client::query()->when($mgr, fn ($q) => $q->where('responsible_user_id', $u->id))->count(),
             'tasks_open' => \App\Models\Task::where('status', '!=', 'done')->when($mgr, fn ($q) => $q->where('assignee_id', $u->id))->count(),

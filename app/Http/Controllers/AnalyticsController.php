@@ -17,6 +17,8 @@ class AnalyticsController extends Controller
     {
         abort_unless($request->user()->can('report.viewAny') || $request->user()->hasRole('admin'), 403);
 
+        $wonIds = Deal::won()->pluck('id');
+
         // Deals by stage (funnel).
         $stages = DealStage::with('translations')->where('is_active', true)->orderBy('order')->get();
         $dealsByStage = Deal::query()
@@ -36,8 +38,8 @@ class AnalyticsController extends Controller
 
         // Monthly income (payments) and expenses — grouped in PHP for DB portability.
         $months = collect(range(5, 0))->map(fn ($i) => now()->subMonths($i)->format('Y-m'));
-        $payments = Payment::query()->get(['amount', 'payment_date']);
-        $expenses = Expense::query()->where('status', 'confirmed')->get(['amount', 'date']);
+        $payments = Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $wonIds))->get(['amount', 'payment_date']);
+        $expenses = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')->whereIn('expenseable_id', $wonIds)->get(['amount', 'date']);
 
         $monthly = $months->map(function ($m) use ($payments, $expenses) {
             $income = $payments->filter(fn ($p) => optional($p->payment_date)->format('Y-m') === $m)->sum('amount');
@@ -63,6 +65,7 @@ class AnalyticsController extends Controller
         $dealIncome = Payment::query()
             ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
             ->where('invoices.invoiceable_type', 'deal')
+            ->whereIn('invoices.invoiceable_id', $wonIds)
             ->whereNotNull('invoices.invoiceable_id')
             ->groupBy('invoices.invoiceable_id')
             ->selectRaw('invoices.invoiceable_id as deal_id, SUM(payments.amount) as income')

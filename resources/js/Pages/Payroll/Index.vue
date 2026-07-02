@@ -18,7 +18,7 @@ const me = props.rows[0] ?? null;
                 <div class="text-xs uppercase text-gray-400">Ваш бонус ({{ rate }}% от чистой прибыли)</div>
                 <div class="mt-1 text-3xl font-bold text-green-600">{{ money(me?.bonus ?? 0) }}</div>
                 <div class="mt-4 space-y-2 text-sm">
-                    <div class="flex justify-between"><span class="text-gray-500">Закрыто сделок</span><span class="font-medium">{{ me?.closed ?? 0 }}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Успешных сделок</span><span class="font-medium">{{ me?.closed ?? 0 }}</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">Ваша чистая прибыль</span><span class="font-medium">{{ money(me?.net ?? 0) }}</span></div>
                 </div>
                 <p class="mt-4 text-xs text-gray-400">Бонус = {{ rate }}% от чистой прибыли по вашим оплаченным сделкам (доход − расходы).</p>
@@ -39,7 +39,7 @@ const me = props.rows[0] ?? null;
                         <tr>
                             <th class="px-4 py-3">Сотрудник</th>
                             <th class="px-4 py-3">Сделок</th>
-                            <th class="px-4 py-3">Закрыто</th>
+                            <th class="px-4 py-3">Успешных</th>
                             <th class="px-4 py-3">Доход</th>
                             <th class="px-4 py-3">Расходы</th>
                             <th class="px-4 py-3">Чистая прибыль</th>

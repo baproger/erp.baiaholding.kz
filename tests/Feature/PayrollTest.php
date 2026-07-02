@@ -32,7 +32,8 @@ class PayrollTest extends TestCase
         return $u;
     }
 
-    private function dealWithFinance(User $mgr, float $paid, float $expense): Deal
+    // status=closed means the tender was won and sent to Цех → counts.
+    private function wonDealWithFinance(User $mgr, float $paid, float $expense): Deal
     {
         $deal = Deal::create(['number' => 'D-'.uniqid(), 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 1000000, 'status' => 'closed', 'deal_stage_id' => DealStage::orderBy('order')->first()->id, 'responsible_user_id' => $mgr->id]);
         $inv = Invoice::create(['number' => 'I-'.uniqid(), 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => $paid, 'status' => 'paid']);
@@ -45,7 +46,7 @@ class PayrollTest extends TestCase
     {
         $admin = $this->user('admin');
         $mgr = $this->user('manager');
-        $this->dealWithFinance($mgr, 500000, 100000); // net 400k -> bonus 40k, company 360k
+        $this->wonDealWithFinance($mgr, 500000, 100000); // net 400k -> bonus 40k, company 360k
 
         $this->actingAs($admin)->get(route('payroll.index'))
             ->assertInertia(fn (Assert $p) => $p->component('Payroll/Index')
@@ -59,11 +60,25 @@ class PayrollTest extends TestCase
     {
         $mgr = $this->user('manager');
         $other = $this->user('manager');
-        $this->dealWithFinance($mgr, 500000, 100000);
-        $this->dealWithFinance($other, 900000, 100000);
+        $this->wonDealWithFinance($mgr, 500000, 100000);
+        $this->wonDealWithFinance($other, 900000, 100000);
 
         $this->actingAs($mgr)->get(route('payroll.index'))
             ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 40000));
+    }
+
+    public function test_unsuccessful_deal_not_counted(): void
+    {
+        $admin = $this->user('admin');
+        $mgr = $this->user('manager');
+        // Active deal at a NON-won stage, with a payment, never sent to Цех → not counted.
+        $stage = DealStage::where('is_won', false)->orderBy('order')->first()->id;
+        $deal = Deal::create(['number' => 'N-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 500000, 'status' => 'active', 'deal_stage_id' => $stage, 'responsible_user_id' => $mgr->id]);
+        $inv = Invoice::create(['number' => 'N-I', 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 200000, 'status' => 'paid']);
+        Payment::create(['invoice_id' => $inv->id, 'amount' => 200000, 'payment_date' => now()->toDateString()]);
+
+        $this->actingAs($admin)->get(route('payroll.index'))
+            ->assertInertia(fn (Assert $p) => $p->where('totals.bonus', 0));
     }
 
     public function test_cex_employee_forbidden(): void
