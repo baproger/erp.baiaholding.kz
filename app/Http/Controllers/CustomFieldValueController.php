@@ -19,6 +19,14 @@ class CustomFieldValueController extends Controller
             'values' => ['array'],
         ]);
 
+        $entity = match ($validated['entity_type']) {
+            'deal' => \App\Models\Deal::find($validated['entity_id']),
+            'project' => \App\Models\Project::find($validated['entity_id']),
+            'task' => \App\Models\Task::find($validated['entity_id']),
+            default => null,
+        };
+        abort_unless($entity && $request->user()->can('update', $entity), 403);
+
         DB::transaction(function () use ($validated) {
             $fields = CustomField::where('entity_type', $validated['entity_type'])->get()->keyBy('id');
 

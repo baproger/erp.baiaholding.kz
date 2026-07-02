@@ -154,7 +154,8 @@ class DealController extends Controller
 
     public function updateResponsible(Request $request, Deal $deal): RedirectResponse
     {
-        // Any authenticated user may (re)assign the responsible person.
+        // Anyone who can see the deal may (re)assign the responsible person.
+        $this->authorize('view', $deal);
         $validated = $request->validate(['responsible_user_id' => ['nullable', 'exists:users,id']]);
         $deal->update(['responsible_user_id' => $validated['responsible_user_id'] ?: null]);
 

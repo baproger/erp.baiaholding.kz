@@ -55,9 +55,10 @@ class DealPermissionTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_any_user_can_change_responsible(): void
+    public function test_user_with_deal_access_can_change_responsible(): void
     {
         $someone = User::factory()->create();
+        $someone->assignRole('manager');
         $newResp = User::factory()->create();
         $deal = $this->deal(null);
 

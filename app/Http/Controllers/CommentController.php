@@ -12,6 +12,10 @@ class CommentController extends Controller
     public function store(CommentRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $entity = $data['commentable_type'] === 'deal'
+            ? \App\Models\Deal::find($data['commentable_id'])
+            : \App\Models\Project::find($data['commentable_id']);
+        abort_unless($entity && $request->user()->can('view', $entity), 403);
         $data['user_id'] = $request->user()->id;
 
         Comment::create($data);
