@@ -67,9 +67,9 @@ const submit = () => form.post(route('deals.store'), { preserveScroll: true, onS
                         class="cursor-move rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-gray-100 transition-all hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200">
                         <Link :href="route('deals.show', deal.id)" class="block">
                             <div class="flex items-start justify-between">
-                                <div>
-                                    <div class="text-[11px] text-gray-400">{{ deal.number }}</div>
-                                    <div class="text-base font-bold leading-tight text-gray-900">{{ money(deal.budget) }}</div>
+                                <div class="min-w-0">
+                                    <div class="truncate text-sm font-bold text-gray-900">{{ deal.company_name || deal.name }}</div>
+                                    <div class="text-base font-bold leading-tight text-indigo-600">{{ money(deal.budget) }}</div>
                                 </div>
                                 <span v-if="deal.overdue_count" class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
                                 <span v-else-if="deal.tasks_count" class="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{{ deal.tasks_count }}</span>
@@ -82,6 +82,7 @@ const submit = () => form.post(route('deals.store'), { preserveScroll: true, onS
                                 <span class="truncate text-xs text-gray-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
                             </div>
                             <div v-if="deal.deadline" class="mt-1 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-gray-400'">⏰ {{ formatDate(deal.deadline) }}</div>
+                            <div class="mt-0.5 truncate text-[11px] text-gray-400">👤 {{ deal.client_name || '—' }} <span class="text-gray-300">· {{ deal.number }}</span></div>
                         </Link>
                         <div class="mt-2 flex items-center justify-between border-t pt-1.5">
                             <Link :href="route('deals.show', deal.id)" class="text-[11px] text-gray-400 hover:text-indigo-600">+ Дело</Link>

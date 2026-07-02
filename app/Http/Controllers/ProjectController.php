@@ -22,15 +22,18 @@ class ProjectController extends Controller
     /** Non-privileged users only see Цех items tied to them. */
     private function scope($query, Request $request)
     {
-        if ($request->user()->hasAnyRole(['admin', 'director', 'financist'])) {
-            return $query;
-        }
-        $uid = $request->user()->id;
+        $user = $request->user();
+        // Only managers are limited to their own orders; workshop staff and
+        // leadership see the whole Цех board (observers of the whole queue).
+        if ($user->hasRole('manager') && ! $user->hasAnyRole(['admin', 'director', 'financist'])) {
+            $uid = $user->id;
 
-        return $query->where(fn ($w) => $w
-            ->where('responsible_user_id', $uid)
-            ->orWhereHas('deal', fn ($d) => $d->where('responsible_user_id', $uid))
-            ->orWhereHas('tasks', fn ($t) => $t->where('assignee_id', $uid)));
+            return $query->where(fn ($w) => $w
+                ->where('responsible_user_id', $uid)
+                ->orWhereHas('deal', fn ($d) => $d->where('responsible_user_id', $uid)));
+        }
+
+        return $query;
     }
 
     public function index(Request $request): Response
@@ -40,7 +43,7 @@ class ProjectController extends Controller
         $view = $request->string('view', 'kanban')->toString();
 
         $base = Project::query()
-            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order'])
+            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name'])
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())]);
         $this->scope($base, $request);
         $base->when($request->string('search')->toString(), fn ($q, $s) => $q
@@ -91,7 +94,7 @@ class ProjectController extends Controller
 
     public function updateStage(Request $request, Project $project): RedirectResponse
     {
-        $this->authorize('update', $project);
+        $this->authorize('view', $project);
 
         $validated = $request->validate(['project_stage_id' => ['required', 'exists:project_stages,id']]);
         $stage = ProjectStage::findOrFail($validated['project_stage_id']);
@@ -107,7 +110,7 @@ class ProjectController extends Controller
 
     public function advance(Request $request, Project $project): RedirectResponse
     {
-        $this->authorize('update', $project);
+        $this->authorize('view', $project);
         $next = ProjectStage::where('is_active', true)->where('order', '>', optional($project->stage)->order ?? 0)->orderBy('order')->first();
         if (! $next) {
             return back()->with('error', 'Это последний этап.');

@@ -45,8 +45,8 @@ const advance = (p) => router.patch(route('projects.advance', p.id), {}, { prese
                 <div class="flex-1 space-y-2 px-2 pb-2">
                     <Link v-for="p in byStage(stage.id)" :key="p.id" :href="route('projects.show', p.id)" draggable="true" @dragstart="draggingId = p.id"
                         class="block cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300">
-                        <div class="text-xs text-gray-400">{{ p.number }}</div>
-                        <div class="font-medium text-gray-800">{{ p.name }}</div>
+                        <div class="text-sm font-bold text-gray-900">{{ p.deal?.company_name || p.name }}</div>
+                        <div class="text-[10px] text-gray-300">{{ p.number }}</div>
                         <div v-if="canSeeMoney" class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
                         <div class="mt-1 text-xs text-gray-400">{{ p.client?.name ?? '—' }}</div>
                         <button @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
