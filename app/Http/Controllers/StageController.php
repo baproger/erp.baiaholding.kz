@@ -39,7 +39,7 @@ class StageController extends Controller
         $model = $this->model($data['kind']);
 
         $max = $model::max('order') ?? 0;
-        $model::create([
+        $stage = $model::create([
             'name' => $data['name'],
             'color' => $data['color'] ?? '#6B7280',
             'order' => $max + 1,
@@ -47,6 +47,7 @@ class StageController extends Controller
             'checklist' => [],
             'type' => $data['kind'] === 'project' ? 'project' : 'sale',
         ]);
+        $stage->translations()->updateOrCreate(['locale' => app()->getLocale()], ['name' => $data['name']]);
 
         return back()->with('success', 'Этап добавлен.');
     }
@@ -61,6 +62,11 @@ class StageController extends Controller
             'color' => $data['color'] ?? null,
             'order' => $data['order'] ?? null,
         ], fn ($v) => $v !== null));
+
+        if (! empty($data['name'])) {
+            // Keep the current-locale translation in sync so the rename shows on cards.
+            $stage->translations()->updateOrCreate(['locale' => app()->getLocale()], ['name' => $data['name']]);
+        }
 
         return back()->with('success', 'Этап обновлён.');
     }
