@@ -11,7 +11,7 @@ import CommentPanel from '@/Components/CommentPanel.vue';
 import HistoryPanel from '@/Components/HistoryPanel.vue';
 import { formatDate } from '@/utils/format';
 
-const props = defineProps({ project: Object, stages: Array, users: Array, finance: Object, canSeeMoney: Boolean, history: Array });
+const props = defineProps({ project: Object, stages: Array, users: Array, finance: Object, financeEntityType: String, financeEntityId: Number, financeInvoices: Array, financeExpenses: Array, canSeeMoney: Boolean, history: Array });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
 const tab = ref('info');
 const lastStage = computed(() => props.stages[props.stages.length - 1]);
@@ -78,7 +78,7 @@ const advance = () => router.patch(route('projects.advance', props.project.id), 
                     </div>
 
                     <TaskPanel v-else-if="tab==='tasks'" :tasks="project.tasks" taskable-type="project" :taskable-id="project.id" :users="users" />
-                    <FinancePanel v-else-if="tab==='finance' && canSeeMoney" :entity-type="'project'" :entity-id="project.id" :client-id="project.client_id" :invoices="project.invoices" :expenses="project.expenses" :finance="finance" />
+                    <FinancePanel v-else-if="tab==='finance' && canSeeMoney" :entity-type="financeEntityType" :entity-id="financeEntityId" :client-id="project.client_id" :invoices="financeInvoices" :expenses="financeExpenses" :finance="finance" />
                     <DocumentPanel v-else-if="tab==='docs'" :documents="project.documents" entity-type="project" :entity-id="project.id" />
                     <CommentPanel v-else-if="tab==='comments'" :comments="project.comments" entity-type="project" :entity-id="project.id" />
                     <HistoryPanel v-else :history="history" />

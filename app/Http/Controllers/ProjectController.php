@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
+use App\Models\Deal;
+use App\Models\DealStage;
 use App\Models\Project;
 use App\Models\ProjectStage;
 use App\Models\User;
 use App\Services\FinanceService;
+use App\Support\AuditFormatter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,18 +17,14 @@ use Inertia\Response;
 
 class ProjectController extends Controller
 {
-    /** Roles that may see money in the Цех. */
     private function canSeeMoney(Request $request): bool
     {
         return $request->user()->hasAnyRole(['admin', 'director', 'financist', 'manager']);
     }
 
-    /** Non-privileged users only see Цех items tied to them. */
     private function scope($query, Request $request)
     {
         $user = $request->user();
-        // Only managers are limited to their own orders; workshop staff and
-        // leadership see the whole Цех board (observers of the whole queue).
         if ($user->hasRole('manager') && ! $user->hasAnyRole(['admin', 'director', 'financist'])) {
             $uid = $user->id;
 
@@ -73,22 +73,54 @@ class ProjectController extends Controller
             'client', 'responsible:id,name', 'department:id,name',
             'stage', 'deal:id,number,name',
             'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
-            'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
-            'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
 
         $canSeeMoney = $this->canSeeMoney($request);
 
+        // Finance & history follow the originating deal so the whole lifecycle
+        // (sale → production) is one continuous picture for the manager.
+        $source = $project->deal_id
+            ? Deal::with([
+                'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
+                'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
+            ])->find($project->deal_id)
+            : null;
+        $source ??= $project->load([
+            'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
+            'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
+        ]);
+
+        // Merge audit history of the project and its deal.
+        $history = AuditFormatter::humanize(
+            AuditLog::query()
+                ->where(function ($q) use ($project) {
+                    $q->where(fn ($w) => $w->where('table_name', 'projects')->where('record_id', $project->id));
+                    if ($project->deal_id) {
+                        $q->orWhere(fn ($w) => $w->where('table_name', 'deals')->where('record_id', $project->deal_id));
+                    }
+                })
+                ->with('user:id,name')->latest()->limit(150)->get(),
+            [
+                'project_stage_id' => ProjectStage::pluck('name', 'id'),
+                'deal_stage_id' => DealStage::pluck('name', 'id'),
+                'responsible_user_id' => User::pluck('name', 'id'),
+            ]
+        );
+
         return Inertia::render('Projects/Show', [
             'project' => $project,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => ProjectStage::with('translations')->where('is_active', true)->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
-            'finance' => $canSeeMoney ? $finance->summaryFor($project) : null,
+            'finance' => $canSeeMoney ? $finance->summaryFor($source) : null,
+            'financeEntityType' => $project->deal_id ? 'deal' : 'project',
+            'financeEntityId' => $source->id,
+            'financeInvoices' => $canSeeMoney ? $source->invoices : [],
+            'financeExpenses' => $canSeeMoney ? $source->expenses : [],
             'canSeeMoney' => $canSeeMoney,
-            'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'projects')->where('record_id', $project->id)->with('user:id,name')->latest()->limit(100)->get(), ['project_stage_id' => ProjectStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
+            'history' => $history,
         ]);
     }
 
