@@ -9,8 +9,6 @@ use Illuminate\Validation\ValidationException;
 
 class StageTransitionService
 {
-    public function __construct(private ProjectService $projects) {}
-
     /**
      * Move a deal to the target stage, enforcing the current stage's checklist,
      * and auto-creating a project when the target stage is a "won" stage.
@@ -34,6 +32,33 @@ class StageTransitionService
                 if ($openTasks > 0) {
                     throw ValidationException::withMessages([
                         'stage' => "Нельзя перейти на следующий этап: на этапе «{$current->name}» есть незавершённые задачи ({$openTasks}).",
+                    ]);
+                }
+            }
+
+            // Post-workshop stages are reachable only through the workshop flow:
+            //   «Акт утверждение» (2nd-from-last) — only via the Цех "АКТ" action.
+            //   «Оплата успешно»  (last, is_won)  — only from «Акт утверждение».
+            $active = DealStage::where('is_active', true)->orderBy('order')->get();
+            $returnStage = $active->slice(-2, 1)->first();
+            $wonStage = $active->last();
+            if ($returnStage && $target->id === $returnStage->id) {
+                throw ValidationException::withMessages([
+                    'stage' => 'На «Акт утверждение» заказ попадает только из цеха (кнопка «АКТ»).',
+                ]);
+            }
+            if ($wonStage && $target->id === $wonStage->id && (! $current || ! $returnStage || $current->id !== $returnStage->id)) {
+                throw ValidationException::withMessages([
+                    'stage' => 'Сначала «Акт утверждение», затем «Оплата успешно».',
+                ]);
+            }
+            // «Оплата успешно» requires the deal to be fully paid (paid income == deal sum).
+            if ($wonStage && $target->id === $wonStage->id) {
+                $paid = (float) \App\Models\Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->where('invoiceable_id', $deal->id))->sum('amount');
+                $remainder = round((float) $deal->budget - $paid, 2);
+                if ($remainder > 0.009) {
+                    throw ValidationException::withMessages([
+                        'stage' => 'Нельзя перевести на «Оплата успешно»: остаток оплаты '.number_format($remainder, 0, '.', ' ').' ₸ (сумма сделки '.number_format((float) $deal->budget, 0, '.', ' ').', оплачено '.number_format($paid, 0, '.', ' ').'). Внесите полную оплату.',
                     ]);
                 }
             }

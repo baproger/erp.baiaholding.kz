@@ -67,14 +67,16 @@ class AuditNotificationTest extends TestCase
     public function test_stage_change_notifies_responsible_and_marks_read(): void
     {
         $u = $this->admin();
+        // Start on the first stage and move one step forward. The won stage is reachable
+        // only through the workshop flow, so we assert notification on a normal transition.
+        $stages = DealStage::where('is_active', true)->orderBy('order')->take(2)->get();
         $deal = Deal::create([
             'number' => 'BAIA-A-2', 'name' => 'D', 'budget' => 1, 'status' => 'active',
             'responsible_user_id' => $u->id,
-            'deal_stage_id' => DealStage::orderBy('order')->first()->id,
+            'deal_stage_id' => $stages[0]->id,
         ]);
-        $won = DealStage::where('is_won', true)->first();
 
-        $this->actingAs($u)->patch(route('deals.stage', $deal), ['deal_stage_id' => $won->id])->assertRedirect();
+        $this->actingAs($u)->patch(route('deals.stage', $deal), ['deal_stage_id' => $stages[1]->id])->assertRedirect();
         $this->assertEquals(1, $u->unreadNotifications()->count());
 
         $this->actingAs($u)->patch(route('notifications.readAll'))->assertRedirect();

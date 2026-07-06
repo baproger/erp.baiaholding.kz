@@ -17,7 +17,7 @@ class Deal extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'number', 'name', 'client_name', 'company_name', 'lot_number', 'client_id', 'responsible_user_id', 'department_id',
+        'number', 'name', 'client_name', 'company_name', 'address', 'bin', 'lot_number', 'client_id', 'responsible_user_id', 'department_id',
         'deal_stage_id', 'budget', 'deadline', 'description', 'note', 'status', 'closed_at',
     ];
 
@@ -49,7 +49,9 @@ class Deal extends Model
 
     public function project(): HasOne
     {
-        return $this->hasOne(Project::class);
+        // Latest workshop run for this deal (a deal may go through the workshop
+        // more than once over its lifetime; the newest one reflects current state).
+        return $this->hasOne(Project::class)->latestOfMany();
     }
 
     public function tasks(): MorphMany
@@ -78,16 +80,13 @@ class Deal extends Model
     }
 
     /**
-     * Successful deals: won stage reached OR already sent to Цех (has project),
-     * excluding cancelled. Used for factual money (payroll/analytics/dashboard).
+     * Successful deals = reached the "won" stage («Оплата успешно»), excluding cancelled.
+     * Money counts as fact only here (payroll/analytics/dashboard): a deal in the
+     * workshop or waiting on «Акт утверждение» is NOT counted until it hits «Оплата».
      */
     public function scopeWon($query)
     {
         return $query->where("status", "!=", "cancelled")
-            ->where(function ($w) {
-                $w->whereHas("stage", fn ($s) => $s->where("is_won", true))
-                    ->orWhereHas("project")
-                    ->orWhere("status", "closed");
-            });
+            ->whereHas("stage", fn ($s) => $s->where("is_won", true));
     }
 }

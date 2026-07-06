@@ -4,37 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\TaskRequest;
 use App\Models\Task;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class TaskController extends Controller
 {
-    public function index(Request $request): Response
-    {
-        $this->authorize('viewAny', Task::class);
-
-        // Personal board: tasks assigned to (or created by) the current user.
-        $tasks = Task::query()
-            ->with(['assignee:id,name', 'taskable'])
-            ->when(! $request->user()->hasAnyRole(['admin', 'director']), function ($query) use ($request) {
-                $uid = $request->user()->id;
-                $query->where(fn ($q) => $q
-                    ->where('assignee_id', $uid)
-                    ->orWhere('creator_id', $uid)
-                    ->orWhereHasMorph('taskable', [\App\Models\Deal::class, \App\Models\Project::class], fn ($m) => $m->where('responsible_user_id', $uid)));
-            })
-            ->when($request->string('assignee')->toString(), fn ($q, $a) => $q->where('assignee_id', $a))
-            ->latest()
-            ->get();
-
-        return Inertia::render('Tasks/Index', [
-            'tasks' => $tasks,
-            'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-        ]);
-    }
+    // Tasks are managed inline inside deal/project cards (TaskPanel). There is no
+    // standalone tasks board, so only the mutation endpoints below are exposed.
 
     public function store(TaskRequest $request): RedirectResponse
     {

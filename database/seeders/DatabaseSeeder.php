@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             StageSeeder::class,
             DealCustomFieldSeeder::class,
+            UiTranslationSeeder::class,
         ]);
 
         $department = Department::firstOrCreate(

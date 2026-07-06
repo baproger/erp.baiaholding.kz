@@ -32,10 +32,11 @@ class PayrollTest extends TestCase
         return $u;
     }
 
-    // status=closed means the tender was won and sent to Цех → counts.
+    // A deal on the «Оплата успешно» (is_won) stage is factual money → counts in payroll.
     private function wonDealWithFinance(User $mgr, float $paid, float $expense): Deal
     {
-        $deal = Deal::create(['number' => 'D-'.uniqid(), 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 1000000, 'status' => 'closed', 'deal_stage_id' => DealStage::orderBy('order')->first()->id, 'responsible_user_id' => $mgr->id]);
+        $wonStage = DealStage::where('is_won', true)->first()->id;
+        $deal = Deal::create(['number' => 'D-'.uniqid(), 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 1000000, 'status' => 'closed', 'deal_stage_id' => $wonStage, 'responsible_user_id' => $mgr->id]);
         $inv = Invoice::create(['number' => 'I-'.uniqid(), 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => $paid, 'status' => 'paid']);
         Payment::create(['invoice_id' => $inv->id, 'amount' => $paid, 'payment_date' => now()->toDateString()]);
         Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => $expense, 'date' => now()->toDateString(), 'status' => 'confirmed']);
@@ -46,14 +47,15 @@ class PayrollTest extends TestCase
     {
         $admin = $this->user('admin');
         $mgr = $this->user('manager');
-        $this->wonDealWithFinance($mgr, 500000, 100000); // net 400k -> bonus 40k, company 360k
+        // budget 1M − tax 3% (30k) − expenses 100k = remainder 870k → bonus 87k, company 783k.
+        $this->wonDealWithFinance($mgr, 500000, 100000);
 
         $this->actingAs($admin)->get(route('payroll.index'))
             ->assertInertia(fn (Assert $p) => $p->component('Payroll/Index')
                 ->where('leadership', true)->where('rate', 10)
-                ->where('rows.0.net', 400000)
-                ->where('rows.0.bonus', 40000)
-                ->where('rows.0.company', 360000));
+                ->where('rows.0.net', 783000)
+                ->where('rows.0.bonus', 87000)
+                ->where('rows.0.company', 783000));
     }
 
     public function test_manager_sees_only_own(): void
@@ -64,7 +66,7 @@ class PayrollTest extends TestCase
         $this->wonDealWithFinance($other, 900000, 100000);
 
         $this->actingAs($mgr)->get(route('payroll.index'))
-            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 40000));
+            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 87000));
     }
 
     public function test_unsuccessful_deal_not_counted(): void
@@ -81,9 +83,15 @@ class PayrollTest extends TestCase
             ->assertInertia(fn (Assert $p) => $p->where('totals.bonus', 0));
     }
 
-    public function test_cex_employee_forbidden(): void
+    // Цех employees may see their OWN salary only (no company-wide figures, no other people's rows).
+    public function test_cex_employee_sees_only_own_salary(): void
     {
         $emp = $this->user('employee');
-        $this->actingAs($emp)->get(route('payroll.index'))->assertForbidden();
+        $mgr = $this->user('manager');
+        $this->wonDealWithFinance($mgr, 500000, 100000); // belongs to a manager, not the employee
+
+        $this->actingAs($emp)->get(route('payroll.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 0));
     }
 }

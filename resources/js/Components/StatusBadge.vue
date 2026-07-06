@@ -7,12 +7,12 @@ const props = defineProps({
 });
 
 const map = {
-    draft: 'bg-gray-100 text-gray-700',
+    draft: 'bg-slate-100 text-slate-700',
     active: 'bg-blue-100 text-blue-700',
     closed: 'bg-green-100 text-green-700',
     completed: 'bg-green-100 text-green-700',
     cancelled: 'bg-red-100 text-red-700',
-    new: 'bg-gray-100 text-gray-700',
+    new: 'bg-slate-100 text-slate-700',
     in_progress: 'bg-amber-100 text-amber-700',
     review: 'bg-purple-100 text-purple-700',
     done: 'bg-green-100 text-green-700',
@@ -26,7 +26,7 @@ const labels = {
     done: 'Готово', legal: 'Юр. лицо', individual: 'Физ. лицо',
 };
 
-const cls = computed(() => map[props.status] ?? 'bg-gray-100 text-gray-700');
+const cls = computed(() => map[props.status] ?? 'bg-slate-100 text-slate-700');
 const label = computed(() => labels[props.status] ?? props.status);
 </script>
 

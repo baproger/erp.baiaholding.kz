@@ -21,6 +21,8 @@ class DealRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'client_name' => ['required', 'string', 'max:255'],
             'company_name' => ['required', 'string', 'max:255'],
+            'address' => ['required', 'string', 'max:255'],
+            'bin' => ['nullable', 'string', 'max:20'],
             'lot_number' => ['nullable', 'string', 'max:100'],
             'client_id' => ['nullable', 'exists:clients,id'],
             'responsible_user_id' => ['nullable', 'exists:users,id'],

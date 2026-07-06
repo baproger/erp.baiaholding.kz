@@ -38,7 +38,7 @@ class DealPermissionTest extends TestCase
         $deal = $this->deal($user->id);
 
         $this->actingAs($user)->put(route('deals.update', $deal), [
-            'name' => 'Отредактировано', 'client_name' => 'Иван', 'company_name' => 'ТОО', 'budget' => 2000,
+            'name' => 'Отредактировано', 'client_name' => 'Иван', 'company_name' => 'ТОО', 'address' => 'Алматы', 'budget' => 2000,
         ])->assertRedirect();
 
         $this->assertEquals('Отредактировано', $deal->fresh()->name);
@@ -51,21 +51,34 @@ class DealPermissionTest extends TestCase
         $deal = $this->deal($owner->id);
 
         $this->actingAs($stranger)->put(route('deals.update', $deal), [
-            'name' => 'Хакнуто', 'client_name' => 'И', 'company_name' => 'Х', 'budget' => 1,
+            'name' => 'Хакнуто', 'client_name' => 'И', 'company_name' => 'Х', 'address' => 'Алматы', 'budget' => 1,
         ])->assertForbidden();
     }
 
-    public function test_user_with_deal_access_can_change_responsible(): void
+    public function test_leadership_can_change_responsible(): void
     {
-        $someone = User::factory()->create();
-        $someone->assignRole('manager');
+        // (Re)assigning the responsible person is an "update" — only the owner or
+        // leadership may do it, so a plain manager cannot grab an unowned deal.
+        $lead = User::factory()->create();
+        $lead->assignRole('director');
         $newResp = User::factory()->create();
         $deal = $this->deal(null);
 
-        $this->actingAs($someone)->patch(route('deals.responsible', $deal), [
+        $this->actingAs($lead)->patch(route('deals.responsible', $deal), [
             'responsible_user_id' => $newResp->id,
         ])->assertRedirect();
 
         $this->assertEquals($newResp->id, $deal->fresh()->responsible_user_id);
+    }
+
+    public function test_non_owner_manager_cannot_change_responsible(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+        $deal = $this->deal(null); // not owned by $manager
+
+        $this->actingAs($manager)->patch(route('deals.responsible', $deal), [
+            'responsible_user_id' => $manager->id,
+        ])->assertForbidden();
     }
 }

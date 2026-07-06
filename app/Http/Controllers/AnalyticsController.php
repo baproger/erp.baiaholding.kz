@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Client;
 use App\Models\Deal;
 use App\Models\DealStage;
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Models\Setting;
+use App\Services\PayrollService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,7 +38,8 @@ class AnalyticsController extends Controller
             ->pluck('cnt', 'status');
 
         // Monthly income (payments) and expenses — grouped in PHP for DB portability.
-        $months = collect(range(5, 0))->map(fn ($i) => now()->subMonths($i)->format('Y-m'));
+        $monthsCount = in_array((int) $request->integer('months', 6), [3, 6, 12], true) ? (int) $request->integer('months', 6) : 6;
+        $months = collect(range($monthsCount - 1, 0))->map(fn ($i) => now()->subMonths($i)->format('Y-m'));
         $payments = Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $wonIds))->get(['amount', 'payment_date']);
         $expenses = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')->whereIn('expenseable_id', $wonIds)->get(['amount', 'date']);
 
@@ -47,14 +49,6 @@ class AnalyticsController extends Controller
 
             return ['month' => $m, 'income' => (float) $income, 'expense' => (float) $expense];
         });
-
-        // Top clients by total deal budget.
-        $topClients = Client::query()
-            ->withSum('deals as deals_total', 'budget')
-            ->withCount('deals')
-            ->orderByDesc('deals_total')
-            ->limit(5)->get(['id', 'name'])
-            ->map(fn ($c) => ['name' => $c->name, 'total' => (float) ($c->deals_total ?? 0), 'deals' => $c->deals_count]);
 
         // Conversion: won deals vs total.
         $wonStageIds = DealStage::where('is_won', true)->pluck('id');
@@ -92,11 +86,85 @@ class AnalyticsController extends Controller
             'value' => round($abc->where('class', $c)->sum('value'), 2),
         ]]);
 
+        // ---- Per-employee analytics (deals by stage + overdue + ЗП/margin) ----
+        $payroll = app(PayrollService::class);
+        $salaryRows = $payroll->perUser();
+        $companyTotals = $payroll->companyTotals();
+        $actStage = DealStage::where('is_active', true)->orderBy('order')->get()->slice(-2, 1)->first();
+        $today = now()->startOfDay();
+        $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
+        $bonusRate = ((float) Setting::get('bonus_percent', 10)) / 100;
+
+        $empDealsRaw = Deal::query()
+            ->whereNotNull('responsible_user_id')
+            ->where(function ($w) use ($wonStageIds, $actStage, $today) {
+                $w->whereIn('deal_stage_id', $wonStageIds)
+                    ->orWhere('deal_stage_id', $actStage?->id)
+                    ->orWhere(fn ($o) => $o->whereNotNull('deadline')->whereDate('deadline', '<', $today)
+                        ->whereNotIn('status', ['closed', 'cancelled'])
+                        ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)));
+            })
+            ->get(['id', 'number', 'company_name', 'budget', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status']);
+
+        // Confirmed expenses per deal → per-deal margin (same formula as the deal card).
+        $dealExpense = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', $empDealsRaw->pluck('id'))
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, sum(amount) as v')->pluck('v', 'did');
+
+        $empDeals = $empDealsRaw->groupBy('responsible_user_id');
+
+        $wonIdsList = $wonStageIds->all();
+        $mapDeal = function ($d) use ($dealExpense, $taxRate, $bonusRate) {
+            $budget = (float) $d->budget;
+            $tax = round($budget * $taxRate, 2);
+            $expense = (float) ($dealExpense[$d->id] ?? 0);
+            $remainder = round($budget - $tax - $expense, 2);
+            $bonus = $remainder > 0 ? round($remainder * $bonusRate, 2) : 0.0;
+            $company = round($remainder - $bonus, 2);
+
+            return [
+                'id' => $d->id,
+                'number' => $d->number,
+                'company' => $d->company_name,
+                'budget' => $budget,
+                'net' => $company,
+                'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
+                'deadline' => optional($d->deadline)->toDateString(),
+            ];
+        };
+
+        $byEmployee = $salaryRows->map(function ($row) use ($empDeals, $wonIdsList, $actStage, $today, $mapDeal) {
+            $deals = $empDeals->get($row['uid'], collect());
+            $won = $deals->whereIn('deal_stage_id', $wonIdsList)->map($mapDeal)->values();
+            $act = $actStage ? $deals->where('deal_stage_id', $actStage->id)->map($mapDeal)->values() : collect();
+            $overdue = $deals->filter(fn ($d) => $d->deadline && $d->deadline->startOfDay() < $today
+                    && ! in_array($d->deal_stage_id, $wonIdsList) && ! in_array($d->status, ['closed', 'cancelled']))
+                ->map(fn ($d) => array_merge($mapDeal($d), ['overdue_days' => (int) $d->deadline->startOfDay()->diffInDays($today)]))
+                ->sortByDesc('overdue_days')->values();
+
+            return [
+                'uid' => $row['uid'],
+                'user' => $row['user'],
+                'avatar' => $row['avatar'],
+                'income' => $row['income'],
+                'expense' => $row['expense'],
+                'net' => $row['net'],
+                'tax' => $row['tax'],
+                'bonus' => $row['bonus'],
+                'margin' => $row['margin'],
+                'closed' => $row['closed'],
+                'won_deals' => $won,
+                'act_deals' => $act,
+                'overdue_deals' => $overdue,
+            ];
+        })->sortByDesc('bonus')->values();
+
         return Inertia::render('Analytics/Index', [
+            'byEmployee' => $byEmployee,
+            'monthsFilter' => $monthsCount,
             'funnel' => $funnel,
             'byStatus' => $byStatus,
             'monthly' => $monthly,
-            'topClients' => $topClients,
             'abc' => $abc->take(20)->values(),
             'abcSummary' => $abcSummary,
             'conversion' => [
@@ -104,10 +172,8 @@ class AnalyticsController extends Controller
                 'won' => $won,
                 'rate' => $total > 0 ? round($won / $total * 100, 1) : 0,
             ],
-            'totals' => [
-                'income' => (float) $payments->sum('amount'),
-                'expense' => (float) $expenses->sum('amount'),
-            ],
+            // Canonical company figures (identical to Dashboard & Finance).
+            'totals' => array_merge($companyTotals, ['net' => $companyTotals['company']]),
         ]);
     }
 }

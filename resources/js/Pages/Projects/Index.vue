@@ -21,54 +21,57 @@ const onDrop = (stage) => {
 };
 const switchView = (v) => router.get(route('projects.index'), { ...props.filters, view: v }, { preserveState: true });
 const advance = (p) => router.patch(route('projects.advance', p.id), {}, { preserveScroll: true, preserveState: false });
+const lastStageId = computed(() => props.stages[props.stages.length - 1]?.id);
+const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preserveScroll: true, preserveState: false });
 </script>
 
 <template>
     <Head title="Проекты" />
     <AppLayout>
-        <template #header>Цех</template>
+        <template #header>{{ $t('page.workshop', 'Цех') }}</template>
 
-        <div class="mb-4 inline-flex rounded-md bg-white shadow-sm ring-1 ring-gray-200">
-            <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-l-md px-4 py-1.5 text-sm" @click="switchView('kanban')">Канбан</button>
-            <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600'" class="rounded-r-md px-4 py-1.5 text-sm" @click="switchView('list')">Список</button>
+        <div class="mb-4 inline-flex rounded-md bg-white shadow-sm border border-slate-200">
+            <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-l-md px-4 py-1.5 text-sm" @click="switchView('kanban')">Канбан</button>
+            <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-r-md px-4 py-1.5 text-sm" @click="switchView('list')">Список</button>
         </div>
 
         <div v-if="view === 'kanban'" class="flex gap-4 overflow-x-auto pb-4">
-            <div v-for="stage in stages" :key="stage.id" class="flex w-72 flex-shrink-0 flex-col rounded-lg bg-gray-200/60" @dragover.prevent @drop="onDrop(stage)">
+            <div v-for="stage in stages" :key="stage.id" class="flex w-72 flex-shrink-0 flex-col rounded-lg bg-slate-200/60" @dragover.prevent @drop="onDrop(stage)">
                 <div class="flex items-center justify-between px-3 py-2">
                     <div class="flex items-center gap-2">
                         <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: stage.color }"></span>
-                        <span class="text-sm font-semibold text-gray-700">{{ stage.name }}</span>
-                        <span class="text-xs text-gray-400">{{ byStage(stage.id).length }}</span>
+                        <span class="text-sm font-semibold text-slate-700">{{ stage.name }}</span>
+                        <span class="text-xs text-slate-400">{{ byStage(stage.id).length }}</span>
                     </div>
                 </div>
                 <div class="flex-1 space-y-2 px-2 pb-2">
                     <Link v-for="p in byStage(stage.id)" :key="p.id" :href="route('projects.show', p.id)" draggable="true" @dragstart="draggingId = p.id"
-                        class="block cursor-move rounded-md bg-white p-3 shadow-sm ring-1 ring-gray-100 hover:ring-indigo-300">
-                        <div class="text-sm font-bold text-gray-900">{{ p.deal?.company_name || p.name }}</div>
-                        <div class="text-[10px] text-gray-300">{{ p.number }}</div>
+                        class="block cursor-move rounded-md bg-white p-3 shadow-sm border border-slate-200 hover:ring-indigo-300">
+                        <div class="text-sm font-bold text-slate-900">{{ p.deal?.company_name || p.name }}</div>
+                        <div class="text-[10px] text-slate-300">{{ p.number }}</div>
                         <div v-if="canSeeMoney" class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
-                        <div class="mt-1 text-xs text-gray-400">{{ p.client?.name ?? '—' }}</div>
-                        <button @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-gray-100 py-1 text-xs text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
+                        <div class="mt-1 text-xs text-slate-400">{{ p.client?.name ?? '—' }}</div>
+                        <button v-if="p.project_stage_id === lastStageId" @click.prevent.stop="sendToAct(p)" class="mt-2 w-full rounded bg-teal-600 py-1 text-xs font-semibold text-white hover:bg-teal-700">📋 АКТ</button>
+                        <button v-else @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-slate-100 py-1 text-xs text-slate-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>
-                    <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-gray-400">Пусто</div>
+                    <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-slate-400">Пусто</div>
                 </div>
             </div>
         </div>
 
-        <div v-else class="overflow-hidden rounded-lg bg-white shadow">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+        <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table class="min-w-full divide-y divide-slate-100 text-sm">
+                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                     <tr>
                         <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Клиент</th>
                         <th class="px-4 py-3">Этап</th><th class="px-4 py-3">Бюджет</th><th class="px-4 py-3">Статус</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
-                    <tr v-for="p in projects.data" :key="p.id" class="cursor-pointer hover:bg-gray-50" @click="router.get(route('projects.show', p.id))">
-                        <td class="px-4 py-3 text-gray-400">{{ p.number }}</td>
-                        <td class="px-4 py-3 font-medium text-gray-900">{{ p.name }}</td>
-                        <td class="px-4 py-3 text-gray-500">{{ p.client?.name ?? '—' }}</td>
+                <tbody class="divide-y divide-slate-100">
+                    <tr v-for="p in projects.data" :key="p.id" class="cursor-pointer hover:bg-slate-50" @click="router.get(route('projects.show', p.id))">
+                        <td class="px-4 py-3 text-slate-400">{{ p.number }}</td>
+                        <td class="px-4 py-3 font-medium text-slate-900">{{ p.name }}</td>
+                        <td class="px-4 py-3 text-slate-500">{{ p.client?.name ?? '—' }}</td>
                         <td class="px-4 py-3"><StatusBadge :status="p.stage?.name" :color="p.stage?.color" /></td>
                         <td class="px-4 py-3">{{ money(p.budget) }}</td>
                         <td class="px-4 py-3"><StatusBadge :status="p.status" /></td>

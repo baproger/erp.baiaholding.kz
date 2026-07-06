@@ -43,6 +43,7 @@ class ProjectController extends Controller
         $view = $request->string('view', 'kanban')->toString();
 
         $base = Project::query()
+            ->where('status', '!=', 'completed')
             ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name'])
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())]);
         $this->scope($base, $request);
@@ -70,7 +71,7 @@ class ProjectController extends Controller
         $this->authorize('view', $project);
 
         $project->load([
-            'client', 'responsible:id,name', 'department:id,name',
+            'client', 'responsible:id,name,avatar', 'department:id,name',
             'stage', 'deal:id,number,name',
             'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
@@ -84,12 +85,12 @@ class ProjectController extends Controller
         $source = $project->deal_id
             ? Deal::with([
                 'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
-                'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
+                'expenses' => fn ($q) => $q->with('responsible:id,name,avatar')->latest(),
             ])->find($project->deal_id)
             : null;
         $source ??= $project->load([
             'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
-            'expenses' => fn ($q) => $q->with('responsible:id,name')->latest(),
+            'expenses' => fn ($q) => $q->with('responsible:id,name,avatar')->latest(),
         ]);
 
         // Merge audit history of the project and its deal.
@@ -140,7 +141,7 @@ class ProjectController extends Controller
         return back()->with('success', 'Этап проекта обновлён.');
     }
 
-    public function advance(Request $request, Project $project): RedirectResponse
+    public function advance(Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
         $next = ProjectStage::where('is_active', true)->where('order', '>', optional($project->stage)->order ?? 0)->orderBy('order')->first();
@@ -155,5 +156,30 @@ class ProjectController extends Controller
         $project->save();
 
         return back()->with('success', 'Цех: этап «'.$next->name.'».');
+    }
+
+    /**
+     * Workshop "АКТ": from the last workshop stage («Отправка»), send the order
+     * back to the Deals board at «Акт утверждение» and close the workshop project.
+     */
+    public function sendToAct(Project $project): RedirectResponse
+    {
+        $this->authorize('view', $project);
+
+        $deal = $project->deal;
+        if (! $deal) {
+            return back()->with('error', 'У заказа нет исходной сделки.');
+        }
+
+        // «Акт утверждение» = 2nd-from-last active deal stage.
+        $returnStage = DealStage::where('is_active', true)->orderBy('order')->get()->slice(-2, 1)->first();
+        if (! $returnStage) {
+            return back()->with('error', 'Не найден этап «Акт утверждение».');
+        }
+
+        $deal->update(['deal_stage_id' => $returnStage->id, 'status' => 'active', 'closed_at' => null]);
+        $project->update(['status' => 'completed', 'completed_at' => now()]);
+
+        return back()->with('success', 'Сделка отправлена на «Акт утверждение».');
     }
 }

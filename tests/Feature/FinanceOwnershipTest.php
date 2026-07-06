@@ -9,6 +9,8 @@ use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\StageSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FinanceOwnershipTest extends TestCase
@@ -58,7 +60,25 @@ class FinanceOwnershipTest extends TestCase
         $mgr = $this->manager();
         $other = $this->manager();
         $deal = $this->deal($other);
+        Storage::fake('local');
 
-        $this->actingAs($mgr)->post(route('expenses.store'), ['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 500, 'date' => now()->toDateString()])->assertForbidden();
+        $this->actingAs($mgr)->post(route('expenses.store'), ['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 500, 'date' => now()->toDateString(), 'file' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf')])->assertForbidden();
+    }
+
+    public function test_manager_cannot_create_invoice_on_foreign_deal(): void
+    {
+        $mgr = $this->manager();
+        $other = $this->manager();
+        $deal = $this->deal($other);
+
+        $this->actingAs($mgr)->post(route('invoices.store'), ['invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 1000, 'status' => 'sent'])->assertForbidden();
+    }
+
+    public function test_manager_can_create_invoice_on_own_deal(): void
+    {
+        $mgr = $this->manager();
+        $deal = $this->deal($mgr);
+
+        $this->actingAs($mgr)->post(route('invoices.store'), ['invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 1000, 'status' => 'sent'])->assertRedirect();
     }
 }

@@ -49,6 +49,7 @@ class RolePermissionSeeder extends Seeder
         $employee->syncPermissions([
             'project.viewAny', 'project.view',
             'task.viewAny', 'task.view', 'task.update',
+            'payroll.view',
         ]);
     }
 

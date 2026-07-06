@@ -2,9 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Deal;
-use App\Models\DealStage;
-use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\ProjectStage;
 use App\Models\User;
@@ -54,17 +51,11 @@ class CexAccessTest extends TestCase
         $this->assertEquals($stages[1]->id, $project->fresh()->project_stage_id);
     }
 
-    public function test_manager_finance_scoped_to_own(): void
+    // Finance is leadership-only: managers/workshop staff handle money inside deal cards,
+    // so the standalone Finance page must be forbidden to them.
+    public function test_manager_cannot_access_finance(): void
     {
         $mgr = $this->user('manager');
-        $other = $this->user('manager');
-        $s = DealStage::orderBy('order')->first()->id;
-        $mine = Deal::create(['number' => 'D-1', 'name' => 'Мой', 'budget' => 1, 'status' => 'active', 'deal_stage_id' => $s, 'responsible_user_id' => $mgr->id]);
-        $theirs = Deal::create(['number' => 'D-2', 'name' => 'Чужой', 'budget' => 1, 'status' => 'active', 'deal_stage_id' => $s, 'responsible_user_id' => $other->id]);
-        Invoice::create(['number' => 'INV-1', 'invoiceable_type' => 'deal', 'invoiceable_id' => $mine->id, 'amount' => 1000, 'status' => 'sent']);
-        Invoice::create(['number' => 'INV-2', 'invoiceable_type' => 'deal', 'invoiceable_id' => $theirs->id, 'amount' => 5000, 'status' => 'sent']);
-
-        $this->actingAs($mgr)->get(route('finance.index'))
-            ->assertInertia(fn (Assert $p) => $p->has('invoices.data', 1)->where('totals.invoiced', 1000));
+        $this->actingAs($mgr)->get(route('finance.index'))->assertForbidden();
     }
 }

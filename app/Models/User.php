@@ -50,4 +50,14 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Department::class)->withTimestamps();
     }
+
+    /**
+     * Expose the stored avatar path as a served URL everywhere the model is
+     * serialized (profile, sidebar, deals, chat). The raw path stays in the DB
+     * (read it via getRawOriginal('avatar') when serving the file).
+     */
+    public function getAvatarAttribute(?string $value): ?string
+    {
+        return $value ? route('profile.avatar.show', $this->id).'?v='.optional($this->updated_at)->timestamp : null;
+    }
 }

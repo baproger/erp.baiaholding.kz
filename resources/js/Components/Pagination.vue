@@ -11,15 +11,15 @@ defineProps({
         <template v-for="(link, i) in links" :key="i">
             <span
                 v-if="link.url === null"
-                class="rounded px-3 py-1.5 text-sm text-gray-400"
+                class="rounded px-3 py-1.5 text-sm text-slate-400"
                 v-html="link.label"
             />
             <Link
                 v-else
                 :href="link.url"
                 preserve-scroll
-                :class="link.active ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
-                class="rounded px-3 py-1.5 text-sm ring-1 ring-gray-200"
+                :class="link.active ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'"
+                class="rounded px-3 py-1.5 text-sm ring-1 ring-slate-200"
                 v-html="link.label"
             />
         </template>

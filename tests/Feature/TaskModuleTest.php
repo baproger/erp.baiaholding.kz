@@ -24,11 +24,8 @@ class TaskModuleTest extends TestCase
         return $u;
     }
 
-    public function test_task_board_renders(): void
-    {
-        $u = $this->admin();
-        $this->actingAs($u)->get(route('tasks.index'))->assertOk();
-    }
+    // Tasks are managed inline inside deal/project cards (TaskPanel); there is no
+    // standalone tasks board route anymore.
 
     public function test_create_task_on_deal_and_advance_status(): void
     {

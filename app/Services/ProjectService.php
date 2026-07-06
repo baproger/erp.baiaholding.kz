@@ -11,12 +11,13 @@ class ProjectService
     public function __construct(private ProjectNumberService $numbers) {}
 
     /**
-     * Create an execution Project from a won Deal (idempotent — returns the
-     * existing project if one is already linked).
+     * Create an execution Project from a Deal. Idempotent for an ACTIVE run
+     * (returns it), but a completed prior run starts a fresh workshop cycle —
+     * otherwise re-sending would close the deal with no active project (lost).
      */
     public function createFromDeal(Deal $deal): Project
     {
-        if ($deal->project) {
+        if ($deal->project && $deal->project->status !== 'completed') {
             return $deal->project;
         }
 

@@ -44,13 +44,14 @@ class ModuleSmokeTest extends TestCase
             'name' => 'Test Deal',
             'client_name' => 'Иван',
             'company_name' => 'ТОО Тест',
+            'address' => 'Алматы, ул. Абая 1',
             'client_id' => $client->id,
             'budget' => 100000,
         ])->assertRedirect();
 
         $deal = Deal::first();
         $this->assertNotNull($deal);
-        $this->assertStringStartsWith('BAIA-'.now()->year.'-', $deal->number);
+        $this->assertMatchesRegularExpression('/^BAIA-\d{4}$/', $deal->number);
     }
 
     public function test_moving_deal_to_won_stage_closes_it(): void

@@ -28,6 +28,7 @@ class UserController extends Controller
             ->through(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
+                'avatar' => $u->avatar,
                 'email' => $u->email,
                 'phone' => $u->phone,
                 'is_active' => $u->is_active,

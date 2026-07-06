@@ -22,14 +22,14 @@ const save = () => { form.values = { ...model }; form.post(route('custom-field-v
 <template>
     <div v-if="fields.length" class="space-y-4">
         <div v-for="f in fields" :key="f.id">
-            <label class="mb-1 block text-sm text-gray-600">{{ f.name }}<span v-if="f.required" class="text-red-500"> *</span></label>
+            <label class="mb-1 block text-sm text-slate-600">{{ f.name }}<span v-if="f.required" class="text-red-500"> *</span></label>
 
-            <select v-if="f.type === 'select' || f.type === 'radio'" v-model="model[f.id]" class="w-full rounded-md border-gray-300 shadow-sm">
+            <select v-if="f.type === 'select' || f.type === 'radio'" v-model="model[f.id]" class="w-full rounded-md border-slate-300 shadow-sm">
                 <option value="">—</option>
                 <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
             </select>
             <label v-else-if="f.type === 'boolean'" class="flex items-center gap-2 text-sm">
-                <input type="checkbox" v-model="model[f.id]" class="rounded border-gray-300 text-indigo-600" /> Да
+                <input type="checkbox" v-model="model[f.id]" class="rounded border-slate-300 text-indigo-600" /> Да
             </label>
             <TextInput v-else v-model="model[f.id]"
                 :type="f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : 'text'"
@@ -37,7 +37,7 @@ const save = () => { form.values = { ...model }; form.post(route('custom-field-v
         </div>
         <PrimaryButton :disabled="form.processing" @click="save">Сохранить поля</PrimaryButton>
     </div>
-    <div v-else class="py-6 text-center text-sm text-gray-400">
+    <div v-else class="py-6 text-center text-sm text-slate-400">
         Дополнительных полей не настроено. Добавьте их в «Настройки → Доп. поля».
     </div>
 </template>

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { confirmDialog } from '@/composables/useConfirm';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -41,8 +42,10 @@ const submit = () => {
     if (editing.value) form.put(route('departments.update', editing.value.id), opts);
     else form.post(route('departments.store'), opts);
 };
-const destroy = (d) => {
-    if (confirm(`Удалить отдел «${d.name}»?`)) router.delete(route('departments.destroy', d.id), { preserveScroll: true });
+const destroy = async (d) => {
+    if (await confirmDialog({ title: 'Удалить отдел', message: `Отдел «${d.name}» будет удалён.`, confirmText: 'Удалить', danger: true })) {
+        router.delete(route('departments.destroy', d.id), { preserveScroll: true });
+    }
 };
 const doSearch = () => router.get(route('departments.index'), { search: search.value }, { preserveState: true, replace: true });
 </script>
@@ -50,16 +53,16 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
 <template>
     <Head title="Отделы" />
     <AppLayout>
-        <template #header>Отделы</template>
+        <template #header>{{ $t('page.departments', 'Отделы') }}</template>
 
         <div class="mb-4 flex items-center justify-between gap-3">
             <TextInput v-model="search" placeholder="Поиск..." class="w-64" @keyup.enter="doSearch" />
             <PrimaryButton v-if="can.create" @click="openCreate">+ Добавить отдел</PrimaryButton>
         </div>
 
-        <div class="overflow-hidden rounded-lg bg-white shadow">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table class="min-w-full divide-y divide-slate-100 text-sm">
+                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                     <tr>
                         <th class="px-4 py-3">Название</th>
                         <th class="px-4 py-3">Описание</th>
@@ -68,13 +71,13 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                         <th class="px-4 py-3 text-right">Действия</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
-                    <tr v-for="d in departments.data" :key="d.id" class="hover:bg-gray-50">
-                        <td class="px-4 py-3 font-medium text-gray-900">{{ d.name }}</td>
-                        <td class="px-4 py-3 text-gray-500">{{ d.description }}</td>
+                <tbody class="divide-y divide-slate-100">
+                    <tr v-for="d in departments.data" :key="d.id" class="hover:bg-slate-50">
+                        <td class="px-4 py-3 font-medium text-slate-900">{{ d.name }}</td>
+                        <td class="px-4 py-3 text-slate-500">{{ d.description }}</td>
                         <td class="px-4 py-3">{{ d.members_count }}</td>
                         <td class="px-4 py-3">
-                            <span :class="d.is_active ? 'text-green-600' : 'text-gray-400'">
+                            <span :class="d.is_active ? 'text-green-600' : 'text-slate-400'">
                                 {{ d.is_active ? 'Активен' : 'Отключён' }}
                             </span>
                         </td>
@@ -84,7 +87,7 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                         </td>
                     </tr>
                     <tr v-if="!departments.data.length">
-                        <td colspan="5" class="px-4 py-8 text-center text-gray-400">Нет данных</td>
+                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">Нет данных</td>
                     </tr>
                 </tbody>
             </table>
@@ -105,10 +108,10 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                     </div>
                     <div>
                         <InputLabel value="Описание" />
-                        <textarea v-model="form.description" rows="3" class="mt-1 w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                        <textarea v-model="form.description" rows="3" class="mt-1 w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
                     </div>
                     <label class="flex items-center gap-2 text-sm">
-                        <input type="checkbox" v-model="form.is_active" class="rounded border-gray-300 text-indigo-600" />
+                        <input type="checkbox" v-model="form.is_active" class="rounded border-slate-300 text-indigo-600" />
                         Активен
                     </label>
                 </div>

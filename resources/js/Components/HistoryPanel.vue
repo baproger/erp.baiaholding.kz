@@ -15,23 +15,23 @@ const fmt = (t) => new Date(t).toLocaleString('ru-RU');
     <div class="space-y-0">
         <div v-for="(log, i) in history" :key="log.id" class="flex gap-3">
             <div class="flex flex-col items-center">
-                <span class="mt-1 h-2.5 w-2.5 rounded-full" :class="actionColor[log.action] || 'bg-gray-400'"></span>
-                <span v-if="i < history.length - 1" class="w-px flex-1 bg-gray-200"></span>
+                <span class="mt-1 h-2.5 w-2.5 rounded-full" :class="actionColor[log.action] || 'bg-slate-400'"></span>
+                <span v-if="i < history.length - 1" class="w-px flex-1 bg-slate-200"></span>
             </div>
             <div class="pb-4 text-sm">
-                <div class="text-gray-800">
+                <div class="text-slate-800">
                     <span class="font-medium">{{ log.user?.name ?? 'Система' }}</span>
-                    <span class="text-gray-500"> {{ (actionLabel[log.action] || log.action).toLowerCase() }}</span>
-                    <span v-if="log.field_name" class="text-gray-500"> «{{ fieldRu[log.field_name] || log.field_name }}»</span>
+                    <span class="text-slate-500"> {{ (actionLabel[log.action] || log.action).toLowerCase() }}</span>
+                    <span v-if="log.field_name" class="text-slate-500"> «{{ fieldRu[log.field_name] || log.field_name }}»</span>
                 </div>
                 <div v-if="log.field_name" class="mt-0.5 text-xs">
                     <span class="text-red-500 line-through">{{ log.old_value ?? '∅' }}</span>
                     <span class="mx-1">→</span>
                     <span class="text-green-600">{{ log.new_value ?? '∅' }}</span>
                 </div>
-                <div class="text-[11px] text-gray-400">{{ fmt(log.created_at) }}</div>
+                <div class="text-[11px] text-slate-400">{{ fmt(log.created_at) }}</div>
             </div>
         </div>
-        <div v-if="!history.length" class="py-6 text-center text-sm text-gray-400">История пуста</div>
+        <div v-if="!history.length" class="py-6 text-center text-sm text-slate-400">История пуста</div>
     </div>
 </template>

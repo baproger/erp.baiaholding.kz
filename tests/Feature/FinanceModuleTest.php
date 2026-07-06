@@ -10,6 +10,8 @@ use App\Services\FinanceService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\StageSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FinanceModuleTest extends TestCase
@@ -73,7 +75,8 @@ class FinanceModuleTest extends TestCase
         $this->actingAs($u)->post(route('invoices.store'), ['invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 100000, 'status' => 'sent']);
         $invoice = Invoice::first();
         $this->actingAs($u)->post(route('payments.store'), ['invoice_id' => $invoice->id, 'amount' => 100000, 'payment_date' => now()->toDateString()]);
-        $this->actingAs($u)->post(route('expenses.store'), ['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 40000, 'date' => now()->toDateString(), 'status' => 'confirmed']);
+        Storage::fake('local');
+        $this->actingAs($u)->post(route('expenses.store'), ['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 40000, 'date' => now()->toDateString(), 'status' => 'confirmed', 'file' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf')]);
 
         $summary = app(FinanceService::class)->summaryFor($deal->fresh());
         $this->assertEquals(100000.0, $summary['income']);
