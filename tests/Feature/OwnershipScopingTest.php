@@ -104,6 +104,19 @@ class OwnershipScopingTest extends TestCase
         $this->assertNotEquals('closed', $deal->status);
     }
 
+    public function test_manager_creating_deal_is_forced_as_responsible(): void
+    {
+        $mgr = $this->manager();
+        $other = $this->manager();
+
+        $this->actingAs($mgr)->post(route('deals.store'), [
+            'name' => 'X', 'client_name' => 'И', 'company_name' => 'ТОО', 'address' => 'адрес', 'budget' => 100,
+            'responsible_user_id' => $other->id, // попытка назначить другого
+        ])->assertRedirect();
+
+        $this->assertSame($mgr->id, Deal::latest('id')->first()->responsible_user_id);
+    }
+
     // ---- Утечка сумм цеху ----
 
     public function test_workshop_staff_does_not_receive_project_budget(): void

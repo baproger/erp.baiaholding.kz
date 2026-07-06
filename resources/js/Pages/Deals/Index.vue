@@ -20,6 +20,7 @@ const list = computed(() => Array.isArray(props.deals) ? props.deals : props.dea
 const byStage = (id) => list.value.filter((d) => d.deal_stage_id === id);
 const stageTotal = (id) => byStage(id).reduce((s, d) => s + Number(d.budget), 0);
 const lastStageId = computed(() => props.stages[props.stages.length - 1]?.id);
+const firstStageId = computed(() => props.stages[0]?.id); // «Заключение договора»
 // "В цех" is triggered on the 3rd-from-last stage (Закуп ЛДСП,МДФ);
 // last two stages (Акт утверждение, Оплата) come after the workshop.
 const workshopStageId = computed(() => props.stages[props.stages.length - 3]?.id);
@@ -170,6 +171,10 @@ const applyBinMatch = () => {
                         </div>
                     </div>
                     <div v-if="!byStage(stage.id).length" class="py-5 text-center text-[11px] text-slate-400">Пусто</div>
+                    <button v-if="stage.id === firstStageId && can.create" @click="openCreate"
+                        class="mt-1 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-indigo-300 py-2 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50">
+                        + Новая сделка
+                    </button>
                 </div>
             </div>
         </div>
@@ -206,7 +211,7 @@ const applyBinMatch = () => {
                     <div class="col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="form.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="form.errors.address" class="mt-1" /></div>
                     <div><InputLabel value="Имя клиента *" /><TextInput v-model="form.client_name" class="mt-1 w-full" /><InputError :message="form.errors.client_name" class="mt-1" /></div>
                     <div><InputLabel value="Номер лота" /><TextInput v-model="form.lot_number" class="mt-1 w-full" /></div>
-                    <div>
+                    <div v-if="isLeadership">
                         <InputLabel value="Ответственный" />
                         <select v-model="form.responsible_user_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
                             <option value="">—</option>

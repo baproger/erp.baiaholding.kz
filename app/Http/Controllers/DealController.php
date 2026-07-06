@@ -68,6 +68,10 @@ class DealController extends Controller
         $data['number'] = $numbers->generate();
         $data['deal_stage_id'] ??= DealStage::where('is_active', true)->orderBy('order')->value('id');
         $data['status'] = $data['status'] ?? 'active';
+        // Менеджер создаёт сделку только на себя — назначить ответственным другого нельзя.
+        if (! $request->user()->hasAnyRole(['admin', 'director', 'financist'])) {
+            $data['responsible_user_id'] = $request->user()->id;
+        }
 
         Deal::create($data);
 
