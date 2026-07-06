@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class DealRequest extends FormRequest
 {
@@ -27,12 +26,13 @@ class DealRequest extends FormRequest
             'client_id' => ['nullable', 'exists:clients,id'],
             'responsible_user_id' => ['nullable', 'exists:users,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
-            'deal_stage_id' => ['nullable', 'exists:deal_stages,id'],
             'budget' => ['required', 'numeric', 'min:0'],
             'deadline' => ['nullable', 'date'],
             'description' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
-            'status' => ['nullable', Rule::in(['draft', 'active', 'closed', 'cancelled'])],
+            // deal_stage_id и status намеренно НЕ принимаются здесь: смена этапа/статуса идёт
+            // только через updateStage → StageTransitionService (гейты оплаты/задач/порядка).
+            // Иначе обычный update позволял бы выставить won-этап без оплаты и накрутить бонус.
         ];
     }
 }

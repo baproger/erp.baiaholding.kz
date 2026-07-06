@@ -57,12 +57,19 @@ class ProjectController extends Controller
             ? (clone $base)->latest()->paginate(20)->withQueryString()
             : (clone $base)->latest()->get();
 
+        // Цех не видит суммы — прячем budget из сериализуемой модели, а не только в UI.
+        $canSeeMoney = $this->canSeeMoney($request);
+        if (! $canSeeMoney) {
+            ($projects instanceof \Illuminate\Pagination\AbstractPaginator ? $projects->getCollection() : $projects)
+                ->transform(fn ($p) => $p->makeHidden('budget'));
+        }
+
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
             'stages' => $stages,
             'view' => $view,
             'filters' => $request->only('search'),
-            'canSeeMoney' => $this->canSeeMoney($request),
+            'canSeeMoney' => $canSeeMoney,
         ]);
     }
 
@@ -79,6 +86,9 @@ class ProjectController extends Controller
         ]);
 
         $canSeeMoney = $this->canSeeMoney($request);
+        if (! $canSeeMoney) {
+            $project->makeHidden('budget');
+        }
 
         // Finance & history follow the originating deal so the whole lifecycle
         // (sale → production) is one continuous picture for the manager.
@@ -109,6 +119,11 @@ class ProjectController extends Controller
                 'responsible_user_id' => User::pluck('name', 'id'),
             ]
         );
+
+        // Цех не должен видеть изменения суммы сделки в истории.
+        if (! $canSeeMoney) {
+            $history = $history->reject(fn ($log) => $log->field_name === 'budget')->values();
+        }
 
         return Inertia::render('Projects/Show', [
             'project' => $project,
