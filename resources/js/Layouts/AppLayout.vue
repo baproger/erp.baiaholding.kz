@@ -62,7 +62,23 @@ const go = () => { mobileOpen.value = false; };
 const markRead = (id) => router.patch(route('notifications.read', id), {}, { preserveScroll: true, preserveState: true });
 const markAllRead = () => router.patch(route('notifications.readAll'), {}, { preserveScroll: true });
 const setLocale = (l) => router.patch(route('locale.update'), { locale: l }, { preserveScroll: true });
-const fmt = (t) => new Date(t).toLocaleString('ru-RU');
+// Иконка/цвет уведомления по смыслу заголовка (просрочка, назначение, этап).
+const notifMeta = (n) => {
+    const s = ((n.data?.title || '') + ' ' + (n.data?.message || '')).toLowerCase();
+    if (s.includes('просроч') || s.includes('overdue')) return { icon: '⏰', cls: 'bg-red-100 text-red-600' };
+    if (s.includes('задач') || s.includes('назнач')) return { icon: '✅', cls: 'bg-emerald-100 text-emerald-600' };
+    if (s.includes('этап') || s.includes('сделк')) return { icon: '📊', cls: 'bg-indigo-100 text-indigo-600' };
+    if (s.includes('оплат') || s.includes('счёт') || s.includes('счет')) return { icon: '💰', cls: 'bg-amber-100 text-amber-600' };
+    return { icon: '🔔', cls: 'bg-slate-100 text-slate-500' };
+};
+const relTime = (t) => {
+    const d = (Date.now() - new Date(t).getTime()) / 1000;
+    if (d < 60) return 'только что';
+    if (d < 3600) return Math.floor(d / 60) + ' мин назад';
+    if (d < 86400) return Math.floor(d / 3600) + ' ч назад';
+    if (d < 604800) return Math.floor(d / 86400) + ' дн назад';
+    return new Date(t).toLocaleDateString('ru-RU');
+};
 
 const roleLabels = { admin: 'Администратор', director: 'Директор', financist: 'Финансист', manager: 'Менеджер', employee: 'Сотрудник' };
 const roleLabel = computed(() => roleLabels[roles.value[0]] ?? roles.value[0] ?? '');
@@ -148,26 +164,45 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                             class="rounded px-2 py-1 font-medium uppercase transition-all">{{ l }}</button>
                     </div>
 
-                    <Dropdown align="right" width="60">
+                    <Dropdown align="right" width="80">
                         <template #trigger>
                             <button class="relative rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100">
                                 <span class="text-lg">🔔</span>
-                                <span v-if="notifications.unread > 0" class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{{ notifications.unread }}</span>
+                                <span v-if="notifications.unread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">{{ notifications.unread > 9 ? '9+' : notifications.unread }}</span>
                             </button>
                         </template>
                         <template #content>
-                            <div class="flex items-center justify-between border-b px-4 py-2">
-                                <span class="text-sm font-semibold text-slate-700">{{ t('header.notifications', 'Уведомления') }}</span>
-                                <button v-if="notifications.unread > 0" class="text-xs text-indigo-600 hover:underline" @click="markAllRead">{{ t('header.read_all', 'Прочитать все') }}</button>
-                            </div>
-                            <div class="max-h-80 overflow-y-auto">
-                                <div v-for="n in notifications.items" :key="n.id" :class="n.read_at ? 'opacity-60' : 'bg-indigo-50/50'"
-                                    class="cursor-pointer border-b px-4 py-2 text-sm transition-colors hover:bg-slate-50" @click="markRead(n.id)">
-                                    <div class="font-medium text-slate-800">{{ n.data.title }}</div>
-                                    <div class="text-xs text-slate-500">{{ n.data.message }}</div>
-                                    <div class="text-[10px] text-slate-400">{{ fmt(n.created_at) }}</div>
+                            <div class="w-72 sm:w-80">
+                                <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-semibold text-slate-800">{{ t('header.notifications', 'Уведомления') }}</span>
+                                        <span v-if="notifications.unread > 0" class="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">{{ notifications.unread }}</span>
+                                    </div>
+                                    <button v-if="notifications.unread > 0" class="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="markAllRead">
+                                        <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l3 3 4-5M9 13l3 3 5-7"/></svg>
+                                        {{ t('header.read_all', 'Прочитать все') }}
+                                    </button>
                                 </div>
-                                <div v-if="!notifications.items.length" class="px-4 py-6 text-center text-sm text-slate-400">{{ t('header.no_notifications', 'Нет уведомлений') }}</div>
+                                <div class="max-h-96 overflow-y-auto">
+                                    <div v-for="n in notifications.items" :key="n.id"
+                                        class="relative flex cursor-pointer gap-3 border-b border-slate-50 px-4 py-3 transition-colors hover:bg-slate-50"
+                                        :class="!n.read_at ? 'bg-indigo-50/40' : ''" @click="markRead(n.id)">
+                                        <span v-if="!n.read_at" class="absolute left-0 top-0 h-full w-0.5 bg-indigo-500"></span>
+                                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm" :class="notifMeta(n).cls">{{ notifMeta(n).icon }}</span>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <span class="text-sm font-semibold text-slate-800" :class="n.read_at ? 'text-slate-600' : ''">{{ n.data.title }}</span>
+                                                <span v-if="!n.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500"></span>
+                                            </div>
+                                            <div class="mt-0.5 text-xs leading-snug text-slate-500">{{ n.data.message }}</div>
+                                            <div class="mt-1 text-[11px] text-slate-400">{{ relTime(n.created_at) }}</div>
+                                        </div>
+                                    </div>
+                                    <div v-if="!notifications.items.length" class="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                                        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">🔕</span>
+                                        <span class="text-sm text-slate-400">{{ t('header.no_notifications', 'Нет уведомлений') }}</span>
+                                    </div>
+                                </div>
                             </div>
                         </template>
                     </Dropdown>
