@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Deal;
+use App\Models\DealStage;
 use App\Models\Expense;
 use App\Models\Payment;
 use App\Models\Setting;
@@ -50,6 +51,71 @@ class PayrollService
         $company = round($remainder - $bonus, 2);
 
         return compact('budget', 'income', 'expense', 'tax', 'remainder', 'bonus', 'company');
+    }
+
+    /**
+     * Per-deal breakdown for the payroll screen, grouped by responsible user.
+     * Includes deals on «Оплата успешно» (won — counted in ЗП) and «Акт утверждение»
+     * (pending — shown so the financist sees what is about to land). Each deal carries
+     * the same money math as the deal card, so the ЗП figure can be verified line by line.
+     *
+     * @return Collection<int, Collection<int, array<string, mixed>>>  keyed by user id
+     */
+    public function dealBreakdown(): Collection
+    {
+        $rate = ((float) Setting::get('bonus_percent', 10)) / 100;
+        $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
+
+        $stages = DealStage::where('is_active', true)->orderBy('order')->get();
+        $wonStageIds = $stages->where('is_won', true)->pluck('id');
+        $actStage = $stages->slice(-2, 1)->first();
+        $stageNames = $stages->pluck('name', 'id');
+
+        $stageFilter = $wonStageIds->all();
+        if ($actStage) {
+            $stageFilter[] = $actStage->id;
+        }
+
+        $deals = Deal::whereNotNull('responsible_user_id')
+            ->whereIn('deal_stage_id', $stageFilter)
+            ->where('status', '!=', 'cancelled')
+            ->orderByDesc('budget')
+            ->get(['id', 'number', 'company_name', 'budget', 'deal_stage_id', 'responsible_user_id', 'status']);
+
+        $ids = $deals->pluck('id');
+        $paidByDeal = Payment::query()
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->where('invoices.invoiceable_type', 'deal')
+            ->whereIn('invoices.invoiceable_id', $ids)
+            ->groupBy('invoices.invoiceable_id')
+            ->selectRaw('invoices.invoiceable_id as did, SUM(payments.amount) as v')->pluck('v', 'did');
+        $expenseByDeal = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', $ids)
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
+
+        return $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate, $rate, $wonStageIds, $stageNames) {
+            $budget = (float) $d->budget;
+            $paid = (float) ($paidByDeal[$d->id] ?? 0);
+            $expense = (float) ($expenseByDeal[$d->id] ?? 0);
+            $tax = round($budget * $taxRate, 2);
+            $remainder = round($budget - $tax - $expense, 2);
+            $bonus = $remainder > 0 ? round($remainder * $rate, 2) : 0.0;
+
+            return [
+                'uid' => (int) $d->responsible_user_id,
+                'id' => $d->id,
+                'number' => $d->number,
+                'company' => $d->company_name,
+                'stage' => $stageNames[$d->deal_stage_id] ?? '—',
+                'is_won' => $wonStageIds->contains($d->deal_stage_id),
+                'budget' => $budget,
+                'paid' => $paid,
+                'expense' => $expense,
+                'tax' => $tax,
+                'bonus' => $bonus,
+                'net' => round($remainder - $bonus, 2),
+            ];
+        })->groupBy('uid');
     }
 
     public function perUser(): Collection

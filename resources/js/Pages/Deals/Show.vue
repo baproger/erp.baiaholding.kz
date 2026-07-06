@@ -4,7 +4,6 @@ import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
-import DangerButton from '@/Components/DangerButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -102,7 +101,14 @@ const saveEdit = () => editForm.put(route('deals.update', props.deal.id), { pres
                 <PrimaryButton v-if="can.update && !isWorkshopStage && !isLastStage" @click="advance">Далее →</PrimaryButton>
                 <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02] hover:bg-emerald-700">📦 Отправить в цех</button>
                 <Link v-if="deal.project && deal.project.status !== 'completed'" :href="route('projects.show', deal.project.id)" class="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">В цеху: {{ deal.project.number }} →</Link>
-                <button v-if="can.update" @click="openEdit" class="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">✎ Изменить</button>
+                <button v-if="can.update" @click="openEdit" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16l-3.5.5L4 13z"/></svg>
+                    Изменить
+                </button>
+                <button v-if="can.delete" @click="destroy" class="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4h4v2M6 6l.5 10h7l.5-10M8.5 9v4M11.5 9v4"/></svg>
+                    Удалить
+                </button>
             </div>
         </div>
 
@@ -209,7 +215,6 @@ const saveEdit = () => editForm.put(route('deals.update', props.deal.id), { pres
                     <DealChat :chat-id="chatId" />
                 </div>
 
-                <DangerButton v-if="can.delete" @click="destroy">Удалить сделку</DangerButton>
             </div>
         </div>
 

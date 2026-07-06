@@ -25,6 +25,14 @@ class PayrollController extends Controller
             $rows = $rows->filter(fn ($r) => $r['uid'] === $user->id)->values();
         }
 
+        // Per-deal breakdown so a row can expand into the employee's «Оплата успешно»
+        // and «Акт утверждение» deals — the raw data the financist needs to check ЗП.
+        $breakdown = $payroll->dealBreakdown();
+        $rows = $rows->map(function ($r) use ($breakdown) {
+            $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
+            return $r;
+        });
+
         return Inertia::render('Payroll/Index', [
             'rows' => $rows,
             'leadership' => $leadership,
