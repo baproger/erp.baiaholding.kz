@@ -19,9 +19,10 @@ use Inertia\Response;
  */
 class WarehouseController extends Controller
 {
+    /** Управление складом (приход, правка, удаление) — только бухгалтер и админ. */
     private function canManage(Request $request): bool
     {
-        return $request->user()->hasAnyRole(['admin', 'director', 'financist']);
+        return $request->user()->hasAnyRole(['admin', 'financist']);
     }
 
     public function index(Request $request): Response
@@ -50,7 +51,7 @@ class WarehouseController extends Controller
     /** Приход товара: существующий материал или новая позиция. */
     public function receipt(Request $request): RedirectResponse
     {
-        abort_unless($this->canManage($request), 403, 'Приход оформляет бухгалтер, директор или админ.');
+        abort_unless($this->canManage($request), 403, 'Приход оформляет бухгалтер или админ.');
 
         $data = $request->validate([
             'material_id' => ['nullable', 'exists:materials,id'],
@@ -87,6 +88,64 @@ class WarehouseController extends Controller
         });
 
         return back()->with('success', 'Приход оформлен — остаток обновлён.');
+    }
+
+    /**
+     * Правка прихода: разница количества корректирует остаток материала
+     * (в минус остаток уйти не может).
+     */
+    public function updateReceipt(Request $request, MaterialReceipt $receipt): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403, 'Приходы редактирует бухгалтер или админ.');
+        abort_unless($request->user()->worksInCompany($receipt->material?->company_id ? (int) $receipt->material->company_id : null), 403);
+
+        $data = $request->validate([
+            'quantity' => ['required', 'numeric', 'min:0.01'],
+            'date' => ['nullable', 'date'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $delta = (float) $data['quantity'] - (float) $receipt->quantity;
+        $material = $receipt->material;
+        if ((float) $material->quantity + $delta < 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'quantity' => 'Так остаток уйдёт в минус: на складе '.number_format((float) $material->quantity, 2, '.', ' ').' '.$material->unit.' (часть уже списана в расходы).',
+            ]);
+        }
+
+        DB::transaction(function () use ($receipt, $material, $data, $delta) {
+            $receipt->update([
+                'quantity' => $data['quantity'],
+                'date' => $data['date'] ?? $receipt->date,
+                'note' => $data['note'] ?? null,
+            ]);
+            if ($delta > 0) {
+                $material->increment('quantity', $delta);
+            } elseif ($delta < 0) {
+                $material->decrement('quantity', abs($delta));
+            }
+        });
+
+        return back()->with('success', 'Приход обновлён — остаток пересчитан.');
+    }
+
+    /** Удаление прихода: количество снимается с остатка (в минус нельзя). */
+    public function destroyReceipt(Request $request, MaterialReceipt $receipt): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403, 'Приходы удаляет бухгалтер или админ.');
+        abort_unless($request->user()->worksInCompany($receipt->material?->company_id ? (int) $receipt->material->company_id : null), 403);
+
+        $material = $receipt->material;
+        if ((float) $material->quantity - (float) $receipt->quantity < 0) {
+            return back()->with('error', 'Нельзя удалить приход: остаток уйдёт в минус (часть уже списана в расходы).');
+        }
+
+        DB::transaction(function () use ($receipt, $material) {
+            $material->decrement('quantity', $receipt->quantity);
+            $receipt->delete();
+        });
+
+        return back()->with('success', 'Приход удалён — остаток пересчитан.');
     }
 
     public function destroyMaterial(Request $request, Material $material): RedirectResponse

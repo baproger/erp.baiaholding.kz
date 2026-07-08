@@ -72,6 +72,51 @@ class WarehouseTest extends TestCase
         $this->actingAs($emp)->get(route('warehouse.index'))->assertForbidden();
     }
 
+    public function test_financist_can_edit_and_delete_receipt_with_stock_recalc(): void
+    {
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $fin = $this->user('financist', $company);
+        $material = Material::create(['company_id' => $company->id, 'name' => 'ЛДСП', 'unit' => 'штук', 'quantity' => 50]);
+        $receipt = $material->receipts()->create(['user_id' => $fin->id, 'quantity' => 50, 'date' => now()->toDateString()]);
+
+        // 50 → 30: остаток уменьшается на 20.
+        $this->actingAs($fin)->put(route('warehouse.receipts.update', $receipt->id), ['quantity' => 30])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertEquals(30.0, (float) $material->fresh()->quantity);
+
+        // Удаление прихода снимает его количество с остатка.
+        $this->actingAs($fin)->delete(route('warehouse.receipts.destroy', $receipt->id))->assertRedirect();
+        $this->assertEquals(0.0, (float) $material->fresh()->quantity);
+        $this->assertSame(0, $material->receipts()->count());
+    }
+
+    public function test_receipt_edit_cannot_push_stock_negative(): void
+    {
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $fin = $this->user('financist', $company);
+        $material = Material::create(['company_id' => $company->id, 'name' => 'МДФ', 'unit' => 'штук', 'quantity' => 10]);
+        $receipt = $material->receipts()->create(['user_id' => $fin->id, 'quantity' => 50, 'date' => now()->toDateString()]);
+        // Остаток 10 (40 уже списано в расходы) — уменьшить приход до 5 нельзя.
+
+        $this->actingAs($fin)->put(route('warehouse.receipts.update', $receipt->id), ['quantity' => 5])
+            ->assertSessionHasErrors('quantity');
+        $this->assertEquals(10.0, (float) $material->fresh()->quantity);
+    }
+
+    public function test_director_cannot_manage_receipts(): void
+    {
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $director = $this->user('director', $company);
+        $material = Material::create(['company_id' => $company->id, 'name' => 'Кромка', 'unit' => 'метр', 'quantity' => 5]);
+        $receipt = $material->receipts()->create(['quantity' => 5, 'date' => now()->toDateString()]);
+
+        $this->actingAs($director)->post(route('warehouse.receipt'), ['material_id' => $material->id, 'quantity' => 1])->assertForbidden();
+        $this->actingAs($director)->put(route('warehouse.receipts.update', $receipt->id), ['quantity' => 1])->assertForbidden();
+        $this->actingAs($director)->delete(route('warehouse.receipts.destroy', $receipt->id))->assertForbidden();
+        // Просмотр склада директору доступен.
+        $this->actingAs($director)->withSession(['company_id' => $company->id])->get(route('warehouse.index'))->assertOk();
+    }
+
     public function test_warehouse_scoped_by_current_company(): void
     {
         $baia = Company::where('code', 'BAIA')->firstOrFail();

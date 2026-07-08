@@ -40,6 +40,25 @@ const removeMaterial = async (m) => {
     }
 };
 
+// Правка/удаление прихода (бухгалтер/админ) — остаток пересчитывается на сервере.
+const editingReceipt = ref(null);
+const receiptForm = useForm({ quantity: '', date: '', note: '' });
+const openEditReceipt = (r) => {
+    editingReceipt.value = r.id;
+    receiptForm.quantity = Number(r.quantity);
+    receiptForm.date = (r.date ?? '').slice(0, 10);
+    receiptForm.note = r.note ?? '';
+    receiptForm.clearErrors();
+};
+const saveReceipt = (r) => receiptForm.put(route('warehouse.receipts.update', r.id), {
+    preserveScroll: true, onSuccess: () => (editingReceipt.value = null),
+});
+const removeReceipt = async (r) => {
+    if (await confirmDialog({ title: 'Удалить приход', message: `Приход «+${r.quantity} ${r.material?.unit ?? ''} ${r.material?.name ?? ''}» будет удалён, остаток уменьшится.`, confirmText: 'Удалить', danger: true })) {
+        router.delete(route('warehouse.receipts.destroy', r.id), { preserveScroll: true });
+    }
+};
+
 const search = ref('');
 const filtered = computed(() => {
     const s = search.value.trim().toLowerCase();
@@ -111,11 +130,43 @@ const lowStock = (m) => Number(m.quantity) <= 0;
         <div v-if="receipts.length" class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
             <h3 class="mb-4 text-sm font-semibold text-slate-700">Последние приходы</h3>
             <div class="divide-y divide-slate-50">
-                <div v-for="r in receipts" :key="r.id" class="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">+ {{ qty(r.quantity) }} {{ r.material?.unit }}</span>
-                    <span class="font-medium text-slate-800">{{ r.material?.name }}</span>
-                    <span v-if="r.note" class="text-xs text-slate-400">{{ r.note }}</span>
-                    <span class="ml-auto text-xs text-slate-400">{{ r.user?.name ?? '—' }} · {{ formatDate(r.date) }}</span>
+                <div v-for="r in receipts" :key="r.id" class="py-2.5 text-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">+ {{ qty(r.quantity) }} {{ r.material?.unit }}</span>
+                        <span class="font-medium text-slate-800">{{ r.material?.name }}</span>
+                        <span v-if="r.note" class="text-xs text-slate-400">{{ r.note }}</span>
+                        <span class="ml-auto text-xs text-slate-400">{{ r.user?.name ?? '—' }} · {{ formatDate(r.date) }}</span>
+                        <template v-if="canManage">
+                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать приход" @click="openEditReceipt(r)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </button>
+                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить приход" @click="removeReceipt(r)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                            </button>
+                        </template>
+                    </div>
+                    <!-- Инлайн-правка прихода -->
+                    <div v-if="editingReceipt === r.id" class="mt-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/40 p-3">
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <InputLabel value="Количество" />
+                                <TextInput v-model="receiptForm.quantity" type="number" min="0.01" step="any" class="mt-1 w-full" />
+                            </div>
+                            <div>
+                                <InputLabel value="Дата" />
+                                <TextInput v-model="receiptForm.date" type="date" class="mt-1 w-full" />
+                            </div>
+                            <div>
+                                <InputLabel value="Заметка" />
+                                <TextInput v-model="receiptForm.note" class="mt-1 w-full" />
+                            </div>
+                        </div>
+                        <InputError :message="receiptForm.errors.quantity" class="mt-1" />
+                        <div class="mt-2 flex gap-2">
+                            <PrimaryButton :disabled="receiptForm.processing" @click="saveReceipt(r)">Сохранить</PrimaryButton>
+                            <SecondaryButton @click="editingReceipt = null">Отмена</SecondaryButton>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

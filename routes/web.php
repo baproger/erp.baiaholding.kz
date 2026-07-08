@@ -113,6 +113,8 @@ Route::middleware('auth')->group(function () {
     Route::get('warehouse', [\App\Http\Controllers\WarehouseController::class, 'index'])->name('warehouse.index');
     Route::post('warehouse/receipt', [\App\Http\Controllers\WarehouseController::class, 'receipt'])->name('warehouse.receipt');
     Route::delete('warehouse/materials/{material}', [\App\Http\Controllers\WarehouseController::class, 'destroyMaterial'])->name('warehouse.materials.destroy');
+    Route::put('warehouse/receipts/{receipt}', [\App\Http\Controllers\WarehouseController::class, 'updateReceipt'])->name('warehouse.receipts.update');
+    Route::delete('warehouse/receipts/{receipt}', [\App\Http\Controllers\WarehouseController::class, 'destroyReceipt'])->name('warehouse.receipts.destroy');
 
     // Projects
     Route::resource('projects', ProjectController::class)->only(['index', 'show']);
