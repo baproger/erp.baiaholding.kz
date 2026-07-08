@@ -11,9 +11,9 @@ class ExpenseRequest extends FormRequest
 
     public function rules(): array
     {
-        // Чек обязателен при создании ПРОЧЕГО расхода; расход по материалам —
-        // внутреннее списание со склада, чек не нужен.
-        $fileRule = $this->isMethod('post') && ! $this->filled('material_id') ? ['required'] : ['nullable'];
+        // Чек при создании НЕ обязателен: если менеджер его не приложил,
+        // бухгалтер прикрепит при подтверждении (без чека подтвердить нельзя).
+        $fileRule = ['nullable'];
 
         return [
             'expenseable_type' => ['nullable', Rule::in(['deal', 'project'])],
@@ -26,7 +26,8 @@ class ExpenseRequest extends FormRequest
             'date' => ['required', 'date'],
             'description' => ['nullable', 'string'],
             'type' => ['nullable', Rule::in(['direct', 'indirect'])],
-            'status' => ['nullable', Rule::in(['draft', 'confirmed'])],
+            'status' => ['nullable', Rule::in(['draft', 'pending', 'confirmed'])],
+            'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
             'file' => [...$fileRule, 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
         ];
     }

@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -79,10 +80,100 @@ class ExpenseController extends Controller
             return back()->with('success', 'Расход по материалам добавлен — остаток на складе списан.');
         }
 
-        $data['status'] ??= 'draft';
-        Expense::create($data);
+        // Прочий расход: бухгалтер/админ подтверждают сразу; расход менеджера
+        // (и директора) ждёт подтверждения бухгалтера — чек + нал/банк.
+        $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
+        $data['status'] = $isAccountant ? 'confirmed' : 'pending';
+        if ($isAccountant) {
+            $data['confirmed_by'] = $request->user()->id;
+            $data['confirmed_at'] = now();
+        } else {
+            unset($data['payment_method']); // способ оплаты выбирает бухгалтер
+        }
+
+        $expense = Expense::create($data);
+
+        if (! $isAccountant) {
+            $this->notifyAccountants($expense, $entity);
+
+            return back()->with('success', 'Расход отправлен бухгалтеру на подтверждение.');
+        }
 
         return back()->with('success', 'Расход добавлен.');
+    }
+
+    /**
+     * Бухгалтеру: уведомление + задача «Подтвердить расход…» на сделке/заказе.
+     */
+    private function notifyAccountants(Expense $expense, ?Model $entity): void
+    {
+        $title = 'Подтвердить расход #'.$expense->id.' — '.number_format((float) $expense->amount, 0, '.', ' ').' ₸'
+            .($entity?->number ? ' ('.$entity->number.')' : '');
+
+        $financists = User::where('is_active', true)->role('financist')->get();
+        foreach ($financists as $fin) {
+            if ($entity && method_exists($entity, 'tasks')) {
+                $entity->tasks()->create([
+                    'title' => $title,
+                    'status' => 'new',
+                    'priority' => 'high',
+                    'assignee_id' => $fin->id,
+                    'creator_id' => $expense->responsible_user_id ?? $fin->id,
+                    'start_date' => now(),
+                    'due_date' => now()->addDays(3),
+                ]);
+            }
+            $fin->notify(new \App\Notifications\ExpensePending($expense));
+        }
+    }
+
+    /**
+     * Подтверждение расхода бухгалтером: обязательный чек (уже приложенный или
+     * загружаемый сейчас) + способ оплаты нал/банк (касса).
+     */
+    public function confirm(Request $request, Expense $expense): RedirectResponse
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Расход подтверждает бухгалтер или админ.');
+        $this->assertOwnership($request->user(), $expense->expenseable);
+
+        if ($expense->status === 'confirmed') {
+            return back()->with('error', 'Расход уже подтверждён.');
+        }
+
+        $data = $request->validate([
+            'payment_method' => ['required', \Illuminate\Validation\Rule::in(['cash', 'bank'])],
+            'file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
+        ], ['payment_method.required' => 'Выберите способ оплаты: наличные или банк.']);
+
+        if ($request->hasFile('file')) {
+            if ($expense->file_path) {
+                Storage::disk('local')->delete($expense->file_path);
+            }
+            $expense->file_path = $request->file('file')->store('receipts', 'local');
+        }
+        if (! $expense->file_path) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'file' => 'Без чека расход не подтверждается — прикрепите фото или PDF.',
+            ]);
+        }
+
+        $expense->update([
+            'file_path' => $expense->file_path,
+            'status' => 'confirmed',
+            'payment_method' => $data['payment_method'],
+            'confirmed_by' => $request->user()->id,
+            'confirmed_at' => now(),
+        ]);
+
+        // Закрываем задачи «Подтвердить расход #N …» у бухгалтеров.
+        \App\Models\Task::where('title', 'like', 'Подтвердить расход #'.$expense->id.' %')
+            ->where('status', '!=', 'done')
+            ->get()->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
+
+        // Автору — уведомление о подтверждении.
+        $expense->responsible?->notify(new \App\Notifications\ExpenseConfirmed($expense));
+
+        return back()->with('success', 'Расход подтверждён ('.($data['payment_method'] === 'cash' ? 'наличные' : 'банк').').');
     }
 
     public function update(ExpenseRequest $request, Expense $expense): RedirectResponse

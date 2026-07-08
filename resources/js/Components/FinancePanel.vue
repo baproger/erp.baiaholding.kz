@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+import { useForm, router, usePage } from '@inertiajs/vue3';
 import { confirmDialog } from '@/composables/useConfirm';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -48,7 +48,21 @@ const selectedMaterial = computed(() => props.materials.find((m) => m.id === exp
 const qtyNum = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
 const canSubmitExpense = computed(() => expenseMode.value === 'material'
     ? !!expenseForm.material_id && Number(expenseForm.qty) > 0
-    : !!expenseForm.file);
+    : Number(expenseForm.amount) > 0);
+
+// Подтверждение прочего расхода — только бухгалтер (financist) или админ.
+const canConfirm = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
+const confirmFor = ref(null); // id расхода, открытого на подтверждение
+const confirmInput = ref(null);
+const confirmForm = useForm({ payment_method: 'bank', file: null });
+const openConfirm = (e) => { confirmFor.value = e.id; confirmForm.reset(); confirmForm.payment_method = 'bank'; };
+const onConfirmReceipt = (ev) => { confirmForm.file = ev.target.files[0] ?? null; };
+const submitConfirm = (e) => confirmForm
+    .transform((d) => ({ ...d, _method: 'PATCH' }))
+    .post(route('expenses.confirm', e.id), {
+        preserveScroll: true, forceFormData: true,
+        onSuccess: () => { confirmFor.value = null; },
+    });
 const addExpense = () => expenseForm
     .transform((d) => expenseMode.value === 'material'
         ? { ...d, file: null }
@@ -201,7 +215,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 </div>
                 <TextInput v-model="expenseForm.description" placeholder="Описание" class="mt-2 w-full" />
                 <div v-if="expenseMode === 'other'" class="mt-2">
-                    <label class="mb-1 block text-xs font-medium text-slate-500">Чек (фото или PDF) *</label>
+                    <label class="mb-1 block text-xs font-medium text-slate-500">Чек (фото или PDF) — можно прикрепить сейчас, иначе бухгалтер добавит при подтверждении</label>
                     <input ref="receiptInput" type="file" accept="image/*,.pdf" @change="onReceipt"
                         class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
                     <div v-if="expenseForm.errors.file" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.file }}</div>
@@ -210,26 +224,58 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <div class="mt-2"><PrimaryButton :disabled="expenseForm.processing || !canSubmitExpense" @click="addExpense">Добавить расход</PrimaryButton></div>
             </div>
             <div class="space-y-2">
-                <div v-for="e in expenses" :key="e.id" class="flex items-start justify-between gap-3 rounded-xl bg-slate-50 p-4 text-sm">
-                    <div>
-                        <div><span class="font-medium tabular-nums text-slate-900">{{ money(e.amount) }}</span><span class="ml-2 text-slate-500">{{ e.description }}</span></div>
-                        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
-                            <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700">📦 склад: {{ e.material.name }} × {{ qtyNum(e.qty) }} {{ e.material.unit }}</span>
-                            <span v-if="e.responsible">{{ e.responsible.name }}</span>
-                            <span>· {{ fmtDateTime(e.created_at) }}</span>
-                            <button v-if="e.file_path" type="button" @click="openReceipt(e)"
-                                class="inline-flex items-center gap-1 font-medium text-indigo-600 transition-colors duration-150 hover:text-indigo-800">
-                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                                Посмотреть чек
+                <div v-for="e in expenses" :key="e.id" class="rounded-xl bg-slate-50 p-4 text-sm">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div><span class="font-medium tabular-nums text-slate-900">{{ money(e.amount) }}</span><span class="ml-2 text-slate-500">{{ e.description }}</span></div>
+                            <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+                                <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700">склад: {{ e.material.name }} × {{ qtyNum(e.qty) }} {{ e.material.unit }}</span>
+                                <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
+                                <span v-if="e.responsible">{{ e.responsible.name }}</span>
+                                <span>· {{ fmtDateTime(e.created_at) }}</span>
+                                <button v-if="e.file_path" type="button" @click="openReceipt(e)"
+                                    class="inline-flex items-center gap-1 font-medium text-indigo-600 transition-colors duration-150 hover:text-indigo-800">
+                                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                    Посмотреть чек
+                                </button>
+                                <span v-else-if="!e.material" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">без чека</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
+                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Ждёт бухгалтера</span>
+                            <span v-else class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Черновик</span>
+                            <button v-if="canConfirm && e.status !== 'confirmed' && confirmFor !== e.id"
+                                class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700"
+                                @click="openConfirm(e)">✓ Подтвердить</button>
+                            <button class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="delExpense(e)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
                             </button>
-                            <span v-else class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">без чека</span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <StatusBadge :status="e.status === 'confirmed' ? 'done' : 'draft'" />
-                        <button class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="delExpense(e)">
-                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
-                        </button>
+                    <!-- Подтверждение бухгалтером: способ оплаты (касса) + чек -->
+                    <div v-if="confirmFor === e.id" class="mt-3 rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-medium text-slate-500">Оплата:</span>
+                            <button type="button" @click="confirmForm.payment_method = 'cash'"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                                :class="confirmForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Наличные</button>
+                            <button type="button" @click="confirmForm.payment_method = 'bank'"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                                :class="confirmForm.payment_method === 'bank' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
+                        </div>
+                        <div v-if="!e.file_path" class="mt-2">
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Чек (обязателен для подтверждения)</label>
+                            <input ref="confirmInput" type="file" accept="image/*,.pdf" @change="onConfirmReceipt"
+                                class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-emerald-700 hover:file:bg-emerald-200" />
+                        </div>
+                        <div v-if="confirmForm.errors.file" class="mt-1 text-xs text-red-600">{{ confirmForm.errors.file }}</div>
+                        <div v-if="confirmForm.errors.payment_method" class="mt-1 text-xs text-red-600">{{ confirmForm.errors.payment_method }}</div>
+                        <div class="mt-2 flex gap-2">
+                            <button class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700 disabled:opacity-50"
+                                :disabled="confirmForm.processing || (!e.file_path && !confirmForm.file)" @click="submitConfirm(e)">Подтвердить расход</button>
+                            <button class="rounded-lg bg-white px-4 py-1.5 text-xs font-medium text-slate-500 ring-1 ring-slate-200 transition-colors duration-150 hover:bg-slate-100" @click="confirmFor = null">Отмена</button>
+                        </div>
                     </div>
                 </div>
                 <div v-if="!expenses.length" class="flex flex-col items-center gap-3 py-8 text-center">

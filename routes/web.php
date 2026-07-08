@@ -136,6 +136,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
     Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
     Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
+    Route::patch('expenses/{expense}/confirm', [ExpenseController::class, 'confirm'])->name('expenses.confirm');
     Route::get('expenses/{expense}/receipt', [ExpenseController::class, 'receipt'])->name('expenses.receipt');
     Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
 

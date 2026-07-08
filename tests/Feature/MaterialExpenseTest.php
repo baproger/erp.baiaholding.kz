@@ -83,11 +83,14 @@ class MaterialExpenseTest extends TestCase
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
     }
 
-    public function test_other_expense_still_requires_receipt(): void
+    public function test_other_expense_by_manager_goes_pending(): void
     {
+        // Прочий расход менеджера ждёт подтверждения бухгалтера (этап 4).
         $this->actingAs($this->manager)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
             'amount' => 5000, 'date' => now()->toDateString(),
-        ])->assertSessionHasErrors('file');
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertSame('pending', Expense::first()->status);
     }
 }
