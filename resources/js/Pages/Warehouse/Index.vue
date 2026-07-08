@@ -1,0 +1,182 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { Head, useForm, router } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import Modal from '@/Components/Modal.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/InputError.vue';
+import { confirmDialog } from '@/composables/useConfirm';
+import { formatDate } from '@/utils/format';
+
+const props = defineProps({
+    materials: Array, receipts: Array, units: Array,
+    canManage: Boolean, allMode: Boolean, companyName: String,
+});
+
+const qty = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
+
+// Приход: существующий материал или новая позиция.
+const showModal = ref(false);
+const mode = ref('existing'); // existing | new
+const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', date: '', note: '' });
+const openReceipt = () => {
+    form.reset(); form.unit = 'штук';
+    mode.value = props.materials.length ? 'existing' : 'new';
+    showModal.value = true;
+};
+const submit = () => {
+    const payload = mode.value === 'existing'
+        ? { material_id: form.material_id, name: '', unit: '' }
+        : { material_id: '', name: form.name, unit: form.unit };
+    form.transform((d) => ({ ...d, ...payload }))
+        .post(route('warehouse.receipt'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
+};
+const removeMaterial = async (m) => {
+    if (await confirmDialog({ title: 'Удалить позицию', message: `«${m.name}» и вся история прихода будут удалены.`, confirmText: 'Удалить', danger: true })) {
+        router.delete(route('warehouse.materials.destroy', m.id), { preserveScroll: true });
+    }
+};
+
+const search = ref('');
+const filtered = computed(() => {
+    const s = search.value.trim().toLowerCase();
+    return s ? props.materials.filter((m) => m.name.toLowerCase().includes(s)) : props.materials;
+});
+const lowStock = (m) => Number(m.quantity) <= 0;
+</script>
+
+<template>
+    <Head title="Склад" />
+    <AppLayout>
+        <template #header>
+            <div class="flex items-center gap-3">
+                <span>{{ $t('page.warehouse', 'Склад') }}</span>
+                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">{{ companyName }}</span>
+            </div>
+        </template>
+
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="relative w-full sm:w-auto sm:flex-1 sm:max-w-sm">
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input v-model="search" type="text" placeholder="Поиск материала…"
+                    class="w-full rounded-xl border-slate-200 py-2 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+            </div>
+            <PrimaryButton v-if="canManage" @click="openReceipt">+ Приход товара</PrimaryButton>
+        </div>
+
+        <!-- Остатки -->
+        <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-card">
+            <table class="min-w-full divide-y divide-slate-100 text-sm">
+                <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <tr>
+                        <th class="px-6 py-3">Материал</th>
+                        <th v-if="allMode" class="px-4 py-3">Компания</th>
+                        <th class="px-4 py-3">Ед. изм.</th>
+                        <th class="px-4 py-3 text-right">Остаток</th>
+                        <th v-if="canManage" class="px-4 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    <tr v-for="m in filtered" :key="m.id" class="transition-colors hover:bg-slate-50">
+                        <td class="px-6 py-3 font-medium text-slate-900">{{ m.name }}<span v-if="m.note" class="ml-2 text-xs text-slate-400">{{ m.note }}</span></td>
+                        <td v-if="allMode" class="px-4 py-3 text-slate-500">{{ m.company?.name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-slate-500">{{ m.unit }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <span class="rounded-full px-2.5 py-0.5 text-sm font-bold tabular-nums"
+                                :class="lowStock(m) ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'">
+                                {{ qty(m.quantity) }}
+                            </span>
+                        </td>
+                        <td v-if="canManage" class="px-4 py-3 text-right">
+                            <button class="text-slate-300 transition-colors hover:text-rose-600" title="Удалить позицию" @click="removeMaterial(m)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr v-if="!filtered.length">
+                        <td :colspan="canManage ? (allMode ? 5 : 4) : (allMode ? 4 : 3)" class="px-6 py-12 text-center">
+                            <svg class="mx-auto h-10 w-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+                            <p class="mt-3 text-sm text-slate-400">Склад пуст — оформите первый приход товара</p>
+                            <PrimaryButton v-if="canManage" class="mt-4" @click="openReceipt">+ Приход товара</PrimaryButton>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- История прихода -->
+        <div v-if="receipts.length" class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+            <h3 class="mb-4 text-sm font-semibold text-slate-700">Последние приходы</h3>
+            <div class="divide-y divide-slate-50">
+                <div v-for="r in receipts" :key="r.id" class="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">+ {{ qty(r.quantity) }} {{ r.material?.unit }}</span>
+                    <span class="font-medium text-slate-800">{{ r.material?.name }}</span>
+                    <span v-if="r.note" class="text-xs text-slate-400">{{ r.note }}</span>
+                    <span class="ml-auto text-xs text-slate-400">{{ r.user?.name ?? '—' }} · {{ formatDate(r.date) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модалка прихода -->
+        <Modal :show="showModal" @close="showModal = false" max-width="lg">
+            <div class="p-6">
+                <h2 class="mb-4 text-lg font-semibold">Приход товара</h2>
+                <div v-if="materials.length" class="mb-4 flex gap-2">
+                    <button type="button" @click="mode = 'existing'"
+                        class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                        :class="mode === 'existing' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                        Существующий материал
+                    </button>
+                    <button type="button" @click="mode = 'new'"
+                        class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                        :class="mode === 'new' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                        Новая позиция
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div v-if="mode === 'existing' && materials.length" class="col-span-2">
+                        <InputLabel value="Материал" />
+                        <select v-model="form.material_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                            <option value="">— выберите —</option>
+                            <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }} (остаток {{ qty(m.quantity) }} {{ m.unit }})</option>
+                        </select>
+                        <InputError :message="form.errors.material_id" class="mt-1" />
+                    </div>
+                    <template v-else>
+                        <div class="col-span-2 sm:col-span-1">
+                            <InputLabel value="Название материала *" />
+                            <TextInput v-model="form.name" class="mt-1 w-full" placeholder="ЛДСП 16мм белый" />
+                            <InputError :message="form.errors.name" class="mt-1" />
+                        </div>
+                        <div class="col-span-2 sm:col-span-1">
+                            <InputLabel value="Ед. изм." />
+                            <select v-model="form.unit" class="mt-1 w-full rounded-md border-slate-300 shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                                <option v-for="u in units" :key="u" :value="u">{{ u }}</option>
+                            </select>
+                        </div>
+                    </template>
+                    <div>
+                        <InputLabel value="Количество *" />
+                        <TextInput v-model="form.quantity" type="number" min="0.01" step="any" class="mt-1 w-full" />
+                        <InputError :message="form.errors.quantity" class="mt-1" />
+                    </div>
+                    <div>
+                        <InputLabel value="Дата" />
+                        <TextInput v-model="form.date" type="date" class="mt-1 w-full" />
+                    </div>
+                    <div class="col-span-2">
+                        <InputLabel value="Заметка" />
+                        <TextInput v-model="form.note" class="mt-1 w-full" placeholder="Поставщик, накладная…" />
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="showModal = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="form.processing" @click="submit">Оформить приход</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+    </AppLayout>
+</template>

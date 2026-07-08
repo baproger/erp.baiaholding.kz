@@ -41,6 +41,7 @@ const allNav = [
     { key: 'nav.deals', name: 'Сделки', route: 'deals.index', icon: '◈', perm: 'deal.viewAny' },
     { key: 'nav.overdue', name: 'Просроченные', route: 'deals.overdue', icon: '⏰', perm: 'deal.viewAny' },
     { key: 'nav.workshop', name: 'Цех', route: 'projects.index', icon: '◇', perm: 'project.viewAny' },
+    { key: 'nav.warehouse', name: 'Склад', route: 'warehouse.index', icon: '▤', roles: ['admin', 'director', 'financist', 'manager'] },
     { key: 'nav.chat', name: 'Чат', route: 'chat.index', icon: '✉' },
     { key: 'nav.profile', name: 'Профиль', route: 'profile.edit', icon: '🪪' },
     { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
@@ -51,7 +52,7 @@ const allNav = [
     { key: 'nav.settings', name: 'Настройки', route: 'settings.index', icon: '⚙', perm: 'setting.update' },
     { key: 'nav.translations', name: 'Переводы', route: 'translations.index', icon: '🌐', perm: 'setting.update' },
 ];
-const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes(i.perm)) && (!i.leadershipOnly || isLeadership.value)));
+const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes(i.perm)) && (!i.leadershipOnly || isLeadership.value) && (!i.roles || i.roles.some((r) => roles.value.includes(r)))));
 
 // Инлайн-SVG иконки (Lucide-style outline) по route — заменяют псевдо-иконки.
 // Чисто презентационно: массив allNav и его perm/leadershipOnly не тронуты.
@@ -61,6 +62,7 @@ const navIcons = {
     'deals.index': '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
     'deals.overdue': '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/>',
     'projects.index': '<path d="M2 20h20"/><path d="M4 20V10l5 4v-4l5 4V6h6v14"/>',
+    'warehouse.index': '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
     'chat.index': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     'profile.edit': '<circle cx="12" cy="8" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>',
     'finance.index': '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',

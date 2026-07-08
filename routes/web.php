@@ -109,6 +109,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('deals/{deal}/responsible', [DealController::class, 'updateResponsible'])->name('deals.responsible');
     Route::patch('deals/{deal}/stage-task', [DealController::class, 'completeStageTask'])->name('deals.stageTask');
 
+    // Склад (приход товара + остатки, у каждой компании свой)
+    Route::get('warehouse', [\App\Http\Controllers\WarehouseController::class, 'index'])->name('warehouse.index');
+    Route::post('warehouse/receipt', [\App\Http\Controllers\WarehouseController::class, 'receipt'])->name('warehouse.receipt');
+    Route::delete('warehouse/materials/{material}', [\App\Http\Controllers\WarehouseController::class, 'destroyMaterial'])->name('warehouse.materials.destroy');
+
     // Projects
     Route::resource('projects', ProjectController::class)->only(['index', 'show']);
     Route::patch('projects/{project}/stage', [ProjectController::class, 'updateStage'])->name('projects.stage');
