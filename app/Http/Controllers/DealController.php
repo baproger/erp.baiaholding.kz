@@ -111,7 +111,7 @@ class DealController extends Controller
             'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
             'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')
                 ->with('payments')->latest(),
-            'expenses' => fn ($q) => $q->with('responsible:id,name,avatar')->latest(),
+            'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'material:id,name,unit'])->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
@@ -147,6 +147,10 @@ class DealController extends Controller
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
             'stageTask' => $stageTask,
+            // Склад компании сделки — для расходов по материалам (показ остатка).
+            'materials' => \App\Models\Material::query()
+                ->when($deal->company_id, fn ($q, $c) => $q->where('company_id', $c))
+                ->orderBy('name')->get(['id', 'name', 'unit', 'quantity']),
             'profit' => [
                 'budget' => $dealBudget,
                 'tax' => $dealTax, 'taxRate' => $taxRate * 100,

@@ -14,6 +14,7 @@ const props = defineProps({
     invoices: { type: Array, default: () => [] },
     expenses: { type: Array, default: () => [] },
     finance: { type: Object, default: () => ({ income: 0, invoiced: 0, expense: 0, profit: 0, margin: 0 }) },
+    materials: { type: Array, default: () => [] }, // склад компании сделки (для расходов по материалам)
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
@@ -39,12 +40,23 @@ const addPayment = () => payForm.post(route('payments.store'), { preserveScroll:
 
 const showExpense = ref(false);
 const receiptInput = ref(null);
-const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', file: null });
+// Тип расхода: «прочий» (нужен чек) или «по материалам» (списание со склада, чек не нужен).
+const expenseMode = ref('other'); // other | material
+const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', file: null });
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
-const addExpense = () => expenseForm.post(route('expenses.store'), {
-    preserveScroll: true, forceFormData: true,
-    onSuccess: () => { expenseForm.reset('amount', 'description', 'file'); if (receiptInput.value) receiptInput.value.value = ''; showExpense.value = false; },
-});
+const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
+const qtyNum = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
+const canSubmitExpense = computed(() => expenseMode.value === 'material'
+    ? !!expenseForm.material_id && Number(expenseForm.qty) > 0
+    : !!expenseForm.file);
+const addExpense = () => expenseForm
+    .transform((d) => expenseMode.value === 'material'
+        ? { ...d, file: null }
+        : { ...d, material_id: '', qty: '' })
+    .post(route('expenses.store'), {
+        preserveScroll: true, forceFormData: true,
+        onSuccess: () => { expenseForm.reset('amount', 'description', 'file', 'material_id', 'qty'); if (receiptInput.value) receiptInput.value.value = ''; showExpense.value = false; },
+    });
 const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 const isImage = (path) => /\.(jpe?g|png|webp|heic)$/i.test(path ?? '');
 
@@ -149,24 +161,60 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showExpense = !showExpense">+ Расход</button>
             </div>
             <div v-if="showExpense" class="mb-3 rounded-xl border border-dashed border-slate-300 p-4">
+                <!-- Тип расхода -->
+                <div v-if="materials.length" class="mb-3 flex gap-2">
+                    <button type="button" @click="expenseMode = 'other'"
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseMode === 'other' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                        Прочий расход (чек)
+                    </button>
+                    <button type="button" @click="expenseMode = 'material'"
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseMode === 'material' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                        По материалам (со склада)
+                    </button>
+                </div>
+
+                <!-- Материал со склада -->
+                <div v-if="expenseMode === 'material' && materials.length" class="mb-2 grid grid-cols-2 gap-2">
+                    <div class="col-span-2">
+                        <select v-model="expenseForm.material_id" class="w-full rounded-md border-slate-300 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                            <option value="">— материал со склада —</option>
+                            <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }} · остаток {{ qtyNum(m.quantity) }} {{ m.unit }}</option>
+                        </select>
+                        <div v-if="expenseForm.errors.material_id" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.material_id }}</div>
+                    </div>
+                    <div>
+                        <TextInput v-model="expenseForm.qty" type="number" min="0.01" step="any" placeholder="Количество" class="w-full" />
+                        <div v-if="expenseForm.errors.qty" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.qty }}</div>
+                    </div>
+                    <div v-if="selectedMaterial" class="flex items-center text-xs"
+                        :class="Number(expenseForm.qty) > Number(selectedMaterial.quantity) ? 'text-rose-600 font-semibold' : 'text-slate-500'">
+                        Остаток: {{ qtyNum(selectedMaterial.quantity) }} {{ selectedMaterial.unit }}
+                        <template v-if="Number(expenseForm.qty) > 0"> → {{ qtyNum(Number(selectedMaterial.quantity) - Number(expenseForm.qty)) }}</template>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-2 gap-2">
-                    <TextInput v-model="expenseForm.amount" type="number" step="0.01" placeholder="Сумма" />
+                    <TextInput v-model="expenseForm.amount" type="number" step="0.01" placeholder="Сумма, ₸" />
                     <TextInput v-model="expenseForm.date" type="date" />
                 </div>
                 <TextInput v-model="expenseForm.description" placeholder="Описание" class="mt-2 w-full" />
-                <div class="mt-2">
+                <div v-if="expenseMode === 'other'" class="mt-2">
                     <label class="mb-1 block text-xs font-medium text-slate-500">Чек (фото или PDF) *</label>
                     <input ref="receiptInput" type="file" accept="image/*,.pdf" @change="onReceipt"
                         class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
                     <div v-if="expenseForm.errors.file" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.file }}</div>
                 </div>
-                <div class="mt-2"><PrimaryButton :disabled="expenseForm.processing || !expenseForm.file" @click="addExpense">Добавить расход</PrimaryButton></div>
+                <div v-else class="mt-2 text-xs text-slate-400">Списание со склада — чек не требуется, остаток уменьшится автоматически.</div>
+                <div class="mt-2"><PrimaryButton :disabled="expenseForm.processing || !canSubmitExpense" @click="addExpense">Добавить расход</PrimaryButton></div>
             </div>
             <div class="space-y-2">
                 <div v-for="e in expenses" :key="e.id" class="flex items-start justify-between gap-3 rounded-xl bg-slate-50 p-4 text-sm">
                     <div>
                         <div><span class="font-medium tabular-nums text-slate-900">{{ money(e.amount) }}</span><span class="ml-2 text-slate-500">{{ e.description }}</span></div>
                         <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+                            <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700">📦 склад: {{ e.material.name }} × {{ qtyNum(e.qty) }} {{ e.material.unit }}</span>
                             <span v-if="e.responsible">{{ e.responsible.name }}</span>
                             <span>· {{ fmtDateTime(e.created_at) }}</span>
                             <button v-if="e.file_path" type="button" @click="openReceipt(e)"

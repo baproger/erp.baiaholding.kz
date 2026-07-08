@@ -15,14 +15,21 @@ class Expense extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'expenseable_type', 'expenseable_id', 'category_id', 'amount', 'date',
+        'expenseable_type', 'expenseable_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
         'responsible_user_id', 'description', 'file_path', 'type', 'status',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'qty' => 'decimal:2',
         'date' => 'date',
     ];
+
+    /** Расход по материалам: позиция склада, списанная этим расходом. */
+    public function material(): BelongsTo
+    {
+        return $this->belongsTo(Material::class);
+    }
 
     public function expenseable(): MorphTo
     {
