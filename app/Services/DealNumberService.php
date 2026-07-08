@@ -2,31 +2,33 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\Deal;
 use Illuminate\Support\Facades\DB;
 
 class DealNumberService
 {
     /**
-     * Generate a unique deal number in the format BAIA-{sequence}, e.g. BAIA-0015.
+     * Generate a unique deal number per company, e.g. BAIA-001 / ASU-001.
+     * The prefix is the company code; the sequence runs per prefix.
      * Uses a row-locking transaction to avoid race conditions.
      */
-    public function generate(): string
+    public function generate(?Company $company = null): string
     {
-        $prefix = 'BAIA-';
+        $prefix = ($company?->code ?: 'BAIA').'-';
 
         return DB::transaction(function () use ($prefix) {
-            $last = Deal::withTrashed()
+            // Максимум числового суффикса СТРОГОГО формата {CODE}-NNN. Легаси-номера
+            // (BAIA-2025-0042, BAIA-TEST-1) игнорируются — иначе счётчик откатывается
+            // и упирается в unique(number). Парсим в PHP: sqlite (тесты) без REGEXP.
+            $max = (int) Deal::withTrashed()
                 ->where('number', 'like', $prefix.'%')
                 ->lockForUpdate()
-                ->orderByDesc('id')
-                ->value('number');
+                ->pluck('number')
+                ->map(fn ($n) => preg_match('/^'.preg_quote($prefix, '/').'(\d+)$/', $n, $m) ? (int) $m[1] : 0)
+                ->max();
 
-            // Sequence = the trailing number after the last dash. Works with the new
-            // BAIA-NNNN format and any legacy BAIA-{year}-NNNN numbers.
-            $next = $last ? ((int) substr(strrchr($last, '-'), 1)) + 1 : 1;
-
-            return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+            return $prefix.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
         });
     }
 }

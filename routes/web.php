@@ -38,17 +38,16 @@ Route::get('/dashboard', function (\Illuminate\Http\Request $request) {
         return redirect()->route($u->hasRole('manager') ? 'deals.index' : 'projects.index');
     }
     $taxRate = ((float) \App\Models\Setting::get('tax_percent', 3)) / 100;
-    $bonusRate = ((float) \App\Models\Setting::get('bonus_percent', 10)) / 100;
 
     // Canonical company figures (shared with Analytics & Finance via PayrollService).
     $fin = app(\App\Services\PayrollService::class)->companyTotals();
 
     $today = now()->startOfDay();
-    $overdueCount = \App\Models\Deal::whereNotNull('deadline')->whereDate('deadline', '<', $today)
+    $overdueCount = \App\Models\Deal::forCurrentCompany()->whereNotNull('deadline')->whereDate('deadline', '<', $today)
         ->whereNotIn('status', ['closed', 'cancelled'])
         ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true))->count();
 
-    $recent = \App\Models\Deal::with('stage:id,name,color,is_won')
+    $recent = \App\Models\Deal::forCurrentCompany()->with('stage:id,name,color,is_won')
         ->where('status', '!=', 'cancelled')
         ->latest()->limit(8)
         ->get(['id', 'number', 'company_name', 'bin', 'client_name', 'budget', 'deadline', 'deal_stage_id', 'status'])
@@ -71,7 +70,6 @@ Route::get('/dashboard', function (\Illuminate\Http\Request $request) {
             'bonus' => $fin['bonus'],
             'overdue' => $overdueCount,
             'taxRate' => $taxRate * 100,
-            'bonusRate' => $bonusRate * 100,
         ],
         'recent' => $recent,
     ]);
@@ -88,7 +86,11 @@ Route::middleware('auth')->group(function () {
     Route::post('profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:20,1')->name('profile.avatar');
     Route::get('profile/avatar/{user}', [ProfileController::class, 'avatarShow'])->name('profile.avatar.show');
 
+    // Company switcher (BAIA / ASU)
+    Route::patch('company/switch', [\App\Http\Controllers\CompanyController::class, 'switch'])->name('company.switch');
+
     // Users
+    Route::get('users/{user}/contract', [UserController::class, 'contract'])->name('users.contract');
     Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);
 
     // Reference data
@@ -105,6 +107,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('deals/{deal}/advance', [DealController::class, 'advance'])->name('deals.advance');
     Route::post('deals/{deal}/to-workshop', [DealController::class, 'sendToWorkshop'])->name('deals.toWorkshop');
     Route::patch('deals/{deal}/responsible', [DealController::class, 'updateResponsible'])->name('deals.responsible');
+    Route::patch('deals/{deal}/stage-task', [DealController::class, 'completeStageTask'])->name('deals.stageTask');
 
     // Projects
     Route::resource('projects', ProjectController::class)->only(['index', 'show']);
@@ -149,6 +152,7 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/stages', [StageController::class, 'index'])->name('stages.index');
     Route::post('settings/stages', [StageController::class, 'store'])->name('stages.store');
     Route::put('settings/stages/{kind}/{id}', [StageController::class, 'update'])->name('stages.update');
+    Route::patch('settings/stages/{kind}/{id}/move', [StageController::class, 'move'])->name('stages.move');
     Route::delete('settings/stages/{kind}/{id}', [StageController::class, 'destroy'])->name('stages.destroy');
 
     // Custom fields

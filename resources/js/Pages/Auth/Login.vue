@@ -3,12 +3,13 @@ import { ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import AuthSplitLayout from '@/Layouts/AuthSplitLayout.vue';
 
-defineProps({
+const props = defineProps({
     canResetPassword: { type: Boolean },
     status: { type: String },
+    companies: { type: Array, default: () => [] },
 });
 
-const form = useForm({ email: '', password: '', remember: false });
+const form = useForm({ email: '', password: '', remember: false, company_id: props.companies[0]?.id ?? '' });
 const showPassword = ref(false);
 const submit = () => form.post(route('login'), { onFinish: () => form.reset('password') });
 </script>
@@ -22,6 +23,17 @@ const submit = () => form.post(route('login'), { onFinish: () => form.reset('pas
         <div v-if="status" class="mt-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">{{ status }}</div>
 
         <form @submit.prevent="submit" class="mt-8 space-y-5">
+            <div v-if="companies.length > 1" class="auth-reveal" style="animation-delay: 200ms">
+                <label class="mb-1.5 block text-sm font-semibold text-slate-700">Компания</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button v-for="c in companies" :key="c.id" type="button" @click="form.company_id = c.id"
+                        class="rounded-xl border py-3 text-sm font-semibold transition-all"
+                        :class="form.company_id === c.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                        {{ c.name }}
+                    </button>
+                </div>
+            </div>
+
             <div class="auth-reveal" style="animation-delay: 250ms">
                 <label for="email" class="mb-1.5 block text-sm font-semibold text-slate-700">Email</label>
                 <div class="group relative">

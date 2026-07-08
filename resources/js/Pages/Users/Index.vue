@@ -12,7 +12,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import Pagination from '@/Components/Pagination.vue';
 
-const props = defineProps({ users: Object, filters: Object, departments: Array, roles: Array });
+const props = defineProps({ users: Object, filters: Object, departments: Array, roles: Array, companies: { type: Array, default: () => [] } });
 
 const roleLabels = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник' };
 const show = ref(false);
@@ -21,21 +21,30 @@ const search = ref(props.filters.search ?? '');
 
 const form = useForm({
     name: '', email: '', password: '', password_confirmation: '',
-    department_id: '', phone: '', role: 'employee', is_active: true,
+    department_id: '', phone: '', salary: 0, contract: null, role: 'employee', is_active: true,
+    company_ids: props.companies.map((c) => c.id),
 });
 
-const openCreate = () => { editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true; show.value = true; };
+const openCreate = () => { editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true; form.company_ids = props.companies.map((c) => c.id); show.value = true; };
 const openEdit = (u) => {
     editing.value = u;
     Object.assign(form, {
         name: u.name, email: u.email, password: '', password_confirmation: '',
-        department_id: u.department_id ?? '', phone: u.phone ?? '', role: u.role ?? 'employee', is_active: u.is_active,
+        department_id: u.department_id ?? '', phone: u.phone ?? '', salary: u.salary ?? 0, contract: null,
+        role: u.role ?? 'employee', is_active: u.is_active,
+        company_ids: [...(u.company_ids ?? [])],
     });
     show.value = true;
 };
+const toggleCompany = (id) => {
+    form.company_ids = form.company_ids.includes(id)
+        ? form.company_ids.filter((c) => c !== id)
+        : [...form.company_ids, id];
+};
 const submit = () => {
     const opts = { preserveScroll: true, onSuccess: () => (show.value = false) };
-    if (editing.value) form.put(route('users.update', editing.value.id), opts);
+    // Файл договора требует multipart — обновление идёт POST-ом с _method=put.
+    if (editing.value) form.transform((d) => ({ ...d, _method: 'put' })).post(route('users.update', editing.value.id), opts);
     else form.post(route('users.store'), opts);
 };
 const deactivate = async (u) => {
@@ -124,6 +133,28 @@ const doSearch = () => router.get(route('users.index'), { search: search.value }
                         </select>
                     </div>
                     <div><InputLabel value="Телефон" /><TextInput v-model="form.phone" class="mt-1 w-full" /></div>
+                    <div>
+                        <InputLabel value="Оклад, ₸ (ЗП = оклад + бонус)" />
+                        <TextInput v-model="form.salary" type="number" step="0.01" min="0" class="mt-1 w-full" />
+                        <InputError :message="form.errors.salary" class="mt-1" />
+                    </div>
+                    <div>
+                        <InputLabel value="Договор (файл, необязательно)" />
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" class="mt-1 w-full text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                            @change="form.contract = $event.target.files[0] ?? null" />
+                        <InputError :message="form.errors.contract" class="mt-1" />
+                        <a v-if="editing?.has_contract" :href="route('users.contract', editing.id)" class="mt-1 inline-block text-xs text-indigo-600 hover:underline">📄 Скачать текущий договор</a>
+                    </div>
+                    <div class="col-span-2">
+                        <InputLabel value="Компании (может работать в обеих)" />
+                        <div class="mt-1 flex gap-2">
+                            <button v-for="c in companies" :key="c.id" type="button" @click="toggleCompany(c.id)"
+                                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                                :class="form.company_ids.includes(c.id) ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                {{ c.name }}
+                            </button>
+                        </div>
+                    </div>
                     <label class="col-span-2 flex items-center gap-2 text-sm">
                         <input type="checkbox" v-model="form.is_active" class="rounded border-slate-300 text-indigo-600" /> Активен
                     </label>

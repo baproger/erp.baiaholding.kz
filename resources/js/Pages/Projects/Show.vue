@@ -52,9 +52,9 @@ const sendToAct = () => router.post(route('projects.toAct', props.project.id), {
                 </button>
                 <button v-else-if="project.status !== 'completed'" @click="sendToAct"
                     class="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white shadow transition-transform hover:scale-[1.02] hover:bg-teal-700 active:scale-95">
-                    📋 АКТ — отправить на «Акт утверждение»
+                    🚚 Готово — отправить на «Логистику»
                 </button>
-                <span v-else class="inline-flex items-center gap-2 text-sm font-semibold text-green-600">✓ Отправлено на «Акт утверждение»</span>
+                <span v-else class="inline-flex items-center gap-2 text-sm font-semibold text-green-600">✓ Отправлено на «Логистику»</span>
             </div>
         </div>
 

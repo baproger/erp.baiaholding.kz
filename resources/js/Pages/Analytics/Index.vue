@@ -43,7 +43,7 @@ const trend = (key) => {
             <!-- KPI row with trend + sparkline -->
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div v-for="k in [
-                        { label: 'Сумма сделок', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up' },
+                        { label: 'Сумма договоров', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up' },
                         { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down' },
                         { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-emerald-600', good: 'up' },
                     ]" :key="k.label" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

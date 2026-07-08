@@ -29,6 +29,7 @@ class DealController extends Controller
             ->withCount('tasks')
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             ->where('status', '!=', 'closed')
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where('company_id', $c))
             ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where(fn ($w) => $w
                 ->where('name', 'like', "%{$s}%")
@@ -40,8 +41,18 @@ class DealController extends Controller
             ->when($request->date('date_from'), fn ($q, $d) => $q->whereDate('deadline', '>=', $d))
             ->when($request->date('date_to'), fn ($q, $d) => $q->whereDate('deadline', '<=', $d));
 
-        $stages = DealStage::with('translations')->where('is_active', true)->orderBy('order')->get()
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won]);
+        // Воронка текущей компании; в режиме «Все компании» (id=0) — обе воронки,
+        // колонки подписываются кодом фирмы.
+        $companyId = \App\Support\CurrentCompany::id() ?: null;
+        $companyCodes = \App\Models\Company::pluck('code', 'id');
+        $stages = DealStage::with('translations')->where('is_active', true)
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+            ->orderBy('order')->orderBy('company_id')->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.$companyCodes[$s->company_id] : ''),
+                'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won,
+            ]);
 
         $deals = $view === 'list'
             ? (clone $base)->latest()->paginate(20)->withQueryString()
@@ -57,6 +68,8 @@ class DealController extends Controller
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'can' => ['create' => $request->user()->can('create', Deal::class)],
+            'companies' => $request->user()->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code']),
+            'currentCompanyId' => \App\Support\CurrentCompany::id(),
         ]);
     }
 
@@ -65,8 +78,18 @@ class DealController extends Controller
         $this->authorize('create', Deal::class);
 
         $data = $request->validated();
-        $data['number'] = $numbers->generate();
-        $data['deal_stage_id'] ??= DealStage::where('is_active', true)->orderBy('order')->value('id');
+
+        // Deal belongs to a firm (BAIA / ASU): the one picked in the form if the
+        // user is a member of it, otherwise the current session company.
+        $requested = (int) $request->input('company_id');
+        $memberIds = $request->user()->companies()->where('is_active', true)->pluck('companies.id');
+        $companyId = $memberIds->contains($requested) ? $requested : \App\Support\CurrentCompany::id();
+        $company = $companyId ? \App\Models\Company::find($companyId) : null;
+
+        $data['company_id'] = $company?->id;
+        $data['number'] = $numbers->generate($company);
+        // Первый этап ВОРОНКИ КОМПАНИИ сделки (у BAIA и ASU воронки свои).
+        $data['deal_stage_id'] ??= DealStage::funnel($company?->id)->first()?->id;
         $data['status'] = $data['status'] ?? 'active';
         // Менеджер создаёт сделку только на себя — назначить ответственным другого нельзя.
         if (! $request->user()->hasAnyRole(['admin', 'director', 'financist'])) {
@@ -99,26 +122,44 @@ class DealController extends Controller
         );
 
         $taxRate = ((float) \App\Models\Setting::get('tax_percent', 3)) / 100;
-        $bonusRate = ((float) \App\Models\Setting::get('bonus_percent', 10)) / 100;
         $confirmedExpense = (float) $deal->expenses->where('status', 'confirmed')->sum('amount');
         $dealBudget = (float) $deal->budget;
         $dealTax = round($dealBudget * $taxRate, 2);
         $dealRemainder = round($dealBudget - $dealTax - $confirmedExpense, 2);
-        $dealBonus = $dealRemainder > 0 ? round($dealRemainder * $bonusRate, 2) : 0.0;
+        // Ступенчатый бонус: ступень по марже ДО налога (как «Маржа» на карточке),
+        // сам бонус — % от остатка (после налога). Та же формула в ЗП/аналитике.
+        $dealMarginPct = \App\Services\PayrollService::marginPct($dealBudget, $dealRemainder, $dealTax);
+        $dealBonusRate = \App\Services\PayrollService::bonusRateForMargin($dealMarginPct);
+        $dealBonus = \App\Services\PayrollService::marginBonus($dealBudget, $dealRemainder, $dealTax);
+
+        // Галочка бухгалтера для текущего этапа (Акт/ЭСФ): показана на карточке.
+        $stageTaskPrefix = self::stageTaskPrefix($deal);
+        $stageTask = null;
+        if ($stageTaskPrefix) {
+            $openTask = $deal->tasks()->where('title', 'like', $stageTaskPrefix.'%')->where('status', '!=', 'done')->orderBy('due_date')->first();
+            $stageTask = [
+                'label' => $stageTaskPrefix === 'Выставить акт' ? 'Акт выставлен' : 'ЭСФ выставлен',
+                'done' => $openTask === null,
+                'due' => optional($openTask?->due_date)->toDateTimeString(),
+            ];
+        }
 
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
+            'stageTask' => $stageTask,
             'profit' => [
                 'budget' => $dealBudget,
                 'tax' => $dealTax, 'taxRate' => $taxRate * 100,
                 'expense' => $confirmedExpense,
                 'remainder' => $dealRemainder,
-                'bonus' => $dealBonus, 'bonusRate' => $bonusRate * 100,
+                'bonus' => $dealBonus, 'bonusRate' => round($dealBonusRate * 100, 1),
                 'company' => round($dealRemainder - $dealBonus, 2),
             ],
             'chatId' => $dealChat->id,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'stages' => DealStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+            'stages' => DealStage::with('translations')->where('is_active', true)
+                ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+                ->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),
             'finance' => $finance->summaryFor($deal),
             'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => DealStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
@@ -133,9 +174,67 @@ class DealController extends Controller
     public function update(DealRequest $request, Deal $deal): RedirectResponse
     {
         $this->authorize('update', $deal);
+        $this->assertNotFrozen($request, $deal);
         $deal->update($request->validated());
 
         return back()->with('success', 'Сделка обновлена.');
+    }
+
+    /**
+     * Галочка бухгалтера на этапах «Акт утверждение» / «ЭСФ»: закрывает
+     * задачу «Выставить акт…» / «Выставить ЭСФ…», после чего сделку можно
+     * двигать дальше. Только financist / admin.
+     */
+    public function completeStageTask(Request $request, Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Галочку ставит только бухгалтер или админ.');
+
+        $prefix = self::stageTaskPrefix($deal);
+        abort_unless($prefix !== null, 404);
+
+        $deal->tasks()->where('title', 'like', $prefix.'%')->where('status', '!=', 'done')
+            ->get()->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
+
+        return back()->with('success', 'Галочка поставлена — сделку можно переводить дальше.');
+    }
+
+    /**
+     * После «Акт утверждение» сделку изменяет только бухгалтер/админ:
+     * менеджеру (и директору) недоступны редактирование, смена ответственного
+     * и удаление сделки на этапах АКТ / ЭСФ / Оплата успешно.
+     */
+    private function assertNotFrozen(Request $request, Deal $deal): void
+    {
+        if ($request->user()->hasAnyRole(['admin', 'financist'])) {
+            return;
+        }
+        $companyId = $deal->company_id ? (int) $deal->company_id : null;
+        $frozenIds = collect([
+            DealStage::actStage($companyId)?->id,
+            DealStage::esfStage($companyId)?->id,
+            DealStage::wonStage($companyId)?->id,
+        ])->filter();
+
+        abort_if(
+            $frozenIds->contains($deal->deal_stage_id),
+            403,
+            'После «Акт утверждение» сделку изменяет только бухгалтер или админ.'
+        );
+    }
+
+    /** Префикс задачи-галочки для текущего этапа сделки (или null). */
+    private static function stageTaskPrefix(Deal $deal): ?string
+    {
+        $companyId = $deal->company_id ? (int) $deal->company_id : null;
+        if ($deal->deal_stage_id === DealStage::actStage($companyId)?->id) {
+            return 'Выставить акт';
+        }
+        if ($deal->deal_stage_id === DealStage::esfStage($companyId)?->id) {
+            return 'Выставить ЭСФ';
+        }
+
+        return null;
     }
 
     public function updateStage(Request $request, Deal $deal, StageTransitionService $transitions): RedirectResponse
@@ -144,14 +243,22 @@ class DealController extends Controller
 
         $validated = $request->validate(['deal_stage_id' => ['required', 'exists:deal_stages,id']]);
         $target = DealStage::findOrFail($validated['deal_stage_id']);
-        $transitions->moveToStage($deal, $target);
+
+        // Причину отказа (гейты этапов) показываем красным баннером, а не
+        // тихой ошибкой валидации, которую на канбане не видно.
+        try {
+            $transitions->moveToStage($deal, $target);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
 
         return back()->with('success', 'Этап сделки обновлён.');
     }
 
-    public function destroy(Deal $deal): RedirectResponse
+    public function destroy(Request $request, Deal $deal): RedirectResponse
     {
         $this->authorize('delete', $deal);
+        $this->assertNotFrozen($request, $deal);
         $deal->delete();
 
         return back()->with('success', 'Сделка удалена.');
@@ -160,9 +267,15 @@ class DealController extends Controller
     public function advance(Deal $deal, StageTransitionService $transitions): \Illuminate\Http\RedirectResponse
     {
         $this->authorize('update', $deal);
-        $next = DealStage::where('is_active', true)->where('order', '>', optional($deal->stage)->order ?? 0)->orderBy('order')->first();
+        // Следующий этап в воронке компании этой сделки.
+        $next = DealStage::funnel($deal->company_id ? (int) $deal->company_id : null)
+            ->first(fn ($s) => $s->order > (optional($deal->stage)->order ?? 0));
         if ($next) {
-            $transitions->moveToStage($deal, $next);
+            try {
+                $transitions->moveToStage($deal, $next);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return back()->with('error', collect($e->errors())->flatten()->first());
+            }
             return back()->with('success', 'Сделка переведена на этап «'.$next->name.'».');
         }
         return back()->with('error', 'Это последний этап.');
@@ -183,6 +296,7 @@ class DealController extends Controller
     {
         // Only the owner (or leadership) may (re)assign the responsible person.
         $this->authorize('update', $deal);
+        $this->assertNotFrozen($request, $deal);
         $validated = $request->validate(['responsible_user_id' => ['nullable', 'exists:users,id']]);
         $deal->update(['responsible_user_id' => $validated['responsible_user_id'] ?: null]);
 
@@ -201,6 +315,7 @@ class DealController extends Controller
 
         $deals = Deal::query()
             ->with(['responsible:id,name,avatar', 'stage:id,name,color'])
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where('company_id', $c))
             ->whereNotNull('deadline')
             ->whereDate('deadline', '<', $today)
             ->whereNotIn('status', ['closed', 'cancelled'])

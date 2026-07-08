@@ -14,10 +14,10 @@ const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) +
     <AppLayout>
         <template #header>{{ $t('page.finance', 'Финансы') }}</template>
 
-        <!-- KPI — Сумма сделок − Налог − Расходы − ЗП = Чистая прибыль -->
+        <!-- KPI — Сумма договоров − Налог − Расходы − ЗП = Чистая прибыль -->
         <div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div class="text-[11px] uppercase tracking-wide text-slate-400">Сумма сделок</div>
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Сумма договоров</div>
                 <div class="mt-1 text-xl font-bold text-slate-800">{{ money(totals.budget) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">оплачено {{ money(totals.paid) }}</div>
             </div>

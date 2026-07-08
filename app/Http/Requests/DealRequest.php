@@ -11,6 +11,14 @@ class DealRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        // «Количество» приходит из числового поля как number — колонка строковая.
+        if ($this->has('lot_number') && $this->lot_number !== null) {
+            $this->merge(['lot_number' => (string) $this->lot_number]);
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -21,8 +29,13 @@ class DealRequest extends FormRequest
             'client_name' => ['required', 'string', 'max:255'],
             'company_name' => ['required', 'string', 'max:255'],
             'address' => ['required', 'string', 'max:255'],
-            'bin' => ['nullable', 'string', 'max:20'],
+            // В UI поле называется «Номер договора» (историческое имя колонки — bin).
+            'bin' => ['nullable', 'string', 'max:100'],
+            'contract_date' => ['nullable', 'date'],
+            // В UI — «Количество» (историческое имя колонки — lot_number) + ед. изм.
             'lot_number' => ['nullable', 'string', 'max:100'],
+            'unit' => ['nullable', \Illuminate\Validation\Rule::in(\App\Models\Deal::UNITS)],
+            'source' => ['nullable', \Illuminate\Validation\Rule::in(\App\Models\Deal::SOURCES)],
             'client_id' => ['nullable', 'exists:clients,id'],
             'responsible_user_id' => ['nullable', 'exists:users,id'],
             'department_id' => ['nullable', 'exists:departments,id'],

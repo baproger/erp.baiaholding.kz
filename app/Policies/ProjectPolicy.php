@@ -13,6 +13,11 @@ class ProjectPolicy
         if (! $user->can('project.view')) {
             return false;
         }
+        // Заказ принадлежит фирме исходной сделки — чужая фирма недоступна.
+        $companyId = $p->deal?->company_id;
+        if (! $user->worksInCompany($companyId ? (int) $companyId : null)) {
+            return false;
+        }
         // Leadership and workshop staff (observers) see the whole Цех; a manager only their own.
         if ($user->hasAnyRole(['admin', 'director', 'financist', 'employee'])) {
             return true;

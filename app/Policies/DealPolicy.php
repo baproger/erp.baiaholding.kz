@@ -13,9 +13,17 @@ class DealPolicy
     public function update(User $user, Deal $d): bool { return $this->ownsOrLeads($user, $d) && ($user->can('deal.update') || $d->responsible_user_id === $user->id); }
     public function delete(User $user, Deal $d): bool { return $user->can('deal.delete') && $this->ownsOrLeads($user, $d); }
 
-    /** Leadership sees everything; a manager is limited to deals they are responsible for. */
+    /**
+     * Leadership sees everything WITHIN ITS COMPANIES; a manager is limited to
+     * deals they are responsible for. Сделка чужой фирмы (BAIA/ASU) недоступна
+     * по прямой ссылке даже руководству, не привязанному к той компании.
+     */
     private function ownsOrLeads(User $user, Deal $d): bool
     {
+        if (! $user->worksInCompany($d->company_id ? (int) $d->company_id : null)) {
+            return false;
+        }
+
         return $user->hasAnyRole(['admin', 'director', 'financist']) || $d->responsible_user_id === $user->id;
     }
 }

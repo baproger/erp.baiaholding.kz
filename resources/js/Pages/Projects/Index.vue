@@ -4,6 +4,8 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { deadlineClass } from '@/utils/deadline';
+import { formatDate } from '@/utils/format';
 
 const props = defineProps({ projects: [Array, Object], stages: Array, view: String, filters: Object, canSeeMoney: Boolean });
 
@@ -51,7 +53,12 @@ const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preser
                         <div class="text-[10px] text-slate-300">{{ p.number }}</div>
                         <div v-if="canSeeMoney" class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
                         <div class="mt-1 text-xs text-slate-400">{{ p.client?.name ?? '—' }}</div>
-                        <button v-if="p.project_stage_id === lastStageId" @click.prevent.stop="sendToAct(p)" class="mt-2 w-full rounded bg-teal-600 py-1 text-xs font-semibold text-white hover:bg-teal-700">📋 АКТ</button>
+                        <!-- Для цеха: город/адрес, срок, описание и заметка из сделки -->
+                        <div v-if="p.deal?.address" class="mt-1 text-xs text-slate-500">📍 {{ p.deal.address }}</div>
+                        <div v-if="p.deal?.deadline || p.deadline" class="mt-1 text-xs" :class="deadlineClass(p.deal?.deadline ?? p.deadline, p.status === 'completed') || 'text-slate-400'">⏰ {{ formatDate(p.deal?.deadline ?? p.deadline) }}</div>
+                        <div v-if="p.deal?.description" class="mt-1 whitespace-pre-line text-xs leading-snug text-slate-500">{{ p.deal.description }}</div>
+                        <div v-if="p.deal?.note" class="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800">📌 {{ p.deal.note }}</div>
+                        <button v-if="p.project_stage_id === lastStageId" @click.prevent.stop="sendToAct(p)" class="mt-2 w-full rounded bg-teal-600 py-1 text-xs font-semibold text-white hover:bg-teal-700">🚚 Готово → Логистика</button>
                         <button v-else @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-slate-100 py-1 text-xs text-slate-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>
                     <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-slate-400">Пусто</div>

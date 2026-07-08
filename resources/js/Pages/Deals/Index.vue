@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -11,20 +11,28 @@ import InputError from '@/Components/InputError.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { deadlineClass } from '@/utils/deadline';
+import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deals: [Array, Object], stages: Array, view: String, filters: Object, users: Array, can: Object, isLeadership: Boolean });
+const props = defineProps({ deals: [Array, Object], stages: Array, view: String, filters: Object, users: Array, can: Object, isLeadership: Boolean, companies: { type: Array, default: () => [] }, currentCompanyId: Number });
 
 const list = computed(() => Array.isArray(props.deals) ? props.deals : props.deals.data);
 const byStage = (id) => list.value.filter((d) => d.deal_stage_id === id);
 const stageTotal = (id) => byStage(id).reduce((s, d) => s + Number(d.budget), 0);
 const lastStageId = computed(() => props.stages[props.stages.length - 1]?.id);
 const firstStageId = computed(() => props.stages[0]?.id); // «Заключение договора»
-// "В цех" is triggered on the 3rd-from-last stage (Закуп ЛДСП,МДФ);
-// last two stages (Акт утверждение, Оплата) come after the workshop.
-const workshopStageId = computed(() => props.stages[props.stages.length - 3]?.id);
-const returnStageId = computed(() => props.stages[props.stages.length - 2]?.id);
+// Спец-этапы ищем по названию/флагу; в режиме «Все компании» воронок две,
+// поэтому работаем с МАССИВАМИ id, а не с одиночными значениями.
+const matchIds = (needle) => props.stages.filter((s) => s.name?.toLowerCase().includes(needle)).map((s) => s.id);
+const workshopIds = computed(() => { const ids = matchIds('закуп'); return ids.length ? ids : [props.stages[props.stages.length - 3]?.id].filter(Boolean); });
+const actIds = computed(() => matchIds('акт'));
+const esfIds = computed(() => matchIds('эсф'));
+const wonIds = computed(() => { const ids = props.stages.filter((s) => s.is_won).map((s) => s.id); return ids.length ? ids : [lastStageId.value].filter(Boolean); });
+const preWonIds = computed(() => (esfIds.value.length ? esfIds.value : actIds.value));
+// Этапы АКТ/ЭСФ/Оплата двигает только бухгалтер (financist) или админ.
+const canAccounting = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
+const postActIds = computed(() => [...actIds.value, ...esfIds.value, ...wonIds.value]);
 
 const draggingId = ref(null);
 const onDrop = async (stage) => {
@@ -32,11 +40,14 @@ const onDrop = async (stage) => {
     if (!id) return;
     const deal = list.value.find((d) => d.id === id);
     if (!deal || deal.deal_stage_id === stage.id) return;
-    // «Акт утверждение» — only via Цех; «Оплата» — only from «Акт утверждение».
-    if (stage.id === returnStageId.value) return;
-    if (stage.id === lastStageId.value && deal.deal_stage_id !== returnStageId.value) return;
-    // Leaving the final «Оплата успешно» stage needs confirmation.
-    if (deal.deal_stage_id === lastStageId.value
+    // Не бухгалтер/админ: сделку на АКТ/ЭСФ/Оплате не двигает; на ЭСФ/Оплату не переводит.
+    if (!canAccounting.value && postActIds.value.includes(deal.deal_stage_id)) return;
+    if (!canAccounting.value && postActIds.value.includes(stage.id) && !actIds.value.includes(stage.id)) return;
+    // «ЭСФ» — только после «Акта»; «Оплата» — только после «ЭСФ».
+    if (esfIds.value.includes(stage.id) && !actIds.value.includes(deal.deal_stage_id)) return;
+    if (wonIds.value.includes(stage.id) && !preWonIds.value.includes(deal.deal_stage_id)) return;
+    // Leaving the «Оплата успешно» stage needs confirmation.
+    if (wonIds.value.includes(deal.deal_stage_id)
         && ! (await confirmDialog({ title: 'Сделка уже успешна', message: 'Сделка на этапе «Оплата успешно». Точно перевести её на другой этап?', confirmText: 'Перевести', danger: true }))) return;
     router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
 };
@@ -64,8 +75,8 @@ const applyFilters = () => router.get(route('deals.index'), {
 const resetFilters = () => { fResponsible.value = ''; fFrom.value = ''; fTo.value = ''; applyFilters(); };
 
 const showModal = ref(false);
-const form = useForm({ name: '', company_name: '', address: '', bin: '', client_name: '', lot_number: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
-const openCreate = () => { form.reset(); binMatch.value = null; showBinModal.value = false; showModal.value = true; };
+const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', name: '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
+const openCreate = () => { form.reset(); form.company_id = props.currentCompanyId || props.companies[0]?.id || ''; binMatch.value = null; showBinModal.value = false; showModal.value = true; };
 const submit = () => form.post(route('deals.store'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
 
 // БИН lookup: if the entered БИН already exists, offer to copy its company data.
@@ -106,7 +117,7 @@ const applyBinMatch = () => {
             </div>
             <div class="relative order-last w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-sm">
                 <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, БИН…"
+                <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, № договора…"
                     class="w-full rounded-lg border-slate-200 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
             </div>
             <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:scale-[1.02] hover:bg-indigo-700 active:scale-95" @click="openCreate">+ Новая сделка</button>
@@ -143,6 +154,11 @@ const applyBinMatch = () => {
                     <span class="text-[11px] font-medium text-slate-400">{{ money(stageTotal(stage.id)) }}</span>
                 </div>
                 <div class="flex-1 space-y-2 px-2 pb-2">
+                    <!-- Кнопка создания всегда СВЕРХУ колонки «Заключение договора» -->
+                    <button v-if="stage.id === firstStageId && can.create" @click="openCreate"
+                        class="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-indigo-300 py-2 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50">
+                        + Новая сделка
+                    </button>
                     <div v-for="deal in byStage(stage.id)" :key="deal.id" draggable="true" @dragstart="draggingId = deal.id"
                         class="cursor-move rounded-lg bg-white p-2.5 border border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200">
                         <Link :href="route('deals.show', deal.id)" class="block">
@@ -162,19 +178,15 @@ const applyBinMatch = () => {
                                 <span class="truncate text-xs text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
                             </div>
                             <div v-if="deal.deadline" class="mt-1 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</div>
-                            <div class="mt-0.5 truncate text-[11px] text-slate-400">👤 {{ deal.client_name || '—' }} <span class="text-slate-300">· {{ deal.number }}</span></div>
+                            <div class="mt-0.5 truncate text-[11px] text-slate-400">📦 {{ deal.client_name || '—' }}<template v-if="deal.lot_number"> · {{ deal.lot_number }} {{ deal.unit || '' }}</template> <span class="text-slate-300">· {{ deal.number }}</span></div>
                         </Link>
                         <div class="mt-2 flex items-center justify-between border-t pt-1.5">
                             <Link :href="route('deals.show', deal.id)" class="text-[11px] text-slate-400 hover:text-indigo-600">+ Дело</Link>
-                            <button v-if="deal.deal_stage_id === workshopStageId" @click="toWorkshop(deal)" class="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">📦 В цех</button>
-                            <button v-else-if="deal.deal_stage_id !== lastStageId" @click="advance(deal)" class="rounded bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
+                            <button v-if="workshopIds.includes(deal.deal_stage_id)" @click="toWorkshop(deal)" class="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">📦 В цех</button>
+                            <button v-else-if="!wonIds.includes(deal.deal_stage_id) && (canAccounting || !postActIds.includes(deal.deal_stage_id))" @click="advance(deal)" class="rounded bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                         </div>
                     </div>
                     <div v-if="!byStage(stage.id).length" class="py-5 text-center text-[11px] text-slate-400">Пусто</div>
-                    <button v-if="stage.id === firstStageId && can.create" @click="openCreate"
-                        class="mt-1 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-indigo-300 py-2 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50">
-                        + Новая сделка
-                    </button>
                 </div>
             </div>
         </div>
@@ -183,7 +195,7 @@ const applyBinMatch = () => {
         <div v-else class="overflow-hidden rounded-xl bg-white border border-slate-200 shadow-sm">
             <table class="min-w-full divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Клиент</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
+                    <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors hover:bg-slate-50" @click="router.get(route('deals.show', deal.id))">
@@ -205,12 +217,41 @@ const applyBinMatch = () => {
             <div class="p-6">
                 <h2 class="mb-4 text-lg font-semibold">Новая сделка</h2>
                 <div class="grid grid-cols-2 gap-4">
+                    <div v-if="companies.length" class="col-span-2">
+                        <InputLabel value="Компания (нумерация сделки)" />
+                        <div class="mt-1 flex gap-2">
+                            <button v-for="c in companies" :key="c.id" type="button" @click="form.company_id = c.id"
+                                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                                :class="form.company_id === c.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                {{ c.name }} <span class="font-normal text-slate-400">({{ c.code }}-…)</span>
+                            </button>
+                        </div>
+                    </div>
                     <div class="col-span-2"><InputLabel value="Название сделки" /><TextInput v-model="form.name" class="mt-1 w-full" /><InputError :message="form.errors.name" class="mt-1" /></div>
                     <div><InputLabel value="Название компании *" /><TextInput v-model="form.company_name" class="mt-1 w-full" /><InputError :message="form.errors.company_name" class="mt-1" /></div>
-                    <div><InputLabel value="БИН" /><TextInput v-model="form.bin" class="mt-1 w-full" placeholder="12 цифр" @blur="checkBin" /><InputError :message="form.errors.bin" class="mt-1" /></div>
+                    <div><InputLabel value="Номер договора" /><TextInput v-model="form.bin" class="mt-1 w-full" @blur="checkBin" /><InputError :message="form.errors.bin" class="mt-1" /></div>
                     <div class="col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="form.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="form.errors.address" class="mt-1" /></div>
-                    <div><InputLabel value="Имя клиента *" /><TextInput v-model="form.client_name" class="mt-1 w-full" /><InputError :message="form.errors.client_name" class="mt-1" /></div>
-                    <div><InputLabel value="Номер лота" /><TextInput v-model="form.lot_number" class="mt-1 w-full" /></div>
+                    <div><InputLabel value="Дата договора" /><TextInput v-model="form.contract_date" type="date" class="mt-1 w-full" /><InputError :message="form.errors.contract_date" class="mt-1" /></div>
+                    <div>
+                        <InputLabel value="Источник (портал)" />
+                        <select v-model="form.source" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
+                            <option value="">—</option>
+                            <option v-for="s in SOURCES" :key="s" :value="s">{{ s }}</option>
+                        </select>
+                        <InputError :message="form.errors.source" class="mt-1" />
+                    </div>
+                    <div><InputLabel value="Наименование товара *" /><TextInput v-model="form.client_name" class="mt-1 w-full" /><InputError :message="form.errors.client_name" class="mt-1" /></div>
+                    <div>
+                        <InputLabel value="Количество" />
+                        <div class="mt-1 flex gap-2">
+                            <TextInput v-model="form.lot_number" type="number" min="0" step="any" class="w-1/2" />
+                            <select v-model="form.unit" class="w-1/2 rounded-md border-slate-300 shadow-sm">
+                                <option value="">ед. изм.</option>
+                                <option v-for="u in UNITS" :key="u" :value="u">{{ u }}</option>
+                            </select>
+                        </div>
+                        <InputError :message="form.errors.unit || form.errors.lot_number" class="mt-1" />
+                    </div>
                     <div v-if="isLeadership">
                         <InputLabel value="Ответственный" />
                         <select v-model="form.responsible_user_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
@@ -218,7 +259,7 @@ const applyBinMatch = () => {
                             <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
                         </select>
                     </div>
-                    <div><InputLabel value="Общая сумма (бюджет)" /><TextInput v-model="form.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="form.errors.budget" class="mt-1" /></div>
+                    <div><InputLabel value="Сумма договора *" /><TextInput v-model="form.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="form.errors.budget" class="mt-1" /></div>
                     <div><InputLabel value="Срок" /><TextInput v-model="form.deadline" type="date" class="mt-1 w-full" /></div>
                     <div class="col-span-2"><InputLabel value="Описание" /><textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm"></textarea></div>
                     <div class="col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm" placeholder="Коротко и чётко по сделке"></textarea></div>
@@ -233,13 +274,13 @@ const applyBinMatch = () => {
         <!-- BIN EXISTS MODAL -->
         <Modal :show="showBinModal" @close="showBinModal = false" max-width="lg">
             <div class="p-6">
-                <h2 class="text-lg font-semibold text-slate-900">Контрагент с этим БИН уже есть</h2>
+                <h2 class="text-lg font-semibold text-slate-900">С этим номером договора уже есть данные</h2>
                 <p class="mt-1 text-sm text-slate-500">Можно подставить его данные в новую сделку.</p>
                 <div class="mt-4 rounded-lg bg-slate-50 p-4 border border-slate-200">
                     <div class="text-xs uppercase tracking-wide text-slate-400">Компания</div>
                     <div class="text-base font-semibold text-slate-900">{{ binMatch?.company_name }}</div>
                     <div class="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-500">
-                        <div>БИН: <span class="font-medium text-slate-700">{{ binMatch?.bin }}</span></div>
+                        <div>Номер договора: <span class="font-medium text-slate-700">{{ binMatch?.bin }}</span></div>
                         <div v-if="binMatch?.phone">Тел: <span class="font-medium text-slate-700">{{ binMatch.phone }}</span></div>
                         <div v-if="binMatch?.address" class="col-span-2">Адрес: <span class="font-medium text-slate-700">{{ binMatch.address }}</span></div>
                     </div>
@@ -247,7 +288,7 @@ const applyBinMatch = () => {
 
                 <button v-if="binHistory.length" type="button" @click="showBinHistory = !showBinHistory"
                     class="mt-4 text-sm font-medium text-indigo-600 hover:text-indigo-700">
-                    {{ showBinHistory ? '▾' : '▸' }} История сделок по этому БИН ({{ binHistory.length }})
+                    {{ showBinHistory ? '▾' : '▸' }} История сделок по этому номеру договора ({{ binHistory.length }})
                 </button>
                 <div v-if="showBinHistory" class="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
                     <div v-for="h in binHistory" :key="h.id" class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs">

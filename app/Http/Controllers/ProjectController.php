@@ -44,7 +44,10 @@ class ProjectController extends Controller
 
         $base = Project::query()
             ->where('status', '!=', 'completed')
-            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name'])
+            // Цех тоже разделён по фирмам: заказ принадлежит компании исходной сделки.
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
+            // Цеху на карточке нужны срок, описание, заметка и адрес (город) из сделки.
+            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name,address,deadline,description,note'])
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())]);
         $this->scope($base, $request);
         $base->when($request->string('search')->toString(), fn ($q, $s) => $q
@@ -148,8 +151,9 @@ class ProjectController extends Controller
         $stage = ProjectStage::findOrFail($validated['project_stage_id']);
         $project->project_stage_id = $stage->id;
         if ($stage->is_completed) {
-            $project->status = 'completed';
-            $project->completed_at = now();
+            // Завершение заказа ЛЮБЫМ путём возвращает сделку на «Логистику» —
+            // иначе она навсегда зависает закрытой и не доходит до оплаты/ЗП.
+            return $this->completeAndReturnDeal($project);
         }
         $project->save();
 
@@ -165,8 +169,7 @@ class ProjectController extends Controller
         }
         $project->project_stage_id = $next->id;
         if ($next->is_completed) {
-            $project->status = 'completed';
-            $project->completed_at = now();
+            return $this->completeAndReturnDeal($project);
         }
         $project->save();
 
@@ -174,27 +177,36 @@ class ProjectController extends Controller
     }
 
     /**
-     * Workshop "АКТ": from the last workshop stage («Отправка»), send the order
-     * back to the Deals board at «Акт утверждение» and close the workshop project.
+     * Workshop "Готово": from the last workshop stage («Отправка»), send the
+     * order back to the Deals board and close the workshop project.
      */
     public function sendToAct(Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
 
+        return $this->completeAndReturnDeal($project);
+    }
+
+    /**
+     * Завершить заказ цеха и вернуть исходную сделку на «Логистику» (воронка
+     * компании сделки); дальше менеджер двигает Логистика → Сборка → Акт.
+     */
+    private function completeAndReturnDeal(Project $project): RedirectResponse
+    {
         $deal = $project->deal;
         if (! $deal) {
             return back()->with('error', 'У заказа нет исходной сделки.');
         }
 
-        // «Акт утверждение» = 2nd-from-last active deal stage.
-        $returnStage = DealStage::where('is_active', true)->orderBy('order')->get()->slice(-2, 1)->first();
+        $companyId = $deal->company_id ? (int) $deal->company_id : null;
+        $returnStage = DealStage::logisticsStage($companyId) ?? DealStage::actStage($companyId);
         if (! $returnStage) {
-            return back()->with('error', 'Не найден этап «Акт утверждение».');
+            return back()->with('error', 'Не найден этап «Логистика».');
         }
 
         $deal->update(['deal_stage_id' => $returnStage->id, 'status' => 'active', 'closed_at' => null]);
         $project->update(['status' => 'completed', 'completed_at' => now()]);
 
-        return back()->with('success', 'Сделка отправлена на «Акт утверждение».');
+        return back()->with('success', 'Заказ завершён — сделка отправлена на «'.$returnStage->name.'».');
     }
 }

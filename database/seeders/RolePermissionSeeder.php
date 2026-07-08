@@ -36,9 +36,12 @@ class RolePermissionSeeder extends Seeder
             'invoice.viewAny', 'invoice.view', 'invoice.create', 'invoice.update', 'invoice.delete',
             'payment.viewAny', 'payment.view', 'payment.create', 'payment.update', 'payment.delete',
             'expense.viewAny', 'expense.view', 'expense.create', 'expense.update', 'expense.delete',
-            'deal.viewAny', 'deal.view',
+            // deal.update: бухгалтер двигает сделку по этапам Акт → ЭСФ → Оплата
+            // (StageTransitionService не пускает туда менеджеров).
+            'deal.viewAny', 'deal.view', 'deal.update',
             'project.viewAny', 'project.view',
             'client.viewAny', 'client.view',
+            'department.viewAny',
             'payroll.view',
         ])->get());
 
@@ -64,7 +67,8 @@ class RolePermissionSeeder extends Seeder
                 $abilities[] = "{$module}.{$ability}";
             }
         }
-        $abilities[] = 'department.viewAny';
+        // department.viewAny намеренно НЕ выдаётся менеджеру: страница «Отделы»
+        // видна только admin / director / financist.
         $abilities[] = 'payroll.view';
 
         return $abilities;

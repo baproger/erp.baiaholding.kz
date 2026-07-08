@@ -6,7 +6,7 @@ import { confirmDialog } from '@/composables/useConfirm';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 
-const props = defineProps({ dealStages: Array, projectStages: Array });
+const props = defineProps({ dealStages: Array, projectStages: Array, currentCompanyName: String });
 
 const newForm = useForm({ kind: 'deal', name: '', color: '#6B7280' });
 const addFor = ref(null); // 'deal' | 'project'
@@ -19,6 +19,7 @@ const rename = (kind, stage) => {
     if (name && name !== stage.name) router.put(route('stages.update', [kind, stage.id]), { name }, { preserveScroll: true });
 };
 const recolor = (kind, stage, e) => router.put(route('stages.update', [kind, stage.id]), { color: e.target.value }, { preserveScroll: true });
+const move = (kind, stage, direction) => router.patch(route('stages.move', [kind, stage.id]), { direction }, { preserveScroll: true });
 const remove = async (kind, stage) => {
     if (await confirmDialog({ title: 'Удалить этап', message: `Этап «${stage.name}» будет удалён.`, confirmText: 'Удалить', danger: true })) {
         router.delete(route('stages.destroy', [kind, stage.id]), { preserveScroll: true });
@@ -38,7 +39,7 @@ const remove = async (kind, stage) => {
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div v-for="group in [{ kind: 'deal', title: 'Этапы сделок', list: dealStages }, { kind: 'project', title: 'Этапы цеха', list: projectStages }]" :key="group.kind"
+            <div v-for="group in [{ kind: 'deal', title: 'Этапы сделок' + (currentCompanyName ? ' · ' + currentCompanyName : ''), list: dealStages }, { kind: 'project', title: 'Этапы цеха (общие)', list: projectStages }]" :key="group.kind"
                 class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="mb-4 flex items-center justify-between">
                     <h3 class="font-semibold text-slate-700">{{ group.title }}</h3>
@@ -54,6 +55,10 @@ const remove = async (kind, stage) => {
 
                 <div class="space-y-2">
                     <div v-for="stage in group.list" :key="stage.id" class="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2">
+                        <div class="flex flex-col">
+                            <button class="text-[10px] leading-3 text-slate-400 hover:text-indigo-600 disabled:opacity-30" :disabled="stage.id === group.list[0]?.id" @click="move(group.kind, stage, 'up')" title="Выше">▲</button>
+                            <button class="text-[10px] leading-3 text-slate-400 hover:text-indigo-600 disabled:opacity-30" :disabled="stage.id === group.list[group.list.length - 1]?.id" @click="move(group.kind, stage, 'down')" title="Ниже">▼</button>
+                        </div>
                         <input type="color" :value="stage.color" class="h-6 w-6 rounded border-0" @change="recolor(group.kind, stage, $event)" />
                         <span class="flex-1 text-sm font-medium text-slate-800">{{ stage.order }}. {{ stage.name }}</span>
                         <button class="text-xs text-indigo-600 hover:underline" @click="rename(group.kind, stage)">Переименовать</button>

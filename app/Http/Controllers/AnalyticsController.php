@@ -18,11 +18,11 @@ class AnalyticsController extends Controller
     {
         abort_unless($request->user()->can('report.viewAny') || $request->user()->hasRole('admin'), 403);
 
-        $wonIds = Deal::won()->pluck('id');
+        $wonIds = Deal::won()->forCurrentCompany()->pluck('id');
 
         // Deals by stage (funnel).
         $stages = DealStage::with('translations')->where('is_active', true)->orderBy('order')->get();
-        $dealsByStage = Deal::query()
+        $dealsByStage = Deal::query()->forCurrentCompany()
             ->selectRaw('deal_stage_id, count(*) as cnt, coalesce(sum(budget),0) as total')
             ->groupBy('deal_stage_id')->get()->keyBy('deal_stage_id');
 
@@ -34,7 +34,7 @@ class AnalyticsController extends Controller
         ])->values();
 
         // Deals by status.
-        $byStatus = Deal::query()->selectRaw('status, count(*) as cnt')->groupBy('status')
+        $byStatus = Deal::query()->forCurrentCompany()->selectRaw('status, count(*) as cnt')->groupBy('status')
             ->pluck('cnt', 'status');
 
         // Monthly income (payments) and expenses — grouped in PHP for DB portability.
@@ -52,8 +52,9 @@ class AnalyticsController extends Controller
 
         // Conversion: won deals vs total.
         $wonStageIds = DealStage::where('is_won', true)->pluck('id');
-        $total = Deal::count();
-        $won = Deal::whereIn('deal_stage_id', $wonStageIds)->count();
+        $total = Deal::query()->forCurrentCompany()->count();
+        // Отменённые сделки, оставшиеся на won-этапе, успехом не считаются.
+        $won = Deal::query()->forCurrentCompany()->whereIn('deal_stage_id', $wonStageIds)->where('status', '!=', 'cancelled')->count();
 
         // ABC analysis by ACTUAL income (paid), A≤80% / B≤95% / C rest of cumulative value.
         $dealIncome = Payment::query()
@@ -90,16 +91,21 @@ class AnalyticsController extends Controller
         $payroll = app(PayrollService::class);
         $salaryRows = $payroll->perUser();
         $companyTotals = $payroll->companyTotals();
-        $actStage = DealStage::where('is_active', true)->orderBy('order')->get()->slice(-2, 1)->first();
+        // «На подходе» = Акт + ЭСФ (по имени, у каждой компании своя воронка).
+        $allStages = DealStage::where('is_active', true)->orderBy('order')->get();
+        $pendingIds = $allStages->filter(fn ($s) => mb_stripos($s->name, 'акт') !== false || mb_stripos($s->name, 'эсф') !== false)->pluck('id');
+        if ($pendingIds->isEmpty() && ($fallback = $allStages->slice(-2, 1)->first())) {
+            $pendingIds = collect([$fallback->id]);
+        }
         $today = now()->startOfDay();
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
-        $bonusRate = ((float) Setting::get('bonus_percent', 10)) / 100;
 
-        $empDealsRaw = Deal::query()
+        $empDealsRaw = Deal::query()->forCurrentCompany()
             ->whereNotNull('responsible_user_id')
-            ->where(function ($w) use ($wonStageIds, $actStage, $today) {
+            ->where('status', '!=', 'cancelled')
+            ->where(function ($w) use ($wonStageIds, $pendingIds, $today) {
                 $w->whereIn('deal_stage_id', $wonStageIds)
-                    ->orWhere('deal_stage_id', $actStage?->id)
+                    ->orWhereIn('deal_stage_id', $pendingIds)
                     ->orWhere(fn ($o) => $o->whereNotNull('deadline')->whereDate('deadline', '<', $today)
                         ->whereNotIn('status', ['closed', 'cancelled'])
                         ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)));
@@ -114,12 +120,13 @@ class AnalyticsController extends Controller
         $empDeals = $empDealsRaw->groupBy('responsible_user_id');
 
         $wonIdsList = $wonStageIds->all();
-        $mapDeal = function ($d) use ($dealExpense, $taxRate, $bonusRate) {
+        $mapDeal = function ($d) use ($dealExpense, $taxRate) {
             $budget = (float) $d->budget;
             $tax = round($budget * $taxRate, 2);
             $expense = (float) ($dealExpense[$d->id] ?? 0);
             $remainder = round($budget - $tax - $expense, 2);
-            $bonus = $remainder > 0 ? round($remainder * $bonusRate, 2) : 0.0;
+            // Ступенчатый бонус от маржи сделки (см. PayrollService::bonusRateForMargin).
+            $bonus = PayrollService::marginBonus($budget, $remainder, $tax);
             $company = round($remainder - $bonus, 2);
 
             return [
@@ -133,10 +140,10 @@ class AnalyticsController extends Controller
             ];
         };
 
-        $byEmployee = $salaryRows->map(function ($row) use ($empDeals, $wonIdsList, $actStage, $today, $mapDeal) {
+        $byEmployee = $salaryRows->map(function ($row) use ($empDeals, $wonIdsList, $pendingIds, $today, $mapDeal) {
             $deals = $empDeals->get($row['uid'], collect());
             $won = $deals->whereIn('deal_stage_id', $wonIdsList)->map($mapDeal)->values();
-            $act = $actStage ? $deals->where('deal_stage_id', $actStage->id)->map($mapDeal)->values() : collect();
+            $act = $deals->whereIn('deal_stage_id', $pendingIds->all())->map($mapDeal)->values();
             $overdue = $deals->filter(fn ($d) => $d->deadline && $d->deadline->startOfDay() < $today
                     && ! in_array($d->deal_stage_id, $wonIdsList) && ! in_array($d->status, ['closed', 'cancelled']))
                 ->map(fn ($d) => array_merge($mapDeal($d), ['overdue_days' => (int) $d->deadline->startOfDay()->diffInDays($today)]))

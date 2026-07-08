@@ -20,6 +20,9 @@ class UserRequest extends FormRequest
             'password' => [$userId ? 'nullable' : 'required', 'confirmed', Password::min(6)],
             'department_id' => ['nullable', 'exists:departments,id'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'salary' => ['nullable', 'numeric', 'min:0'],
+            // Трудовой договор — необязательный файл (PDF/фото/скан).
+            'contract' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx', 'max:10240'],
             'role' => ['required', Rule::exists('roles', 'name')],
             'is_active' => ['boolean'],
         ];

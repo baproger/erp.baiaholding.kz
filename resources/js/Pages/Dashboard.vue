@@ -74,7 +74,7 @@ const openDeal = (id) => router.get(route('deals.show', id));
             <div class="rise rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md" style="animation-delay: 160ms">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Бонус менеджера</span>
-                    <span class="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">{{ metrics.bonusRate }}%</span>
+                    <span class="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">по марже</span>
                 </div>
                 <div class="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-emerald-600">{{ money(cBonus) }}</div>
                 <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -105,7 +105,7 @@ const openDeal = (id) => router.get(route('deals.show', id));
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                         <tr>
                             <th class="px-5 py-2.5">№</th>
-                            <th class="px-5 py-2.5">Контрагент · БИН</th>
+                            <th class="px-5 py-2.5">Контрагент · № договора</th>
                             <th class="px-5 py-2.5 text-right">Сумма общая</th>
                             <th class="px-5 py-2.5 text-right">Сумма чистая</th>
                             <th class="px-5 py-2.5">Дедлайн</th>
@@ -118,7 +118,7 @@ const openDeal = (id) => router.get(route('deals.show', id));
                             <td class="px-5 py-3 text-slate-400">{{ d.number }}</td>
                             <td class="px-5 py-3">
                                 <div class="font-medium text-slate-800">{{ d.company || '—' }}</div>
-                                <div class="text-xs text-slate-400">{{ d.bin || 'без БИН' }}</div>
+                                <div class="text-xs text-slate-400">{{ d.bin || 'без № договора' }}</div>
                             </td>
                             <td class="px-5 py-3 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
                             <td class="px-5 py-3 text-right font-medium tabular-nums text-slate-900">{{ money(d.net) }}</td>

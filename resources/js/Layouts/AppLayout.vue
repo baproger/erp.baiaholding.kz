@@ -46,18 +46,45 @@ const allNav = [
     { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
     { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },
     { key: 'nav.audit', name: 'Аудит', route: 'audit.index', icon: '❑', perm: 'setting.viewAny' },
-    { key: 'nav.departments', name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny' },
+    { key: 'nav.departments', name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny', leadershipOnly: true },
     { key: 'nav.users', name: 'Сотрудники', route: 'users.index', icon: '☻', perm: 'user.viewAny' },
     { key: 'nav.settings', name: 'Настройки', route: 'settings.index', icon: '⚙', perm: 'setting.update' },
     { key: 'nav.translations', name: 'Переводы', route: 'translations.index', icon: '🌐', perm: 'setting.update' },
 ];
 const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes(i.perm)) && (!i.leadershipOnly || isLeadership.value)));
 
+// Инлайн-SVG иконки (Lucide-style outline) по route — заменяют псевдо-иконки.
+// Чисто презентационно: массив allNav и его perm/leadershipOnly не тронуты.
+const navIcons = {
+    'dashboard': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    'analytics.index': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 15v-4M12 15V7M17 15v-6"/>',
+    'deals.index': '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    'deals.overdue': '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/>',
+    'projects.index': '<path d="M2 20h20"/><path d="M4 20V10l5 4v-4l5 4V6h6v14"/>',
+    'chat.index': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    'profile.edit': '<circle cx="12" cy="8" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>',
+    'finance.index': '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    'payroll.index': '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
+    'audit.index': '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 11h6M9 15h6"/>',
+    'departments.index': '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+    'users.index': '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    'settings.index': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    'translations.index': '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+};
+
 const isActive = (name) => {
     const base = name.split('.')[0];
     return route().current(base + '.*') || route().current(base);
 };
 const go = () => { mobileOpen.value = false; };
+
+// Company (BAIA / ASU) switcher — full data separation per firm.
+// «Все» (id=0) — общий отчёт по обеим фирмам для бухгалтера/админа.
+const companies = computed(() => page.props.auth.companies ?? []);
+const currentCompanyId = computed(() => page.props.auth.currentCompanyId);
+const currentCompany = computed(() => companies.value.find((c) => c.id === currentCompanyId.value));
+const canAllCompanies = computed(() => roles.value.some((r) => ['admin', 'financist'].includes(r)) && companies.value.length > 1);
+const switchCompany = (id) => { if (id !== currentCompanyId.value) router.patch(route('company.switch'), { company_id: id }); };
 
 const markRead = (id) => router.patch(route('notifications.read', id), {}, { preserveScroll: true, preserveState: true });
 const markAllRead = () => router.patch(route('notifications.readAll'), {}, { preserveScroll: true });
@@ -115,13 +142,17 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                     <div class="text-[10px] font-medium uppercase tracking-widest text-slate-500">ERP · CRM</div>
                 </div>
             </div>
-            <nav class="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
+            <nav class="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
                 <Link v-for="item in nav" :key="item.route" :href="route(item.route)" @click="go"
                     :title="collapsed ? t(item.key, item.name) : ''"
                     :class="isActive(item.route) ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
-                    class="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors">
-                    <span v-if="isActive(item.route)" class="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-indigo-500"></span>
-                    <span class="text-lg leading-none" :class="isActive(item.route) ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'">{{ item.icon }}</span>
+                    class="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out">
+                    <span v-if="isActive(item.route)" class="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-indigo-500"></span>
+                    <svg v-if="navIcons[item.route]" class="h-5 w-5 shrink-0 transition-colors duration-200"
+                        :class="isActive(item.route) ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                        v-html="navIcons[item.route]"></svg>
+                    <span v-else class="text-lg leading-none transition-colors duration-200" :class="isActive(item.route) ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'">{{ item.icon }}</span>
                     <span v-if="!collapsed || mobileOpen" class="truncate">{{ t(item.key, item.name) }}</span>
                 </Link>
             </nav>
@@ -150,6 +181,17 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                     <h1 class="text-base font-semibold text-slate-800 sm:text-lg"><slot name="header">{{ t('header.title', 'Панель управления') }}</slot></h1>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- Company switcher (BAIA / ASU) -->
+                    <div v-if="companies.length > 1" class="flex items-center rounded-lg bg-slate-100 p-0.5 text-xs">
+                        <button v-for="c in companies" :key="c.id" @click="switchCompany(c.id)"
+                            :class="currentCompanyId === c.id ? 'bg-white text-emerald-600 shadow' : 'text-slate-500'"
+                            class="rounded px-2.5 py-1 font-semibold transition-all">{{ c.name }}</button>
+                        <button v-if="canAllCompanies" @click="switchCompany(0)" title="Общий отчёт по обеим компаниям"
+                            :class="currentCompanyId === 0 ? 'bg-white text-emerald-600 shadow' : 'text-slate-500'"
+                            class="rounded px-2.5 py-1 font-semibold transition-all">Все</button>
+                    </div>
+                    <span v-else-if="currentCompany" class="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">{{ currentCompany.name }}</span>
+
                     <!-- Live date & time -->
                     <div class="hidden items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs md:flex">
                         <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>

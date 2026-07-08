@@ -51,7 +51,7 @@ class ModuleSmokeTest extends TestCase
 
         $deal = Deal::first();
         $this->assertNotNull($deal);
-        $this->assertMatchesRegularExpression('/^BAIA-\d{4}$/', $deal->number);
+        $this->assertMatchesRegularExpression('/^BAIA-\d{3,}$/', $deal->number);
     }
 
     public function test_moving_deal_to_won_stage_closes_it(): void

@@ -15,7 +15,8 @@ class SettingsController extends Controller
         'currency' => '₸',
         'auto_create_project' => true,
         'default_locale' => 'ru',
-        'bonus_percent' => 10,
+        // bonus_percent удалён: бонус теперь ступенчатый от маржи сделки
+        // (PayrollService::bonusRateForMargin), настройкой не регулируется.
         'tax_percent' => 3,
     ];
 
@@ -45,7 +46,6 @@ class SettingsController extends Controller
             'currency' => ['required', 'string', 'max:10'],
             'auto_create_project' => ['boolean'],
             'default_locale' => ['required', 'in:ru,kk'],
-            'bonus_percent' => ['required', 'numeric', 'min:0', 'max:100'],
             'tax_percent' => ['required', 'numeric', 'min:0', 'max:100'],
         ]);
 

@@ -33,6 +33,9 @@ class HandleInertiaRequests extends Middleware
                     'roles' => $user->getRoleNames(),
                     'permissions' => $user->getAllPermissions()->pluck('name'),
                 ] : null,
+                // Firms the user may work in + the one currently selected (header switcher).
+                'companies' => $user ? $user->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code']) : [],
+                'currentCompanyId' => $user ? \App\Support\CurrentCompany::id() : null,
             ],
             'notifications' => fn () => $user ? [
                 'unread' => $user->unreadNotifications()->count(),

@@ -13,19 +13,49 @@ use Illuminate\Support\Collection;
 class PayrollService
 {
     /**
-     * Per-manager money breakdown (factual — only won/paid deals):
-     *   net    = income − expense
-     *   tax    = tax_percent% of the manager's won-deal budget
-     *   company = (net − tax) split so the employee bonus is bonus_percent% of it
-     *   bonus (ЗП) = bonus_percent% of the company's kept share
-     *   margin = net / income %
-     *
-     * @return Collection<int, array<string, mixed>>
+     * Ступенчатый бонус менеджера от маржи сделки (остаток / бюджет):
+     *   маржа ≤ 10%  → бонуса нет
+     *   11% – 20%    → 7% от остатка
+     *   21% – 30%    → 10% от остатка
+     *   от 31%       → 15% от остатка
      */
+    public static function bonusRateForMargin(float $marginPct): float
+    {
+        return match (true) {
+            $marginPct <= 10 => 0.0,
+            $marginPct <= 20 => 0.07,
+            $marginPct <= 30 => 0.10,
+            default => 0.15,
+        };
+    }
+
+    /**
+     * Маржа сделки для выбора ступени — ДО налога, как на карточке сделки:
+     * (сумма − расходы) / сумма = (остаток + налог) / сумма.
+     */
+    public static function marginPct(float $budget, float $remainder, float $tax = 0): float
+    {
+        return $budget > 0 ? round(($remainder + $tax) / $budget * 100, 1) : 0.0;
+    }
+
+    /**
+     * Bonus for one deal: remainder = budget − tax − expenses. The tier is picked
+     * by the PRE-TAX margin (the one shown on the deal card) and applied to the remainder.
+     */
+    public static function marginBonus(float $budget, float $remainder, float $tax = 0): float
+    {
+        if ($budget <= 0 || $remainder <= 0) {
+            return 0.0;
+        }
+
+        return round($remainder * self::bonusRateForMargin(self::marginPct($budget, $remainder, $tax)), 2);
+    }
+
     /**
      * Canonical company-wide finance figures over WON deals — the single source of
      * truth shared by Dashboard, Analytics and Finance so every page shows the same
-     * numbers. All values are factual (won stage = «Оплата успешно»).
+     * numbers. All values are factual (won stage = «Оплата успешно») and scoped to
+     * the current firm (BAIA / ASU).
      *
      *   budget    = Σ won-deal budgets
      *   income    = Σ payments on won deals (factual money in)
@@ -40,7 +70,7 @@ class PayrollService
     public function companyTotals(): array
     {
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
-        $wonIds = Deal::won()->pluck('id');
+        $wonIds = Deal::won()->forCurrentCompany()->pluck('id');
 
         $budget = (float) Deal::whereIn('id', $wonIds)->sum('budget');
         $income = (float) Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $wonIds))->sum('amount');
@@ -63,20 +93,21 @@ class PayrollService
      */
     public function dealBreakdown(): Collection
     {
-        $rate = ((float) Setting::get('bonus_percent', 10)) / 100;
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
         $stages = DealStage::where('is_active', true)->orderBy('order')->get();
         $wonStageIds = $stages->where('is_won', true)->pluck('id');
-        $actStage = $stages->slice(-2, 1)->first();
         $stageNames = $stages->pluck('name', 'id');
 
-        $stageFilter = $wonStageIds->all();
-        if ($actStage) {
-            $stageFilter[] = $actStage->id;
+        // «На подходе» = сделки на Акте и ЭСФ (по имени, не по позиции — этапы
+        // перемещаются в настройках, и у каждой компании своя воронка).
+        $pendingIds = $stages->filter(fn ($s) => mb_stripos($s->name, 'акт') !== false || mb_stripos($s->name, 'эсф') !== false)->pluck('id');
+        if ($pendingIds->isEmpty() && ($fallback = $stages->slice(-2, 1)->first())) {
+            $pendingIds = collect([$fallback->id]);
         }
+        $stageFilter = $wonStageIds->merge($pendingIds)->unique()->all();
 
-        $deals = Deal::whereNotNull('responsible_user_id')
+        $deals = Deal::forCurrentCompany()->whereNotNull('responsible_user_id')
             ->whereIn('deal_stage_id', $stageFilter)
             ->where('status', '!=', 'cancelled')
             ->orderByDesc('budget')
@@ -93,13 +124,14 @@ class PayrollService
             ->whereIn('expenseable_id', $ids)
             ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
 
-        return $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate, $rate, $wonStageIds, $stageNames) {
+        return $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate, $wonStageIds, $stageNames) {
             $budget = (float) $d->budget;
             $paid = (float) ($paidByDeal[$d->id] ?? 0);
             $expense = (float) ($expenseByDeal[$d->id] ?? 0);
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - $expense, 2);
-            $bonus = $remainder > 0 ? round($remainder * $rate, 2) : 0.0;
+            $bonus = self::marginBonus($budget, $remainder, $tax);
+            $marginPct = self::marginPct($budget, $remainder, $tax);
 
             return [
                 'uid' => (int) $d->responsible_user_id,
@@ -112,57 +144,72 @@ class PayrollService
                 'paid' => $paid,
                 'expense' => $expense,
                 'tax' => $tax,
+                'margin_pct' => $marginPct,
+                'bonus_rate' => self::bonusRateForMargin($marginPct) * 100,
                 'bonus' => $bonus,
                 'net' => round($remainder - $bonus, 2),
             ];
         })->groupBy('uid');
     }
 
+    /**
+     * Per-manager totals. The bonus is computed PER DEAL (each deal falls into its
+     * own margin tier) and then summed — not one rate over the aggregate.
+     */
     public function perUser(): Collection
     {
-        $rate = ((float) Setting::get('bonus_percent', 10)) / 100;
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
-        $wonIds = Deal::won()->pluck('id');
 
-        $incomeByUser = Payment::query()
+        $deals = Deal::won()->forCurrentCompany()->whereNotNull('responsible_user_id')
+            ->get(['id', 'budget', 'responsible_user_id']);
+        $ids = $deals->pluck('id');
+
+        $paidByDeal = Payment::query()
             ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
-            ->join('deals', fn ($j) => $j->on('invoices.invoiceable_id', '=', 'deals.id')->where('invoices.invoiceable_type', 'deal'))
-            ->whereIn('deals.id', $wonIds)
-            ->groupBy('deals.responsible_user_id')
-            ->selectRaw('deals.responsible_user_id as uid, SUM(payments.amount) as v')->pluck('v', 'uid');
+            ->where('invoices.invoiceable_type', 'deal')
+            ->whereIn('invoices.invoiceable_id', $ids)
+            ->groupBy('invoices.invoiceable_id')
+            ->selectRaw('invoices.invoiceable_id as did, SUM(payments.amount) as v')->pluck('v', 'did');
+        $expenseByDeal = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', $ids)
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
 
-        $expenseByUser = Expense::query()
-            ->join('deals', fn ($j) => $j->on('expenses.expenseable_id', '=', 'deals.id')->where('expenses.expenseable_type', 'deal'))
-            ->whereIn('deals.id', $wonIds)
-            ->where('expenses.status', 'confirmed')
-            ->groupBy('deals.responsible_user_id')
-            ->selectRaw('deals.responsible_user_id as uid, SUM(expenses.amount) as v')->pluck('v', 'uid');
-
-        $budgetByUser = Deal::won()->whereNotNull('responsible_user_id')
-            ->groupBy('responsible_user_id')->selectRaw('responsible_user_id as uid, COALESCE(SUM(budget),0) as v')->pluck('v', 'uid');
-
-        $closedByUser = Deal::won()->whereNotNull('responsible_user_id')
-            ->groupBy('responsible_user_id')->selectRaw('responsible_user_id as uid, count(*) as c')->pluck('c', 'uid');
-        $totalByUser = Deal::whereNotNull('responsible_user_id')
+        $totalByUser = Deal::forCurrentCompany()->whereNotNull('responsible_user_id')
             ->groupBy('responsible_user_id')->selectRaw('responsible_user_id as uid, count(*) as c')->pluck('c', 'uid');
 
-        $uids = collect($incomeByUser->keys())
-            ->merge($expenseByUser->keys())->merge($budgetByUser->keys())->merge($totalByUser->keys())
-            ->unique()->filter()->values();
+        $perDeal = $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate) {
+            $budget = (float) $d->budget;
+            $expense = (float) ($expenseByDeal[$d->id] ?? 0);
+            $tax = round($budget * $taxRate, 2);
+            $remainder = round($budget - $tax - $expense, 2);
 
-        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar'])->keyBy('id');
+            return [
+                'uid' => (int) $d->responsible_user_id,
+                'income' => (float) ($paidByDeal[$d->id] ?? 0),
+                'expense' => $expense,
+                'budget' => $budget,
+                'tax' => $tax,
+                'remainder' => $remainder,
+                'bonus' => self::marginBonus($budget, $remainder, $tax),
+            ];
+        })->groupBy('uid');
+
+        // В ведомость попадают и сотрудники без сделок, но с окладом (цех, офис).
+        $salaryUids = User::where('is_active', true)->where('salary', '>', 0)->pluck('id');
+        $uids = $perDeal->keys()->merge($totalByUser->keys())->merge($salaryUids)->unique()->filter()->values();
+
+        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'salary'])->keyBy('id');
         // Drop orphaned responsible ids (deleted users) so only real employees show.
         $uids = $uids->filter(fn ($id) => $people->has($id))->values();
 
-        return $uids->map(function ($uid) use ($incomeByUser, $expenseByUser, $budgetByUser, $closedByUser, $totalByUser, $people, $rate, $taxRate) {
-            $income = (float) ($incomeByUser[$uid] ?? 0);
-            $expense = (float) ($expenseByUser[$uid] ?? 0);
-            $budget = (float) ($budgetByUser[$uid] ?? 0);
-            $tax = round($budget * $taxRate, 2);
-            // Remainder = deal sum − tax − expenses. Employee bonus (ЗП) = rate% of it;
-            // the company keeps the rest as its net profit.
-            $remainder = round($budget - $tax - $expense, 2);
-            $bonus = $remainder > 0 ? round($remainder * $rate, 2) : 0.0;
+        return $uids->map(function ($uid) use ($perDeal, $totalByUser, $people) {
+            $rows = $perDeal[$uid] ?? collect();
+            $income = (float) $rows->sum('income');
+            $expense = (float) $rows->sum('expense');
+            $budget = (float) $rows->sum('budget');
+            $tax = round((float) $rows->sum('tax'), 2);
+            $remainder = round((float) $rows->sum('remainder'), 2);
+            $bonus = round((float) $rows->sum('bonus'), 2);
             $company = round($remainder - $bonus, 2);
             $margin = $budget > 0 ? round($company / $budget * 100, 1) : 0.0;
 
@@ -171,13 +218,16 @@ class PayrollService
                 'user' => $people[$uid]->name ?? '—',
                 'avatar' => $people[$uid]->avatar ?? null,
                 'deals' => (int) ($totalByUser[$uid] ?? 0),
-                'closed' => (int) ($closedByUser[$uid] ?? 0),
+                'closed' => count($rows),
                 'income' => $income,
                 'expense' => $expense,
                 'budget' => $budget,
                 'tax' => $tax,
                 'remainder' => $remainder,
                 'bonus' => $bonus,
+                // ЗП сотрудника = оклад (из карточки сотрудника) + бонус по марже.
+                'salary' => (float) ($people[$uid]->salary ?? 0),
+                'payout' => round((float) ($people[$uid]->salary ?? 0) + $bonus, 2),
                 'company' => $company,
                 'net' => $company,
                 'margin' => $margin,

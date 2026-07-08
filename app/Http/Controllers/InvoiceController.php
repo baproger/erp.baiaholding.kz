@@ -20,6 +20,11 @@ class InvoiceController extends Controller
     // Менеджер работает только со своими сделками — счета чужих сделок недоступны.
     private function assertOwnership(User $user, ?Model $entity): void
     {
+        // Изоляция фирм: счета чужой компании (BAIA/ASU) недоступны никому,
+        // кто к этой компании не привязан, — включая финансиста и директора.
+        $companyId = $entity instanceof Project ? $entity->deal?->company_id : $entity?->company_id;
+        abort_unless($entity === null || $user->worksInCompany($companyId ? (int) $companyId : null), 403);
+
         if ($user->hasRole('manager') && ! $user->hasAnyRole(['admin', 'director', 'financist'])) {
             abort_unless($entity && $entity->responsible_user_id === $user->id, 403);
         }
@@ -44,6 +49,13 @@ class InvoiceController extends Controller
         $invoices = Invoice::query()
             ->with('client:id,name')
             ->withSum('payments as payments_sum_amount', 'amount')
+            // Финансы разделены по фирмам: счёт принадлежит компании своей сделки
+            // (счета цеховых заказов идут через сделку заказа).
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where(fn ($w) => $w
+                ->where(fn ($d) => $d->where('invoiceable_type', 'deal')
+                    ->whereIn('invoiceable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+                ->orWhere(fn ($p) => $p->where('invoiceable_type', 'project')
+                    ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))))
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where('number', 'like', "%{$s}%"))
             ->when($request->string('status')->toString(), fn ($q, $st) => $q->where('status', $st))
             ->latest()->paginate(20)->withQueryString();

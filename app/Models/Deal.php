@@ -16,16 +16,31 @@ class Deal extends Model
     use Auditable;
     use HasFactory, SoftDeletes;
 
+    /** Ед. изм. для поля «Количество» (колонка lot_number). */
+    public const UNITS = ['штук', 'рулон', 'Комплект', 'Работа', 'метр', 'метр погонный'];
+
+    /** Источник (портал), откуда пришла сделка. */
+    public const SOURCES = ['ОМ', 'ЗЦП', 'ИОИ', 'СК', 'СК-ЭМ', 'СК-store', 'ОТП'];
+
     protected $fillable = [
-        'number', 'name', 'client_name', 'company_name', 'address', 'bin', 'lot_number', 'client_id', 'responsible_user_id', 'department_id',
+        'company_id', 'number', 'name', 'client_name', 'company_name', 'address', 'bin', 'contract_date', 'lot_number', 'unit', 'source', 'client_id', 'responsible_user_id', 'department_id',
         'deal_stage_id', 'budget', 'deadline', 'description', 'note', 'status', 'closed_at',
     ];
 
     protected $casts = [
         'budget' => 'decimal:2',
         'deadline' => 'date',
+        'contract_date' => 'date',
         'closed_at' => 'datetime',
     ];
+
+    /**
+     * Owning firm (BAIA / ASU) — not to be confused with company_name (the client's company).
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
 
     public function client(): BelongsTo
     {
@@ -88,5 +103,14 @@ class Deal extends Model
     {
         return $query->where("status", "!=", "cancelled")
             ->whereHas("stage", fn ($s) => $s->where("is_won", true));
+    }
+
+    /**
+     * Restrict to the firm currently selected in the session (BAIA / ASU).
+     * No-op when no company is selected (e.g. console commands, tests).
+     */
+    public function scopeForCurrentCompany($query)
+    {
+        return $query->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where('company_id', $c));
     }
 }

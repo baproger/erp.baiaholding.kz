@@ -43,19 +43,40 @@ class PayrollTest extends TestCase
         return $deal;
     }
 
-    public function test_bonus_is_ten_percent_of_net_profit(): void
+    public function test_bonus_follows_margin_tiers(): void
     {
         $admin = $this->user('admin');
         $mgr = $this->user('manager');
-        // budget 1M − tax 3% (30k) − expenses 100k = remainder 870k → bonus 87k, company 783k.
+        // budget 1M − tax 3% (30k) − expenses 100k = remainder 870k.
+        // Маржа 87% → ставка 15% → бонус 130 500, компании 739 500.
         $this->wonDealWithFinance($mgr, 500000, 100000);
 
         $this->actingAs($admin)->get(route('payroll.index'))
             ->assertInertia(fn (Assert $p) => $p->component('Payroll/Index')
-                ->where('leadership', true)->where('rate', 10)
-                ->where('rows.0.net', 783000)
-                ->where('rows.0.bonus', 87000)
-                ->where('rows.0.company', 783000));
+                ->where('leadership', true)
+                ->where('rows.0.net', 739500)
+                ->where('rows.0.bonus', 130500)
+                ->where('rows.0.company', 739500));
+    }
+
+    public function test_bonus_tier_rates(): void
+    {
+        // ≤10% → 0; 11–20% → 7%; 21–30% → 10%; от 31% → 15%.
+        $this->assertSame(0.0, \App\Services\PayrollService::bonusRateForMargin(10));
+        $this->assertSame(0.07, \App\Services\PayrollService::bonusRateForMargin(15));
+        $this->assertSame(0.10, \App\Services\PayrollService::bonusRateForMargin(30));
+        $this->assertSame(0.15, \App\Services\PayrollService::bonusRateForMargin(45));
+        // Низкомаржинальная сделка: маржа 7% → бонуса нет.
+        $this->assertSame(0.0, \App\Services\PayrollService::marginBonus(1000000, 70000));
+    }
+
+    public function test_tier_uses_pre_tax_margin(): void
+    {
+        // Кейс ASU-001: бюджет 1М, расходы 780k, налог 3% (30k) → остаток 190k.
+        // Маржа для ступени — ДО налога: (1М − 780k)/1М = 22% → ставка 10%,
+        // бонус = 10% × 190 000 = 19 000 (а не 7% × 190 000 = 13 300).
+        $this->assertSame(22.0, \App\Services\PayrollService::marginPct(1000000, 190000, 30000));
+        $this->assertSame(19000.0, \App\Services\PayrollService::marginBonus(1000000, 190000, 30000));
     }
 
     public function test_manager_sees_only_own(): void
@@ -66,7 +87,7 @@ class PayrollTest extends TestCase
         $this->wonDealWithFinance($other, 900000, 100000);
 
         $this->actingAs($mgr)->get(route('payroll.index'))
-            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 87000));
+            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 130500));
     }
 
     public function test_unsuccessful_deal_not_counted(): void

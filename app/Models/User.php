@@ -14,7 +14,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'department_id', 'phone', 'avatar', 'language', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'department_id', 'phone', 'salary', 'contract_path', 'avatar', 'language', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -32,6 +32,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'salary' => 'decimal:2',
         ];
     }
 
@@ -49,6 +50,23 @@ class User extends Authenticatable
     public function departments(): BelongsToMany
     {
         return $this->belongsToMany(Department::class)->withTimestamps();
+    }
+
+    /**
+     * Companies (BAIA / ASU) the user works for; one user may belong to both.
+     */
+    public function companies(): BelongsToMany
+    {
+        return $this->belongsToMany(Company::class)->withTimestamps();
+    }
+
+    /**
+     * Изоляция фирм: принадлежит ли пользователь компании сущности.
+     * null = сущность без компании (легаси/тесты) — доступна всем.
+     */
+    public function worksInCompany(?int $companyId): bool
+    {
+        return $companyId === null || $this->companies()->where('companies.id', $companyId)->exists();
     }
 
     /**

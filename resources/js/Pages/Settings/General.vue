@@ -11,7 +11,6 @@ const form = useForm({
     currency: props.settings.currency,
     auto_create_project: !!props.settings.auto_create_project,
     default_locale: props.settings.default_locale,
-    bonus_percent: props.settings.bonus_percent,
     tax_percent: props.settings.tax_percent,
 });
 const save = () => form.put(route('settings.update'), { preserveScroll: true });
@@ -48,12 +47,12 @@ const save = () => form.put(route('settings.update'), { preserveScroll: true });
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <InputLabel value="Бонус сотруднику, % от чистой прибыли" />
-                    <TextInput v-model="form.bonus_percent" type="number" step="0.1" class="mt-1 w-full" />
-                </div>
-                <div>
                     <InputLabel value="Налог, % с суммы сделок" />
                     <TextInput v-model="form.tax_percent" type="number" step="0.1" class="mt-1 w-full" />
+                </div>
+                <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-500 ring-1 ring-slate-200">
+                    <div class="font-semibold text-slate-600">Бонус сотрудника — по марже сделки (фиксировано):</div>
+                    до 10% — нет · 11–20% — 7% · 21–30% — 10% · от 31% — 15% от остатка
                 </div>
             </div>
             <label class="flex items-center gap-2 text-sm">
