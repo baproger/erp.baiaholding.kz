@@ -60,6 +60,31 @@ class InvoiceController extends Controller
             ->when($request->string('status')->toString(), fn ($q, $st) => $q->where('status', $st))
             ->latest()->paginate(20)->withQueryString();
 
+        // ---- Раздел «Расходы»: материальные/прочие, нал/банк, статус ----
+        $companyId = \App\Support\CurrentCompany::id();
+        $expBase = \App\Models\Expense::query()
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
+                ->where(fn ($d) => $d->where('expenseable_type', 'deal')
+                    ->whereIn('expenseable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+                ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
+                    ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))));
+
+        $expenseTotals = [
+            'material' => (float) (clone $expBase)->whereNotNull('material_id')->where('status', 'confirmed')->sum('amount'),
+            'other' => (float) (clone $expBase)->whereNull('material_id')->where('status', 'confirmed')->sum('amount'),
+            'cash' => (float) (clone $expBase)->where('status', 'confirmed')->where('payment_method', 'cash')->sum('amount'),
+            'bank' => (float) (clone $expBase)->where('status', 'confirmed')->where('payment_method', 'bank')->sum('amount'),
+            'pending_sum' => (float) (clone $expBase)->where('status', 'pending')->sum('amount'),
+            'pending_count' => (clone $expBase)->where('status', 'pending')->count(),
+        ];
+
+        $expenses = (clone $expBase)
+            ->with(['expenseable', 'material:id,name,unit', 'responsible:id,name', 'confirmedBy:id,name'])
+            ->when($request->string('exp_status')->toString(), fn ($q, $s) => $q->where('status', $s))
+            ->when($request->string('exp_method')->toString(), fn ($q, $m) => $q->where('payment_method', $m))
+            ->when($request->string('exp_kind')->toString(), fn ($q, $k) => $k === 'material' ? $q->whereNotNull('material_id') : $q->whereNull('material_id'))
+            ->latest()->paginate(15, ['*'], 'exp_page')->withQueryString();
+
         // Canonical company finance — identical to Dashboard & Analytics (via PayrollService).
         $payroll = app(PayrollService::class);
         $fin = $payroll->companyTotals();
@@ -69,7 +94,9 @@ class InvoiceController extends Controller
 
         return Inertia::render('Finance/Index', [
             'invoices' => $invoices,
-            'filters' => $request->only('search', 'status'),
+            'expenses' => $expenses,
+            'expenseTotals' => $expenseTotals,
+            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind'),
             'salaries' => $salaries,
             'totals' => [
                 'budget' => $fin['budget'],
