@@ -8,6 +8,14 @@ const props = defineProps({ byEmployee: Array, monthsFilter: Number, funnel: Arr
 
 const tab = ref('general');
 const selected = ref(props.byEmployee?.[0] ?? null);
+// Фильтр по сотрудникам: поиск по имени, список и выбор обновляются сразу.
+const empSearch = ref('');
+const filteredEmployees = computed(() => {
+    const s = empSearch.value.trim().toLowerCase();
+    const list = s ? props.byEmployee.filter((e) => (e.user ?? '').toLowerCase().includes(s)) : props.byEmployee;
+    if (list.length && (!selected.value || !list.some((e) => e.uid === selected.value.uid))) selected.value = list[0];
+    return list;
+});
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 const initials = (name) => (name ?? '?').trim().charAt(0).toUpperCase();
 // Colour a per-deal margin badge: healthy ≥ 40%, thin 20–40%, poor/negative below.
@@ -158,7 +166,12 @@ const trend = (key) => {
         <div v-show="tab==='employees'" class="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <!-- Employee list -->
             <div class="space-y-2 lg:col-span-1">
-                <button v-for="e in byEmployee" :key="e.uid" @click="selected = e"
+                <div class="relative">
+                    <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input v-model="empSearch" type="text" placeholder="Фильтр по сотруднику…"
+                        class="w-full rounded-xl border-slate-200 py-2 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+                <button v-for="e in filteredEmployees" :key="e.uid" @click="selected = e"
                     :class="selected && selected.uid===e.uid ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300 hover:shadow-md'"
                     class="group flex w-full items-center gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm transition-all">
                     <Avatar :name="e.user" :src="e.avatar" :size="44" />
@@ -174,7 +187,7 @@ const trend = (key) => {
                         <div class="text-[10px] uppercase tracking-wide text-slate-400">ЗП</div>
                     </div>
                 </button>
-                <div v-if="!byEmployee.length" class="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400 shadow-sm">Нет данных</div>
+                <div v-if="!filteredEmployees.length" class="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400 shadow-sm">{{ byEmployee.length ? 'Никто не найден' : 'Нет данных' }}</div>
             </div>
 
             <!-- Detail -->
