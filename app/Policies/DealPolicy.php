@@ -11,7 +11,8 @@ class DealPolicy
     public function view(User $user, Deal $d): bool { return $user->can('deal.view') && $this->ownsOrLeads($user, $d); }
     public function create(User $user): bool { return $user->can('deal.create'); }
     public function update(User $user, Deal $d): bool { return $this->ownsOrLeads($user, $d) && ($user->can('deal.update') || $d->responsible_user_id === $user->id); }
-    public function delete(User $user, Deal $d): bool { return $user->can('deal.delete') && $this->ownsOrLeads($user, $d); }
+    // Удаление сделки — ТОЛЬКО админ (менеджеру/директору/бухгалтеру нельзя).
+    public function delete(User $user, Deal $d): bool { return $user->hasRole('admin') && $this->ownsOrLeads($user, $d); }
 
     /**
      * Leadership sees everything WITHIN ITS COMPANIES; a manager is limited to

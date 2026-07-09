@@ -17,7 +17,7 @@ class DealPermissionTest extends TestCase
     private function deal(?int $responsibleId = null): Deal
     {
         return Deal::create([
-            'number' => 'BAIA-P-1', 'name' => 'D', 'budget' => 1000, 'status' => 'active',
+            'number' => 'BAIA-P-'.(Deal::count() + 1), 'name' => 'D', 'budget' => 1000, 'status' => 'active',
             'responsible_user_id' => $responsibleId,
             'deal_stage_id' => DealStage::orderBy('order')->first()->id,
         ]);
@@ -80,5 +80,26 @@ class DealPermissionTest extends TestCase
         $this->actingAs($manager)->patch(route('deals.responsible', $deal), [
             'responsible_user_id' => $manager->id,
         ])->assertForbidden();
+    }
+
+    public function test_only_admin_can_delete_deal(): void
+    {
+        // Удаление сделки — только админ: даже ответственный менеджер,
+        // директор и бухгалтер получают 403.
+        foreach (['manager', 'director', 'financist'] as $role) {
+            $user = User::factory()->create();
+            $user->assignRole($role);
+            $deal = $this->deal($user->id);
+
+            $this->actingAs($user)->delete(route('deals.destroy', $deal))->assertForbidden();
+            $this->assertNotNull($deal->fresh(), "Роль {$role} не должна удалять сделку");
+        }
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $deal = $this->deal(null);
+
+        $this->actingAs($admin)->delete(route('deals.destroy', $deal))->assertRedirect();
+        $this->assertNull(Deal::find($deal->id));
     }
 }
