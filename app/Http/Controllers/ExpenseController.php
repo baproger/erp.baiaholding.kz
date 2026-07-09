@@ -66,6 +66,14 @@ class ExpenseController extends Controller
                 ]);
             }
 
+            // Сумма считается автоматически: количество × закупочная цена
+            // (последняя цена прихода на материале). Если цена не заведена
+            // (старые позиции) — берём сумму, введённую вручную.
+            if ((float) $material->price > 0) {
+                $data['amount'] = round((float) $data['qty'] * (float) $material->price, 2);
+            }
+            $data['amount'] = (float) ($data['amount'] ?? 0);
+
             // Внутреннее списание — подтверждение бухгалтера не требуется.
             $data['status'] = 'confirmed';
             $data['description'] = trim(($data['description'] ?? '')) !== ''
@@ -186,6 +194,10 @@ class ExpenseController extends Controller
         // Материал/количество после создания не меняются (иначе разъедется склад) —
         // удалите расход (остаток вернётся) и создайте заново.
         unset($data['material_id'], $data['qty']);
+        // Сумма материального расхода — производная (кол-во × цена), руками не правится.
+        if ($expense->material_id && (float) ($expense->material?->price ?? 0) > 0) {
+            unset($data['amount']);
+        }
         if ($request->hasFile('file')) {
             if ($expense->file_path) {
                 Storage::disk('local')->delete($expense->file_path);

@@ -83,6 +83,33 @@ class MaterialExpenseTest extends TestCase
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
     }
 
+    public function test_material_expense_amount_is_qty_times_price(): void
+    {
+        // У материала есть закупочная цена — сумма считается на сервере,
+        // присланная вручную сумма игнорируется.
+        $this->material->update(['price' => 1200]);
+
+        $this->actingAs($this->manager)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'material_id' => $this->material->id, 'qty' => 5,
+            'amount' => 1, 'date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertEquals(6000.0, (float) Expense::first()->amount); // 5 × 1200
+    }
+
+    public function test_material_expense_without_price_keeps_manual_amount(): void
+    {
+        // Легаси-позиция без цены: сумму вводят вручную, как раньше.
+        $this->actingAs($this->manager)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'material_id' => $this->material->id, 'qty' => 5,
+            'amount' => 7000, 'date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertEquals(7000.0, (float) Expense::first()->amount);
+    }
+
     public function test_other_expense_by_manager_goes_pending(): void
     {
         // Прочий расход менеджера ждёт подтверждения бухгалтера (этап 4).

@@ -8,9 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Приход товара на склад (история пополнений). */
 class MaterialReceipt extends Model
 {
-    protected $fillable = ['material_id', 'user_id', 'quantity', 'date', 'note'];
+    protected $fillable = ['material_id', 'user_id', 'quantity', 'price', 'date', 'note'];
 
-    protected $casts = ['quantity' => 'decimal:2', 'date' => 'date'];
+    protected $casts = ['quantity' => 'decimal:2', 'price' => 'decimal:2', 'date' => 'date'];
 
     public function material(): BelongsTo
     {

@@ -150,7 +150,7 @@ class DealController extends Controller
             // Склад компании сделки — для расходов по материалам (показ остатка).
             'materials' => \App\Models\Material::query()
                 ->when($deal->company_id, fn ($q, $c) => $q->where('company_id', $c))
-                ->orderBy('name')->get(['id', 'name', 'unit', 'quantity']),
+                ->orderBy('name')->get(['id', 'name', 'unit', 'quantity', 'price']),
             'profit' => [
                 'budget' => $dealBudget,
                 'tax' => $dealTax, 'taxRate' => $taxRate * 100,

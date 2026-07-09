@@ -117,6 +117,44 @@ class WarehouseTest extends TestCase
         $this->actingAs($director)->withSession(['company_id' => $company->id])->get(route('warehouse.index'))->assertOk();
     }
 
+    public function test_receipt_price_becomes_last_purchase_price(): void
+    {
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $fin = $this->user('financist', $company);
+
+        $this->actingAs($fin)->withSession(['company_id' => $company->id])
+            ->post(route('warehouse.receipt'), ['name' => 'ЛДСП', 'unit' => 'штук', 'quantity' => 10, 'price' => 1200])
+            ->assertSessionHasNoErrors()->assertRedirect();
+
+        $material = Material::where('name', 'ЛДСП')->firstOrFail();
+        $this->assertEquals(1200.0, (float) $material->price);
+        $this->assertEquals(1200.0, (float) $material->receipts()->first()->price);
+
+        // Новый приход с другой ценой — материал хранит последнюю закупочную.
+        $this->actingAs($fin)->withSession(['company_id' => $company->id])
+            ->post(route('warehouse.receipt'), ['material_id' => $material->id, 'quantity' => 5, 'price' => 1500])
+            ->assertRedirect();
+        $this->assertEquals(1500.0, (float) $material->fresh()->price);
+
+        // Приход без цены закупочную не сбрасывает.
+        $this->actingAs($fin)->withSession(['company_id' => $company->id])
+            ->post(route('warehouse.receipt'), ['material_id' => $material->id, 'quantity' => 3])
+            ->assertRedirect();
+        $this->assertEquals(1500.0, (float) $material->fresh()->price);
+    }
+
+    public function test_editing_receipt_price_resyncs_material_price(): void
+    {
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $fin = $this->user('financist', $company);
+        $material = Material::create(['company_id' => $company->id, 'name' => 'МДФ', 'unit' => 'штук', 'quantity' => 10, 'price' => 900]);
+        $receipt = $material->receipts()->create(['user_id' => $fin->id, 'quantity' => 10, 'price' => 900, 'date' => now()->toDateString()]);
+
+        $this->actingAs($fin)->put(route('warehouse.receipts.update', $receipt->id), ['quantity' => 10, 'price' => 950])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertEquals(950.0, (float) $material->fresh()->price);
+    }
+
     public function test_warehouse_scoped_by_current_company(): void
     {
         $baia = Company::where('code', 'BAIA')->firstOrFail();

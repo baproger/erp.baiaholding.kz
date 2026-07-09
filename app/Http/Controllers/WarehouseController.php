@@ -58,6 +58,7 @@ class WarehouseController extends Controller
             'name' => ['required_without:material_id', 'nullable', 'string', 'max:255'],
             'unit' => ['nullable', Rule::in(Deal::UNITS)],
             'quantity' => ['required', 'numeric', 'min:0.01'],
+            'price' => ['nullable', 'numeric', 'min:0'],
             'date' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
@@ -81,10 +82,16 @@ class WarehouseController extends Controller
             $material->receipts()->create([
                 'user_id' => $request->user()->id,
                 'quantity' => $data['quantity'],
+                'price' => $data['price'] ?? null,
                 'date' => $data['date'] ?? now()->toDateString(),
                 'note' => $data['note'] ?? null,
             ]);
             $material->increment('quantity', $data['quantity']);
+            // На материале храним последнюю закупочную цену — по ней считается
+            // расход по материалам в сделке (количество × цена).
+            if (isset($data['price'])) {
+                $material->update(['price' => $data['price']]);
+            }
         });
 
         return back()->with('success', 'Приход оформлен — остаток обновлён.');
@@ -101,6 +108,7 @@ class WarehouseController extends Controller
 
         $data = $request->validate([
             'quantity' => ['required', 'numeric', 'min:0.01'],
+            'price' => ['nullable', 'numeric', 'min:0'],
             'date' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
@@ -116,6 +124,7 @@ class WarehouseController extends Controller
         DB::transaction(function () use ($receipt, $material, $data, $delta) {
             $receipt->update([
                 'quantity' => $data['quantity'],
+                'price' => array_key_exists('price', $data) ? $data['price'] : $receipt->price,
                 'date' => $data['date'] ?? $receipt->date,
                 'note' => $data['note'] ?? null,
             ]);
@@ -124,6 +133,7 @@ class WarehouseController extends Controller
             } elseif ($delta < 0) {
                 $material->decrement('quantity', abs($delta));
             }
+            $this->syncLastPurchasePrice($material);
         });
 
         return back()->with('success', 'Приход обновлён — остаток пересчитан.');
@@ -143,9 +153,20 @@ class WarehouseController extends Controller
         DB::transaction(function () use ($receipt, $material) {
             $material->decrement('quantity', $receipt->quantity);
             $receipt->delete();
+            $this->syncLastPurchasePrice($material);
         });
 
         return back()->with('success', 'Приход удалён — остаток пересчитан.');
+    }
+
+    /** Цена на материале = последняя закупочная (самый свежий приход с ценой). */
+    private function syncLastPurchasePrice(Material $material): void
+    {
+        $last = $material->receipts()->whereNotNull('price')
+            ->orderByDesc('date')->orderByDesc('id')->first();
+        if ($last) {
+            $material->update(['price' => $last->price]);
+        }
     }
 
     public function destroyMaterial(Request $request, Material $material): RedirectResponse

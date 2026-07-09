@@ -46,8 +46,12 @@ const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
 const qtyNum = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
+// Цена закупки на материале (последний приход): сумма расхода = количество × цена.
+// Для старых позиций без цены сумму вводят вручную.
+const materialPrice = computed(() => Number(selectedMaterial.value?.price ?? 0));
+const autoAmount = computed(() => materialPrice.value > 0 ? Math.round(Number(expenseForm.qty || 0) * materialPrice.value * 100) / 100 : null);
 const canSubmitExpense = computed(() => expenseMode.value === 'material'
-    ? !!expenseForm.material_id && Number(expenseForm.qty) > 0
+    ? !!expenseForm.material_id && Number(expenseForm.qty) > 0 && (materialPrice.value > 0 || Number(expenseForm.amount) > 0)
     : Number(expenseForm.amount) > 0);
 
 // Подтверждение прочего расхода — только бухгалтер (financist) или админ.
@@ -65,7 +69,7 @@ const submitConfirm = (e) => confirmForm
     });
 const addExpense = () => expenseForm
     .transform((d) => expenseMode.value === 'material'
-        ? { ...d, file: null }
+        ? { ...d, file: null, amount: autoAmount.value ?? d.amount } // сервер пересчитает: кол-во × цена
         : { ...d, material_id: '', qty: '' })
     .post(route('expenses.store'), {
         preserveScroll: true, forceFormData: true,
@@ -194,7 +198,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <div class="col-span-2">
                         <select v-model="expenseForm.material_id" class="w-full rounded-md border-slate-300 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                             <option value="">— материал со склада —</option>
-                            <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }} · остаток {{ qtyNum(m.quantity) }} {{ m.unit }}</option>
+                            <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }} · остаток {{ qtyNum(m.quantity) }} {{ m.unit }}<template v-if="Number(m.price) > 0"> · {{ money(m.price) }}/{{ m.unit }}</template></option>
                         </select>
                         <div v-if="expenseForm.errors.material_id" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.material_id }}</div>
                     </div>
@@ -207,10 +211,17 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         Остаток: {{ qtyNum(selectedMaterial.quantity) }} {{ selectedMaterial.unit }}
                         <template v-if="Number(expenseForm.qty) > 0"> → {{ qtyNum(Number(selectedMaterial.quantity) - Number(expenseForm.qty)) }}</template>
                     </div>
+                    <!-- Сумма считается автоматически: количество × закупочная цена -->
+                    <div v-if="selectedMaterial && materialPrice > 0" class="col-span-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
+                        Сумма: <span class="font-semibold tabular-nums">{{ money(autoAmount ?? 0) }}</span>
+                        <span class="ml-1 text-xs text-indigo-400">({{ qtyNum(expenseForm.qty || 0) }} × {{ money(materialPrice) }})</span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
-                    <TextInput v-model="expenseForm.amount" type="number" step="0.01" placeholder="Сумма, ₸" />
+                    <TextInput v-if="expenseMode !== 'material' || !selectedMaterial || materialPrice <= 0"
+                        v-model="expenseForm.amount" type="number" step="0.01"
+                        :placeholder="expenseMode === 'material' ? 'Сумма, ₸ (цена не заведена)' : 'Сумма, ₸'" />
                     <TextInput v-model="expenseForm.date" type="date" />
                 </div>
                 <TextInput v-model="expenseForm.description" placeholder="Описание" class="mt-2 w-full" />

@@ -17,11 +17,12 @@ const props = defineProps({
 });
 
 const qty = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
+const money = (v) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(Number(v ?? 0)) + ' ₸';
 
 // Приход: существующий материал или новая позиция.
 const showModal = ref(false);
 const mode = ref('existing'); // existing | new
-const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', date: '', note: '' });
+const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', price: '', date: '', note: '' });
 const openReceipt = () => {
     form.reset(); form.unit = 'штук';
     mode.value = props.materials.length ? 'existing' : 'new';
@@ -42,10 +43,11 @@ const removeMaterial = async (m) => {
 
 // Правка/удаление прихода (бухгалтер/админ) — остаток пересчитывается на сервере.
 const editingReceipt = ref(null);
-const receiptForm = useForm({ quantity: '', date: '', note: '' });
+const receiptForm = useForm({ quantity: '', price: '', date: '', note: '' });
 const openEditReceipt = (r) => {
     editingReceipt.value = r.id;
     receiptForm.quantity = Number(r.quantity);
+    receiptForm.price = r.price != null ? Number(r.price) : '';
     receiptForm.date = (r.date ?? '').slice(0, 10);
     receiptForm.note = r.note ?? '';
     receiptForm.clearErrors();
@@ -94,7 +96,9 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         <th class="px-6 py-3">Материал</th>
                         <th v-if="allMode" class="px-4 py-3">Компания</th>
                         <th class="px-4 py-3">Ед. изм.</th>
+                        <th class="px-4 py-3 text-right">Цена за ед.</th>
                         <th class="px-4 py-3 text-right">Остаток</th>
+                        <th class="px-4 py-3 text-right">Сумма</th>
                         <th v-if="canManage" class="px-4 py-3"></th>
                     </tr>
                 </thead>
@@ -103,11 +107,19 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         <td class="px-6 py-3 font-medium text-slate-900">{{ m.name }}<span v-if="m.note" class="ml-2 text-xs text-slate-400">{{ m.note }}</span></td>
                         <td v-if="allMode" class="px-4 py-3 text-slate-500">{{ m.company?.name ?? '—' }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ m.unit }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums text-slate-600">
+                            <template v-if="Number(m.price) > 0">{{ money(m.price) }}</template>
+                            <span v-else class="text-slate-300">—</span>
+                        </td>
                         <td class="px-4 py-3 text-right">
                             <span class="rounded-full px-2.5 py-0.5 text-sm font-bold tabular-nums"
                                 :class="lowStock(m) ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'">
                                 {{ qty(m.quantity) }}
                             </span>
+                        </td>
+                        <td class="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
+                            <template v-if="Number(m.price) > 0">{{ money(Number(m.quantity) * Number(m.price)) }}</template>
+                            <span v-else class="text-slate-300">—</span>
                         </td>
                         <td v-if="canManage" class="px-4 py-3 text-right">
                             <button class="text-slate-300 transition-colors hover:text-rose-600" title="Удалить позицию" @click="removeMaterial(m)">
@@ -116,7 +128,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         </td>
                     </tr>
                     <tr v-if="!filtered.length">
-                        <td :colspan="canManage ? (allMode ? 5 : 4) : (allMode ? 4 : 3)" class="px-6 py-12 text-center">
+                        <td :colspan="canManage ? (allMode ? 7 : 6) : (allMode ? 6 : 5)" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-10 w-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
                             <p class="mt-3 text-sm text-slate-400">Склад пуст — оформите первый приход товара</p>
                             <PrimaryButton v-if="canManage" class="mt-4" @click="openReceipt">+ Приход товара</PrimaryButton>
@@ -134,6 +146,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">+ {{ qty(r.quantity) }} {{ r.material?.unit }}</span>
                         <span class="font-medium text-slate-800">{{ r.material?.name }}</span>
+                        <span v-if="Number(r.price) > 0" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">{{ money(r.price) }}/{{ r.material?.unit }}</span>
                         <span v-if="r.note" class="text-xs text-slate-400">{{ r.note }}</span>
                         <span class="ml-auto text-xs text-slate-400">{{ r.user?.name ?? '—' }} · {{ formatDate(r.date) }}</span>
                         <template v-if="canManage">
@@ -147,10 +160,14 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                     </div>
                     <!-- Инлайн-правка прихода -->
                     <div v-if="editingReceipt === r.id" class="mt-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/40 p-3">
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
                             <div>
                                 <InputLabel value="Количество" />
                                 <TextInput v-model="receiptForm.quantity" type="number" min="0.01" step="any" class="mt-1 w-full" />
+                            </div>
+                            <div>
+                                <InputLabel value="Цена за ед., ₸" />
+                                <TextInput v-model="receiptForm.price" type="number" min="0" step="0.01" class="mt-1 w-full" />
                             </div>
                             <div>
                                 <InputLabel value="Дата" />
@@ -161,7 +178,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                                 <TextInput v-model="receiptForm.note" class="mt-1 w-full" />
                             </div>
                         </div>
-                        <InputError :message="receiptForm.errors.quantity" class="mt-1" />
+                        <InputError :message="receiptForm.errors.quantity || receiptForm.errors.price" class="mt-1" />
                         <div class="mt-2 flex gap-2">
                             <PrimaryButton :disabled="receiptForm.processing" @click="saveReceipt(r)">Сохранить</PrimaryButton>
                             <SecondaryButton @click="editingReceipt = null">Отмена</SecondaryButton>
@@ -215,10 +232,15 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         <InputError :message="form.errors.quantity" class="mt-1" />
                     </div>
                     <div>
+                        <InputLabel value="Цена за ед., ₸" />
+                        <TextInput v-model="form.price" type="number" min="0" step="0.01" class="mt-1 w-full" placeholder="Закупочная цена" />
+                        <InputError :message="form.errors.price" class="mt-1" />
+                    </div>
+                    <div>
                         <InputLabel value="Дата" />
                         <TextInput v-model="form.date" type="date" class="mt-1 w-full" />
                     </div>
-                    <div class="col-span-2">
+                    <div>
                         <InputLabel value="Заметка" />
                         <TextInput v-model="form.note" class="mt-1 w-full" placeholder="Поставщик, накладная…" />
                     </div>

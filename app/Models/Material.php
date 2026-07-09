@@ -12,9 +12,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Material extends Model
 {
-    protected $fillable = ['company_id', 'name', 'unit', 'quantity', 'note'];
+    protected $fillable = ['company_id', 'name', 'unit', 'quantity', 'price', 'note'];
 
-    protected $casts = ['quantity' => 'decimal:2'];
+    protected $casts = ['quantity' => 'decimal:2', 'price' => 'decimal:2'];
 
     public function company(): BelongsTo
     {

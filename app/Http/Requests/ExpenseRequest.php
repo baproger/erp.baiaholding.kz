@@ -19,10 +19,12 @@ class ExpenseRequest extends FormRequest
             'expenseable_type' => ['nullable', Rule::in(['deal', 'project'])],
             'expenseable_id' => ['nullable', 'integer'],
             'category_id' => ['nullable', 'exists:expense_categories,id'],
-            // Расход по материалам: позиция склада + количество (сумму вводят вручную).
+            // Расход по материалам: позиция склада + количество; сумма считается
+            // на сервере (количество × закупочная цена), вручную — только если
+            // у материала цена не заведена.
             'material_id' => ['nullable', 'exists:materials,id'],
             'qty' => ['required_with:material_id', 'nullable', 'numeric', 'min:0.01'],
-            'amount' => ['required', 'numeric', 'min:0'],
+            'amount' => ['required_without:material_id', 'nullable', 'numeric', 'min:0'],
             'date' => ['required', 'date'],
             'description' => ['nullable', 'string'],
             'type' => ['nullable', Rule::in(['direct', 'indirect'])],
