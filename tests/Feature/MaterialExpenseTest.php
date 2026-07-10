@@ -110,6 +110,39 @@ class MaterialExpenseTest extends TestCase
         $this->assertEquals(7000.0, (float) Expense::first()->amount);
     }
 
+    public function test_material_expense_without_price_and_amount_is_rejected(): void
+    {
+        // Материал без цены + без суммы: раньше сервер молча создавал
+        // подтверждённый расход на 0 ₸ со списанием склада.
+        $this->actingAs($this->manager)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'material_id' => $this->material->id, 'qty' => 5,
+            'date' => now()->toDateString(),
+        ])->assertSessionHasErrors('amount');
+
+        $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
+        $this->assertSame(0, Expense::count());
+    }
+
+    public function test_editing_derived_material_expense_amount_returns_error(): void
+    {
+        // Производная сумма (кол-во × цена) не правится: честная ошибка
+        // вместо молчаливого игнора с «Расход обновлён».
+        $this->material->update(['price' => 1200]);
+        $this->actingAs($this->manager)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'material_id' => $this->material->id, 'qty' => 5,
+            'date' => now()->toDateString(),
+        ]);
+        $expense = Expense::first();
+        $this->assertEquals(6000.0, (float) $expense->amount);
+
+        $this->actingAs($this->manager)->put(route('expenses.update', $expense->id), [
+            'amount' => 9999, 'date' => now()->toDateString(),
+        ])->assertSessionHasErrors('amount');
+        $this->assertEquals(6000.0, (float) $expense->fresh()->amount);
+    }
+
     public function test_other_expense_by_manager_goes_pending(): void
     {
         // Прочий расход менеджера ждёт подтверждения бухгалтера (этап 4).

@@ -155,6 +155,32 @@ class WarehouseTest extends TestCase
         $this->assertEquals(950.0, (float) $material->fresh()->price);
     }
 
+    public function test_deleting_only_priced_receipt_resets_material_price(): void
+    {
+        // Фантомная цена: удалили единственный приход с ценой — цена сбрасывается,
+        // иначе расходы продолжали бы считаться по цене несуществующего прихода.
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $fin = $this->user('financist', $company);
+        $material = Material::create(['company_id' => $company->id, 'name' => 'Кромка', 'unit' => 'метр', 'quantity' => 10, 'price' => 90000]);
+        $receipt = $material->receipts()->create(['user_id' => $fin->id, 'quantity' => 10, 'price' => 90000, 'date' => now()->toDateString()]);
+
+        $this->actingAs($fin)->delete(route('warehouse.receipts.destroy', $receipt->id))->assertRedirect();
+        $this->assertEquals(0.0, (float) $material->fresh()->price);
+    }
+
+    public function test_clearing_receipt_price_resets_material_price(): void
+    {
+        $company = Company::where('code', 'BAIA')->firstOrFail();
+        $fin = $this->user('financist', $company);
+        $material = Material::create(['company_id' => $company->id, 'name' => 'Клей', 'unit' => 'штук', 'quantity' => 10, 'price' => 500]);
+        $receipt = $material->receipts()->create(['user_id' => $fin->id, 'quantity' => 10, 'price' => 500, 'date' => now()->toDateString()]);
+
+        // Очистка поля цены ('' → null через ConvertEmptyStringsToNull).
+        $this->actingAs($fin)->put(route('warehouse.receipts.update', $receipt->id), ['quantity' => 10, 'price' => ''])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertEquals(0.0, (float) $material->fresh()->price);
+    }
+
     public function test_warehouse_scoped_by_current_company(): void
     {
         $baia = Company::where('code', 'BAIA')->firstOrFail();

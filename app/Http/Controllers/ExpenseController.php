@@ -68,11 +68,16 @@ class ExpenseController extends Controller
 
             // Сумма считается автоматически: количество × закупочная цена
             // (последняя цена прихода на материале). Если цена не заведена
-            // (старые позиции) — берём сумму, введённую вручную.
+            // (старые позиции) — сумма обязательна вручную: без неё возник бы
+            // «подтверждённый» расход на 0 ₸ со списанием склада.
             if ((float) $material->price > 0) {
                 $data['amount'] = round((float) $data['qty'] * (float) $material->price, 2);
+            } elseif ((float) ($data['amount'] ?? 0) <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'У материала не заведена закупочная цена — укажите сумму расхода вручную.',
+                ]);
             }
-            $data['amount'] = (float) ($data['amount'] ?? 0);
+            $data['amount'] = (float) $data['amount'];
 
             // Внутреннее списание — подтверждение бухгалтера не требуется.
             $data['status'] = 'confirmed';
@@ -194,8 +199,18 @@ class ExpenseController extends Controller
         // Материал/количество после создания не меняются (иначе разъедется склад) —
         // удалите расход (остаток вернётся) и создайте заново.
         unset($data['material_id'], $data['qty']);
-        // Сумма материального расхода — производная (кол-во × цена), руками не правится.
+        // Сумма материального расхода — производная (кол-во × цена), руками не
+        // правится: попытка её изменить получает честную ошибку, а не молчаливый
+        // игнор с флешем «Расход обновлён».
         if ($expense->material_id && (float) ($expense->material?->price ?? 0) > 0) {
+            if (isset($data['amount']) && abs((float) $data['amount'] - (float) $expense->amount) > 0.005) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'Сумма расхода по материалам считается автоматически (количество × цена) и не редактируется — удалите расход (остаток вернётся) и создайте заново.',
+                ]);
+            }
+            unset($data['amount']);
+        } elseif (! isset($data['amount'])) {
+            // amount необязателен при material_id: null в NOT NULL колонку → 500.
             unset($data['amount']);
         }
         if ($request->hasFile('file')) {

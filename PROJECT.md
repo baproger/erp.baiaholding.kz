@@ -7,7 +7,7 @@
 - **Frontend:** Inertia.js + Vue 3 + Tailwind + Vite (Laravel Breeze)
 - **Права:** spatie/laravel-permission (RBAC)
 - **Таймзона:** Asia/Almaty (+05:00); **Локализация:** ru / kk
-- **Тесты:** PHPUnit — 133, все зелёные
+- **Тесты:** PHPUnit — 138, все зелёные
 
 ## 2. Роли и доступы
 | Роль | Что видит |

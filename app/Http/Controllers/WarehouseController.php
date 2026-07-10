@@ -159,14 +159,16 @@ class WarehouseController extends Controller
         return back()->with('success', 'Приход удалён — остаток пересчитан.');
     }
 
-    /** Цена на материале = последняя закупочная (самый свежий приход с ценой). */
+    /**
+     * Цена на материале = последняя закупочная (самый свежий приход с ценой).
+     * Если приходов с ценой не осталось (удалили/очистили) — цена сбрасывается
+     * в 0, иначе расходы продолжали бы считаться по «фантомной» цене.
+     */
     private function syncLastPurchasePrice(Material $material): void
     {
         $last = $material->receipts()->whereNotNull('price')
             ->orderByDesc('date')->orderByDesc('id')->first();
-        if ($last) {
-            $material->update(['price' => $last->price]);
-        }
+        $material->update(['price' => $last?->price ?? 0]);
     }
 
     public function destroyMaterial(Request $request, Material $material): RedirectResponse
