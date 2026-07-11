@@ -46,19 +46,30 @@ class InvoiceController extends Controller
         // Finance page is leadership-only; managers/workshop staff handle money inside deal cards.
         abort_unless($request->user()->hasAnyRole(['admin', 'director', 'financist']), 403);
 
-        $invoices = Invoice::query()
-            ->with('client:id,name')
-            ->withSum('payments as payments_sum_amount', 'amount')
-            // Финансы разделены по фирмам: счёт принадлежит компании своей сделки
-            // (счета цеховых заказов идут через сделку заказа).
+        // Финансы разделены по фирмам: счёт принадлежит компании своей сделки
+        // (счета цеховых заказов идут через сделку заказа).
+        $invBase = Invoice::query()
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where(fn ($d) => $d->where('invoiceable_type', 'deal')
                     ->whereIn('invoiceable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
                 ->orWhere(fn ($p) => $p->where('invoiceable_type', 'project')
-                    ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))))
+                    ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))));
+
+        $invoices = (clone $invBase)
+            ->with('client:id,name')
+            ->withSum('payments as payments_sum_amount', 'amount')
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where('number', 'like', "%{$s}%"))
             ->when($request->string('status')->toString(), fn ($q, $st) => $q->where('status', $st))
             ->latest()->paginate(20)->withQueryString();
+
+        // Дебиторка для финансиста: выставлено / оплачено / остаток к оплате.
+        $invoiced = (float) (clone $invBase)->sum('amount');
+        $invoicePaid = (float) \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->select('id'))->sum('amount');
+        $invoiceTotals = [
+            'invoiced' => $invoiced,
+            'paid' => $invoicePaid,
+            'debt' => max(0, $invoiced - $invoicePaid),
+        ];
 
         // ---- Раздел «Расходы»: материальные/прочие, нал/банк, статус ----
         $companyId = \App\Support\CurrentCompany::id();
@@ -103,6 +114,7 @@ class InvoiceController extends Controller
 
         return Inertia::render('Finance/Index', [
             'invoices' => $invoices,
+            'invoiceTotals' => $invoiceTotals,
             'expenses' => $expenses,
             'expenseTotals' => $expenseTotals,
             'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to'),
