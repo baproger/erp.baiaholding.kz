@@ -67,13 +67,22 @@ class InvoiceController extends Controller
                 ->where(fn ($d) => $d->where('expenseable_type', 'deal')
                     ->whereIn('expenseable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
                 ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
-                    ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))));
+                    ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))))
+            // Период применяется и к сводке, и к таблице — «сколько нал/банк
+            // за месяц» видно сразу, без ручного суммирования.
+            ->when($request->string('exp_from')->toString(), fn ($q, $d) => $q->whereDate('date', '>=', $d))
+            ->when($request->string('exp_to')->toString(), fn ($q, $d) => $q->whereDate('date', '<=', $d));
 
+        $confirmed = fn () => (clone $expBase)->where('status', 'confirmed');
         $expenseTotals = [
-            'material' => (float) (clone $expBase)->whereNotNull('material_id')->where('status', 'confirmed')->sum('amount'),
-            'other' => (float) (clone $expBase)->whereNull('material_id')->where('status', 'confirmed')->sum('amount'),
-            'cash' => (float) (clone $expBase)->where('status', 'confirmed')->where('payment_method', 'cash')->sum('amount'),
-            'bank' => (float) (clone $expBase)->where('status', 'confirmed')->where('payment_method', 'bank')->sum('amount'),
+            'all' => (float) $confirmed()->sum('amount'),
+            'all_count' => $confirmed()->count(),
+            'material' => (float) $confirmed()->whereNotNull('material_id')->sum('amount'),
+            'other' => (float) $confirmed()->whereNull('material_id')->sum('amount'),
+            // Нал/банк — разбивка ПРОЧИХ расходов: у материальных списаний
+            // способа оплаты нет, поэтому cash + bank = other, а не all.
+            'cash' => (float) $confirmed()->where('payment_method', 'cash')->sum('amount'),
+            'bank' => (float) $confirmed()->where('payment_method', 'bank')->sum('amount'),
             'pending_sum' => (float) (clone $expBase)->where('status', 'pending')->sum('amount'),
             'pending_count' => (clone $expBase)->where('status', 'pending')->count(),
         ];
@@ -96,7 +105,7 @@ class InvoiceController extends Controller
             'invoices' => $invoices,
             'expenses' => $expenses,
             'expenseTotals' => $expenseTotals,
-            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind'),
+            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to'),
             'salaries' => $salaries,
             'totals' => [
                 'budget' => $fin['budget'],

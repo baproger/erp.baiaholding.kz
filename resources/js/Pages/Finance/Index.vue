@@ -10,16 +10,29 @@ import { formatDate } from '@/utils/format';
 const props = defineProps({ invoices: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
-// Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк), статус.
+// Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
+// статус и период. Период влияет и на сводку-плитки, и на таблицу.
 const expKind = ref(props.filters?.exp_kind ?? '');
 const expMethod = ref(props.filters?.exp_method ?? '');
 const expStatus = ref(props.filters?.exp_status ?? '');
+const expFrom = ref(props.filters?.exp_from ?? '');
+const expTo = ref(props.filters?.exp_to ?? '');
 const applyExpFilters = () => router.get(route('finance.index'), {
     ...props.filters,
     exp_kind: expKind.value || undefined,
     exp_method: expMethod.value || undefined,
     exp_status: expStatus.value || undefined,
+    exp_from: expFrom.value || undefined,
+    exp_to: expTo.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
+
+// Плитки сводки работают как фильтры: клик по «Наличные» фильтрует таблицу.
+const setTile = (kind, method, status) => {
+    expKind.value = kind; expMethod.value = method; expStatus.value = status;
+    applyExpFilters();
+};
+const tileActive = (kind, method, status) =>
+    expKind.value === kind && expMethod.value === method && expStatus.value === status;
 
 // Ссылка на сделку/заказ расхода (морф: deal | project).
 const expLink = (e) => e.expenseable_type === 'project'
@@ -114,6 +127,12 @@ const expLink = (e) => e.expenseable_type === 'project'
             <div class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
                 <h3 class="text-sm font-semibold text-slate-900">Расходы</h3>
                 <div class="flex flex-wrap items-center gap-2 text-sm">
+                    <label class="flex items-center gap-1 text-xs text-slate-400">с
+                        <input v-model="expFrom" @change="applyExpFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                    </label>
+                    <label class="flex items-center gap-1 text-xs text-slate-400">по
+                        <input v-model="expTo" @change="applyExpFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                    </label>
                     <select v-model="expKind" @change="applyExpFilters" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                         <option value="">Все виды</option>
                         <option value="material">Материальные (склад)</option>
@@ -132,13 +151,45 @@ const expLink = (e) => e.expenseable_type === 'project'
                 </div>
             </div>
 
-            <!-- Сводка по расходам -->
-            <div class="grid grid-cols-2 gap-3 px-6 py-4 lg:grid-cols-5">
-                <div class="rounded-xl bg-indigo-50 p-3"><div class="text-[11px] font-medium text-indigo-700">Материальные (склад)</div><div class="mt-0.5 text-base font-bold tabular-nums text-indigo-700">{{ money(expenseTotals.material) }}</div></div>
-                <div class="rounded-xl bg-slate-100 p-3"><div class="text-[11px] font-medium text-slate-600">Прочие</div><div class="mt-0.5 text-base font-bold tabular-nums text-slate-700">{{ money(expenseTotals.other) }}</div></div>
-                <div class="rounded-xl bg-emerald-50 p-3"><div class="text-[11px] font-medium text-emerald-700">Наличными</div><div class="mt-0.5 text-base font-bold tabular-nums text-emerald-700">{{ money(expenseTotals.cash) }}</div></div>
-                <div class="rounded-xl bg-emerald-50 p-3"><div class="text-[11px] font-medium text-emerald-700">Банк (счёт)</div><div class="mt-0.5 text-base font-bold tabular-nums text-emerald-700">{{ money(expenseTotals.bank) }}</div></div>
-                <div class="rounded-xl bg-amber-50 p-3"><div class="text-[11px] font-medium text-amber-700">Ждёт бухгалтера ({{ expenseTotals.pending_count }})</div><div class="mt-0.5 text-base font-bold tabular-nums text-amber-700">{{ money(expenseTotals.pending_sum) }}</div></div>
+            <!-- Сводка по расходам: плитки-фильтры (клик фильтрует таблицу).
+                 Нал + банк = прочие: у материальных списаний способа оплаты нет. -->
+            <div class="grid grid-cols-2 gap-3 px-6 py-4 lg:grid-cols-6">
+                <button type="button" @click="setTile('', '', '')"
+                    class="rounded-xl bg-slate-900 p-3 text-left transition hover:opacity-90"
+                    :class="tileActive('', '', '') ? 'ring-2 ring-slate-900 ring-offset-2' : ''">
+                    <div class="text-[11px] font-medium text-slate-300">Все расходы ({{ expenseTotals.all_count }})</div>
+                    <div class="mt-0.5 text-base font-bold tabular-nums text-white">{{ money(expenseTotals.all) }}</div>
+                </button>
+                <button type="button" @click="setTile('material', '', 'confirmed')"
+                    class="rounded-xl bg-indigo-50 p-3 text-left transition hover:bg-indigo-100"
+                    :class="tileActive('material', '', 'confirmed') ? 'ring-2 ring-indigo-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-indigo-700">Материальные (склад)</div>
+                    <div class="mt-0.5 text-base font-bold tabular-nums text-indigo-700">{{ money(expenseTotals.material) }}</div>
+                </button>
+                <button type="button" @click="setTile('other', '', 'confirmed')"
+                    class="rounded-xl bg-slate-100 p-3 text-left transition hover:bg-slate-200"
+                    :class="tileActive('other', '', 'confirmed') ? 'ring-2 ring-slate-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-slate-600">Прочие</div>
+                    <div class="mt-0.5 text-base font-bold tabular-nums text-slate-700">{{ money(expenseTotals.other) }}</div>
+                </button>
+                <button type="button" @click="setTile('', 'cash', 'confirmed')"
+                    class="rounded-xl bg-emerald-50 p-3 text-left transition hover:bg-emerald-100"
+                    :class="tileActive('', 'cash', 'confirmed') ? 'ring-2 ring-emerald-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-emerald-700">Наличными <span class="text-emerald-400">· из прочих</span></div>
+                    <div class="mt-0.5 text-base font-bold tabular-nums text-emerald-700">{{ money(expenseTotals.cash) }}</div>
+                </button>
+                <button type="button" @click="setTile('', 'bank', 'confirmed')"
+                    class="rounded-xl bg-sky-50 p-3 text-left transition hover:bg-sky-100"
+                    :class="tileActive('', 'bank', 'confirmed') ? 'ring-2 ring-sky-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-sky-700">Банк (счёт) <span class="text-sky-400">· из прочих</span></div>
+                    <div class="mt-0.5 text-base font-bold tabular-nums text-sky-700">{{ money(expenseTotals.bank) }}</div>
+                </button>
+                <button type="button" @click="setTile('', '', 'pending')"
+                    class="rounded-xl bg-amber-50 p-3 text-left transition hover:bg-amber-100"
+                    :class="tileActive('', '', 'pending') ? 'ring-2 ring-amber-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-amber-700">Ждёт бухгалтера ({{ expenseTotals.pending_count }})</div>
+                    <div class="mt-0.5 text-base font-bold tabular-nums text-amber-700">{{ money(expenseTotals.pending_sum) }}</div>
+                </button>
             </div>
 
             <table class="min-w-full divide-y divide-slate-100 text-sm">
