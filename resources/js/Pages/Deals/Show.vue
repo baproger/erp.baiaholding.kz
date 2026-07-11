@@ -185,6 +185,10 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                             <div class="mt-1 text-[15px] font-semibold text-slate-900">{{ deal.company_name || '—' }}</div>
                         </div>
                         <div>
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Адрес</div>
+                            <div class="mt-1 text-[15px] font-medium text-slate-900">📍 {{ deal.address || '—' }}</div>
+                        </div>
+                        <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Номер договора</div>
                             <div class="mt-1 text-[15px] font-medium text-slate-900">{{ deal.bin || '—' }}</div>
                         </div>

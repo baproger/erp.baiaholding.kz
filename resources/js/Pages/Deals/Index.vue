@@ -162,23 +162,29 @@ const applyBinMatch = () => {
                     <div v-for="deal in byStage(stage.id)" :key="deal.id" draggable="true" @dragstart="draggingId = deal.id"
                         class="cursor-move rounded-lg bg-white p-2.5 border border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200">
                         <Link :href="route('deals.show', deal.id)" class="block">
-                            <div class="flex items-start justify-between">
-                                <div class="min-w-0">
-                                    <div class="truncate text-sm font-bold text-slate-900">{{ deal.company_name || deal.name }}</div>
-                                    <div class="text-base font-bold leading-tight text-indigo-600">{{ money(deal.budget) }}</div>
-                                </div>
-                                <span v-if="deal.overdue_count" class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
-                                <span v-else-if="deal.tasks_count" class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">{{ deal.tasks_count }}</span>
+                            <!-- Кто и сколько -->
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="truncate text-sm font-bold text-slate-900">{{ deal.company_name || deal.name }}</div>
+                                <span v-if="deal.overdue_count" class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
+                                <span v-else class="shrink-0 text-[10px] text-slate-300">{{ deal.number }}</span>
                             </div>
-                            <div class="mt-1.5 flex items-center gap-1.5">
-                                <span class="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-indigo-500 text-[10px] font-bold text-white">
-                                    <img v-if="deal.responsible?.avatar" :src="deal.responsible.avatar" class="h-full w-full object-cover" />
-                                    <template v-else>{{ deal.responsible?.name?.charAt(0) ?? '—' }}</template>
+                            <div class="text-base font-bold leading-tight text-indigo-600">{{ money(deal.budget) }}</div>
+                            <!-- Куда и что -->
+                            <div class="mt-1.5 space-y-0.5 text-[11px] leading-4 text-slate-500">
+                                <div v-if="deal.address" class="truncate">📍 {{ deal.address }}</div>
+                                <div class="truncate">📦 {{ deal.client_name || '—' }}<template v-if="deal.lot_number"> · {{ deal.lot_number }} {{ deal.unit || '' }}</template></div>
+                            </div>
+                            <!-- Когда и кто ведёт -->
+                            <div class="mt-1.5 flex items-center justify-between gap-2">
+                                <span class="flex min-w-0 items-center gap-1.5">
+                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-500 text-[10px] font-bold text-white">
+                                        <img v-if="deal.responsible?.avatar" :src="deal.responsible.avatar" class="h-full w-full object-cover" />
+                                        <template v-else>{{ deal.responsible?.name?.charAt(0) ?? '—' }}</template>
+                                    </span>
+                                    <span class="truncate text-[11px] text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
                                 </span>
-                                <span class="truncate text-xs text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
+                                <span v-if="deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</span>
                             </div>
-                            <div v-if="deal.deadline" class="mt-1 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</div>
-                            <div class="mt-0.5 truncate text-[11px] text-slate-400">📦 {{ deal.client_name || '—' }}<template v-if="deal.lot_number"> · {{ deal.lot_number }} {{ deal.unit || '' }}</template> <span class="text-slate-300">· {{ deal.number }}</span></div>
                         </Link>
                         <div class="mt-2 flex items-center justify-between border-t pt-1.5">
                             <Link :href="route('deals.show', deal.id)" class="text-[11px] text-slate-400 hover:text-indigo-600">+ Дело</Link>
