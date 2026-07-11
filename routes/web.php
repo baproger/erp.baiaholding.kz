@@ -31,49 +31,7 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::get('/dashboard', function (\Illuminate\Http\Request $request) {
-    $u = $request->user();
-    // Dashboard is leadership-only; managers/employees are sent to their working area.
-    if (! $u->hasAnyRole(['admin', 'director', 'financist'])) {
-        return redirect()->route($u->hasRole('manager') ? 'deals.index' : 'projects.index');
-    }
-    $taxRate = ((float) \App\Models\Setting::get('tax_percent', 3)) / 100;
-
-    // Canonical company figures (shared with Analytics & Finance via PayrollService).
-    $fin = app(\App\Services\PayrollService::class)->companyTotals();
-
-    $today = now()->startOfDay();
-    $overdueCount = \App\Models\Deal::forCurrentCompany()->whereNotNull('deadline')->whereDate('deadline', '<', $today)
-        ->whereNotIn('status', ['closed', 'cancelled'])
-        ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true))->count();
-
-    $recent = \App\Models\Deal::forCurrentCompany()->with('stage:id,name,color,is_won')
-        ->where('status', '!=', 'cancelled')
-        ->latest()->limit(8)
-        ->get(['id', 'number', 'company_name', 'bin', 'client_name', 'budget', 'deadline', 'deal_stage_id', 'status'])
-        ->map(function ($d) use ($taxRate, $today) {
-            $overdueDays = ($d->deadline && $d->deadline->startOfDay() < $today && ! optional($d->stage)->is_won && ! in_array($d->status, ['closed', 'cancelled']))
-                ? (int) $d->deadline->startOfDay()->diffInDays($today) : 0;
-
-            return [
-                'id' => $d->id, 'number' => $d->number, 'company' => $d->company_name, 'bin' => $d->bin,
-                'budget' => (float) $d->budget, 'net' => round((float) $d->budget * (1 - $taxRate), 2),
-                'deadline' => optional($d->deadline)->toDateString(), 'overdue_days' => $overdueDays,
-                'stage' => optional($d->stage)->name, 'color' => optional($d->stage)->color,
-            ];
-        })->sortByDesc('overdue_days')->values();
-
-    return Inertia::render('Dashboard', [
-        'metrics' => [
-            'total' => $fin['budget'],
-            'net' => $fin['company'],
-            'bonus' => $fin['bonus'],
-            'overdue' => $overdueCount,
-            'taxRate' => $taxRate * 100,
-        ],
-        'recent' => $recent,
-    ]);
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     // Single profile page (role-aware card). `update`/`destroy` back the Breeze
