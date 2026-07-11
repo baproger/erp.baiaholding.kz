@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -15,28 +15,33 @@ const onScroll = () => { scrollY.value = window.scrollY || document.documentElem
 onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }));
 onUnmounted(() => window.removeEventListener('scroll', onScroll));
 
-// Count-up animation for the stat numbers.
-function useCountUp(target) {
+// Count-up animation for the stat numbers. Принимает getter и следит за ним:
+// при смене компании (BAIA/ASU/Все) Inertia обновляет props без пересоздания
+// компонента — цифры должны переанимироваться на новые значения.
+function useCountUp(getter) {
     const val = ref(0);
-    onMounted(() => {
-        const to = Number(target) || 0;
+    const animate = (to) => {
+        to = Number(to) || 0;
+        const fromVal = val.value;
         const dur = 900;
         const start = performance.now();
         const step = (now) => {
             const p = Math.min(1, (now - start) / dur);
-            val.value = to * (1 - Math.pow(1 - p, 3));
+            val.value = fromVal + (to - fromVal) * (1 - Math.pow(1 - p, 3));
             if (p < 1) requestAnimationFrame(step);
             else val.value = to;
         };
         requestAnimationFrame(step);
-    });
+    };
+    watch(getter, animate);
+    onMounted(() => animate(getter()));
     return val;
 }
 
-const cTotal = useCountUp(props.metrics.total);
-const cNet = useCountUp(props.metrics.net);
-const cExpense = useCountUp(props.metrics.expense);
-const cDebt = useCountUp(props.metrics.debt);
+const cTotal = useCountUp(() => props.metrics.total);
+const cNet = useCountUp(() => props.metrics.net);
+const cExpense = useCountUp(() => props.metrics.expense);
+const cDebt = useCountUp(() => props.metrics.debt);
 
 // Поиск по сделкам + период (менеджеры и факт за период) — серверные фильтры.
 const search = ref(props.filters?.search ?? '');
