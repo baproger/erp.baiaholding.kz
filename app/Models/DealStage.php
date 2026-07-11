@@ -10,8 +10,26 @@ class DealStage extends Model
 {
     use HasFactory;
 
+    /**
+     * Системные типы этапов: логика (гейты, права, won, возврат из цеха)
+     * держится на stage_type, а НЕ на названии — этапы можно свободно
+     * переименовывать. Типы с логикой: shop_gate (кнопка «В цех»), logistics
+     * (возврат из цеха), act / esf (ведёт бухгалтер), payment_won (won).
+     */
+    public const STAGE_TYPES = [
+        'contract' => 'Заключение договора',
+        'design' => 'Дизайн и расчёт',
+        'shop_gate' => 'Закуп / отправка в цех',
+        'logistics' => 'Логистика (возврат из цеха)',
+        'assembly' => 'Сборка',
+        'act' => 'Акт утверждения (бухгалтер)',
+        'esf' => 'ЭСФ (бухгалтер)',
+        'payment_won' => 'Оплата успешно (won)',
+    ];
+
     protected $fillable = [
-        'company_id', 'name', 'order', 'color', 'checklist', 'type', 'is_won', 'is_active',
+        'company_id', 'name', 'order', 'color', 'checklist', 'type', 'stage_type',
+        'gate_task_title', 'gate_task_role', 'gate_task_days', 'is_won', 'is_active',
     ];
 
     protected $casts = [
@@ -28,8 +46,8 @@ class DealStage extends Model
     /**
      * У каждой компании (BAIA/ASU) СВОЯ воронка: этапы с company_id видны
      * только своей фирме; этапы без company_id — общие (легаси/тесты).
-     * Спец-этапы ищутся ПО НАЗВАНИЮ (не по позиции): пользователь может
-     * перемещать/добавлять этапы в настройках, порядок не гарантирован.
+     * Спец-этапы ищутся ПО ТИПУ (stage_type), не по названию и не по позиции:
+     * этапы можно переименовывать и перемещать без поломки логики.
      */
 
     /** Активная воронка компании (+ общие этапы без компании). */
@@ -40,42 +58,49 @@ class DealStage extends Model
             ->orderBy('order')->get();
     }
 
+    /** Этап воронки по системному типу. */
+    public static function ofType(string $type, ?int $companyId = null): ?self
+    {
+        return self::funnel($companyId)->firstWhere('stage_type', $type);
+    }
+
     /** «Акт утверждение» — с него сделку ведёт бухгалтер. */
     public static function actStage(?int $companyId = null): ?self
     {
-        $active = self::funnel($companyId);
-
-        return $active->first(fn ($s) => mb_stripos($s->name, 'акт') !== false)
-            ?? $active->slice(-2, 1)->first();
+        return self::ofType('act', $companyId) ?? self::funnel($companyId)->slice(-2, 1)->first();
     }
 
-    /** «ЭСФ» — после акта, галочка со сроком 30 дней. Может отсутствовать. */
+    /** «ЭСФ» — после акта. Может отсутствовать в воронке. */
     public static function esfStage(?int $companyId = null): ?self
     {
-        return self::funnel($companyId)->first(fn ($s) => mb_stripos($s->name, 'эсф') !== false);
+        return self::ofType('esf', $companyId);
     }
 
-    /** «Оплата успешно» — is_won. */
+    /** «Оплата успешно» — payment_won (is_won синхронизирован с типом). */
     public static function wonStage(?int $companyId = null): ?self
     {
         $active = self::funnel($companyId);
 
-        return $active->firstWhere('is_won', true) ?? $active->last();
+        return $active->firstWhere('stage_type', 'payment_won')
+            ?? $active->firstWhere('is_won', true) ?? $active->last();
     }
 
     /** «Логистика» — сюда цех возвращает сделку после производства. */
     public static function logisticsStage(?int $companyId = null): ?self
     {
-        return self::funnel($companyId)->first(fn ($s) => mb_stripos($s->name, 'логист') !== false);
+        return self::ofType('logistics', $companyId);
     }
 
-    /** «Закуп ЛДСП,МДФ» — на этом этапе доступна кнопка «В цех». */
+    /** Этап-ворота в цех — на нём доступна кнопка «В цех». */
     public static function workshopGateStage(?int $companyId = null): ?self
     {
-        $active = self::funnel($companyId);
+        return self::ofType('shop_gate', $companyId) ?? self::funnel($companyId)->slice(-3, 1)->first();
+    }
 
-        return $active->first(fn ($s) => mb_stripos($s->name, 'закуп') !== false)
-            ?? $active->slice(-3, 1)->first();
+    /** Настроен ли на этапе гейт (задача на входе, блокирующая выход). */
+    public function hasGate(): bool
+    {
+        return ! empty($this->gate_task_title) && (int) $this->gate_task_days > 0;
     }
 
     public function translations(): HasMany

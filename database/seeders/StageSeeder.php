@@ -16,13 +16,13 @@ class StageSeeder extends Seeder
             ['name' => 'Предложение',  'kk' => 'Ұсыныс',      'color' => '#F59E0B', 'is_won' => false],
             ['name' => 'Переговоры',   'kk' => 'Келіссөздер', 'color' => '#8B5CF6', 'is_won' => false],
             ['name' => 'Договор',      'kk' => 'Шарт',        'color' => '#EC4899', 'is_won' => false],
-            ['name' => 'Оплачено',     'kk' => 'Төленді',     'color' => '#10B981', 'is_won' => true],
+            ['name' => 'Оплачено',     'kk' => 'Төленді',     'color' => '#10B981', 'is_won' => true, 'stage_type' => 'payment_won'],
         ];
 
         foreach ($dealStages as $i => $s) {
             $stage = DealStage::updateOrCreate(
                 ['name' => $s['name'], 'type' => 'sale'],
-                ['order' => $i + 1, 'color' => $s['color'], 'is_won' => $s['is_won'], 'is_active' => true, 'checklist' => []]
+                ['order' => $i + 1, 'color' => $s['color'], 'is_won' => $s['is_won'], 'is_active' => true, 'checklist' => [], 'stage_type' => $s['stage_type'] ?? null]
             );
             $stage->translations()->updateOrCreate(['locale' => 'ru'], ['name' => $s['name']]);
             $stage->translations()->updateOrCreate(['locale' => 'kk'], ['name' => $s['kk']]);

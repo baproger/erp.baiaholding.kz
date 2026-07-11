@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
+use App\Models\Deal;
 use App\Models\DealStage;
+use App\Models\Project;
 use App\Models\ProjectStage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -10,6 +13,11 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * Настройки → Этапы: управление воронками компаний (BAIA/ASU) и общей
+ * воронкой цеха. Спец-логика этапов держится на stage_type (не на названии);
+ * гейт-задачи (текст/роль/срок) настраиваются на этапе.
+ */
 class StageController extends Controller
 {
     private function guard(Request $request): void
@@ -22,20 +30,38 @@ class StageController extends Controller
         return $kind === 'project' ? ProjectStage::class : DealStage::class;
     }
 
+    /** Воронка выбирается на странице: company=<id> (сделки) — не зависит от шапки. */
+    private function funnelCompanyId(Request $request): ?int
+    {
+        $id = (int) $request->query('company', 0);
+        if ($id && Company::whereKey($id)->exists()) {
+            return $id;
+        }
+
+        return \App\Support\CurrentCompany::id() ?: (int) Company::orderBy('id')->value('id');
+    }
+
     public function index(Request $request): Response
     {
         $this->guard($request);
 
-        // Воронка сделок редактируется ДЛЯ ТЕКУЩЕЙ КОМПАНИИ (переключатель в
-        // шапке); этапы цеха общие. Общие (без company_id) этапы тоже показываем.
-        $companyId = \App\Support\CurrentCompany::id() ?: null;
+        $companyId = $this->funnelCompanyId($request);
+        $dealStages = DealStage::query()
+            ->withCount(['deals as active_deals_count' => fn ($q) => $q->whereNotIn('status', ['closed', 'cancelled'])])
+            ->where(fn ($w) => $w->where('company_id', $companyId)->orWhereNull('company_id'))
+            ->orderBy('order')->get();
 
         return Inertia::render('Settings/Stages', [
-            'dealStages' => DealStage::query()
-                ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
-                ->orderBy('order')->get(),
-            'projectStages' => ProjectStage::orderBy('order')->get(),
-            'currentCompanyName' => $companyId ? \App\Models\Company::find($companyId)?->name : 'Все компании',
+            'dealStages' => $dealStages,
+            'projectStages' => ProjectStage::withCount('projects')->orderBy('order')->get(),
+            'companies' => Company::orderBy('id')->get(['id', 'name']),
+            'selectedCompanyId' => $companyId,
+            'stageTypes' => DealStage::STAGE_TYPES,
+            'gateRoles' => ['financist' => 'Бухгалтер', 'manager' => 'Менеджер', 'director' => 'Директор', 'admin' => 'Админ'],
+            // Обязательные типы: без payment_won не работает подсчёт денег/won.
+            'missingTypes' => collect(['payment_won' => 'Оплата успешно (won)', 'shop_gate' => 'Закуп / отправка в цех', 'logistics' => 'Логистика (возврат из цеха)'])
+                ->reject(fn ($label, $type) => $dealStages->contains('stage_type', $type))
+                ->all(),
         ]);
     }
 
@@ -45,8 +71,8 @@ class StageController extends Controller
         $data = $this->validated($request);
         $model = $this->model($data['kind']);
 
-        // Новый этап сделок попадает в воронку текущей компании.
-        $companyId = $data['kind'] === 'deal' ? (\App\Support\CurrentCompany::id() ?: null) : null;
+        // Новый этап сделок попадает в воронку, выбранную на странице.
+        $companyId = $data['kind'] === 'deal' ? $this->funnelCompanyId($request) : null;
 
         $max = $model::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
@@ -69,11 +95,35 @@ class StageController extends Controller
         $this->guard($request);
         $data = $this->validated($request, false);
         $stage = $this->model($kind)::findOrFail($id);
-        $stage->update(array_filter([
+
+        $updates = array_filter([
             'name' => $data['name'] ?? null,
             'color' => $data['color'] ?? null,
             'order' => $data['order'] ?? null,
-        ], fn ($v) => $v !== null));
+        ], fn ($v) => $v !== null);
+
+        // Тип и гейт — только у этапов сделок.
+        if ($kind !== 'project' && $request->hasAny(['stage_type', 'gate_task_title', 'gate_task_role', 'gate_task_days'])) {
+            if ($request->has('stage_type')) {
+                $type = $data['stage_type'] ?? null;
+                // Один спец-тип на воронку: два «Акта» сломали бы логику.
+                if ($type && DealStage::where('stage_type', $type)->where('company_id', $stage->company_id)->where('id', '!=', $stage->id)->exists()) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'stage_type' => 'Тип «'.(DealStage::STAGE_TYPES[$type] ?? $type).'» уже назначен другому этапу этой воронки.',
+                    ]);
+                }
+                $updates['stage_type'] = $type;
+                // won-логика (деньги, ЗП, аналитика) читает is_won — синхронизируем.
+                $updates['is_won'] = $type === 'payment_won';
+            }
+            foreach (['gate_task_title', 'gate_task_role', 'gate_task_days'] as $f) {
+                if ($request->has($f)) {
+                    $updates[$f] = $data[$f] ?? null;
+                }
+            }
+        }
+
+        $stage->update($updates);
 
         if (! empty($data['name'])) {
             // Keep the current-locale translation in sync so the rename shows on cards.
@@ -111,11 +161,36 @@ class StageController extends Controller
         return back()->with('success', 'Этап перемещён.');
     }
 
+    /**
+     * Удаление этапа. Если на этапе есть активные сделки (или заказы цеха) —
+     * требуется transfer_to: они переносятся на указанный этап той же воронки.
+     */
     public function destroy(Request $request, string $kind, int $id): RedirectResponse
     {
         $this->guard($request);
         $model = $this->model($kind);
         $stage = $model::findOrFail($id);
+        $transferTo = (int) $request->input('transfer_to', 0);
+
+        $occupants = $kind === 'project'
+            ? Project::where('project_stage_id', $stage->id)
+            : Deal::where('deal_stage_id', $stage->id)->whereNotIn('status', ['closed', 'cancelled']);
+
+        if (($count = (clone $occupants)->count()) > 0) {
+            if (! $transferTo) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'transfer_to' => "На этапе «{$stage->name}» — {$count} ".($kind === 'project' ? 'заказ(ов)' : 'сделок(ки)').'. Выберите этап, куда их перенести.',
+                ]);
+            }
+            $target = $model::findOrFail($transferTo);
+            if ($target->id === $stage->id || ($kind === 'deal' && $target->company_id !== $stage->company_id)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'transfer_to' => 'Этап переноса должен быть другим этапом той же воронки.',
+                ]);
+            }
+            $occupants->update($kind === 'project' ? ['project_stage_id' => $target->id] : ['deal_stage_id' => $target->id]);
+        }
+
         $stage->delete();
 
         // Re-index remaining stages (внутри воронки своей компании) — 1..N без пробелов.
@@ -123,7 +198,7 @@ class StageController extends Controller
             ->when($kind === 'deal', fn ($q) => $q->where('company_id', $stage->company_id))
             ->orderBy('order')->orderBy('id')->get()->each(fn ($s, $i) => $s->update(['order' => $i + 1]));
 
-        return back()->with('success', 'Этап удалён.');
+        return back()->with('success', 'Этап удалён'.($transferTo ? ' — записи перенесены.' : '.'));
     }
 
     /**
@@ -136,6 +211,10 @@ class StageController extends Controller
             'name' => [$requireKind ? 'required' : 'nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:20'],
             'order' => ['nullable', 'integer'],
+            'stage_type' => ['nullable', Rule::in(array_keys(DealStage::STAGE_TYPES))],
+            'gate_task_title' => ['nullable', 'string', 'max:255'],
+            'gate_task_role' => ['nullable', Rule::in(['financist', 'manager', 'director', 'admin'])],
+            'gate_task_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ]);
     }
 }

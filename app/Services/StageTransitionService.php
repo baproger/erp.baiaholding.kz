@@ -39,23 +39,16 @@ class StageTransitionService
             // Этап перед «Оплата успешно»: ЭСФ, если он есть, иначе Акт.
             $preWon = $esfStage ?? $actStage;
 
-            // Галочка бухгалтера: с «Акта» дальше — только когда закрыта задача
-            // «Выставить акт…» (3 дня), с «ЭСФ» — «Выставить ЭСФ…» (30 дней).
-            // Прочие открытые задачи сделку не держат. Для остальных этапов
-            // работает общий checklist-гейт (все задачи должны быть закрыты).
+            // Гейт этапа настраивается в админке (Настройки → Этапы): пока
+            // гейт-задача не закрыта, сделка дальше не идёт. Прочие открытые
+            // задачи сделку не держат. Для этапов без гейта работает общий
+            // checklist-гейт (все задачи должны быть закрыты).
             if ($isForward && $current) {
-                $stageTaskPrefix = null;
-                if ($actStage && $current->id === $actStage->id) {
-                    $stageTaskPrefix = 'Выставить акт';
-                } elseif ($esfStage && $current->id === $esfStage->id) {
-                    $stageTaskPrefix = 'Выставить ЭСФ';
-                }
-
-                if ($stageTaskPrefix) {
-                    $open = $deal->tasks()->where('title', 'like', $stageTaskPrefix.'%')->where('status', '!=', 'done')->count();
+                if ($current->hasGate()) {
+                    $open = $deal->tasks()->where('title', 'like', $current->gate_task_title.'%')->where('status', '!=', 'done')->count();
                     if ($open > 0) {
                         throw ValidationException::withMessages([
-                            'stage' => "Сначала закройте задачу «{$stageTaskPrefix}…» — галочка бухгалтера на этапе «{$current->name}».",
+                            'stage' => "Сначала закройте задачу «{$current->gate_task_title}…» — гейт этапа «{$current->name}».",
                         ]);
                     }
                 } elseif (! empty($current->checklist)) {
@@ -110,13 +103,10 @@ class StageTransitionService
 
             $deal->save();
 
-            // На «Акт утверждение» — задача бухгалтеру, галочка со сроком 3 дня.
-            if ($actStage && $target->id === $actStage->id) {
-                $this->createFinancistTask($deal, 'Выставить акт по сделке '.$deal->number, 3);
-            }
-            // На «ЭСФ» — задача бухгалтеру, галочка со сроком 30 дней.
-            if ($esfStage && $target->id === $esfStage->id) {
-                $this->createFinancistTask($deal, 'Выставить ЭСФ по сделке '.$deal->number, 30);
+            // Вход на этап с настроенным гейтом → задача исполнителям
+            // выбранной роли (текст/роль/срок задаются в Настройки → Этапы).
+            if ($target->hasGate()) {
+                $this->createGateTask($deal, $target);
             }
 
             if ($deal->responsible_user_id) {
@@ -128,29 +118,30 @@ class StageTransitionService
     }
 
     /**
-     * Задача-уведомление финансисту (бухгалтеру) со сроком: «Акт» — 3 дня,
-     * «ЭСФ» — 30 дней. Пока задача не закрыта галочкой, сделка не двигается
-     * дальше (checklist-гейт этапа); при просрочке tasks:notify-overdue
-     * уведомит исполнителя-финансиста.
+     * Гейт-задача этапа: настраивается в админке (текст, роль исполнителя,
+     * срок в днях). Ставится КАЖДОМУ активному сотруднику роли; пока хотя бы
+     * одна не закрыта — сделка не двигается дальше (см. moveToStage); при
+     * просрочке tasks:notify-overdue уведомит исполнителя.
      */
-    public function createFinancistTask(Deal $deal, string $title, int $days): void
+    public function createGateTask(Deal $deal, DealStage $stage): void
     {
+        $title = $stage->gate_task_title.' по сделке '.$deal->number;
         if ($deal->tasks()->where('title', $title)->where('status', '!=', 'done')->exists()) {
             return; // задача уже висит — не дублируем
         }
 
-        $financists = User::where('is_active', true)->role('financist')->get();
-        foreach ($financists as $fin) {
+        $assignees = User::where('is_active', true)->role($stage->gate_task_role ?: 'financist')->get();
+        foreach ($assignees as $assignee) {
             $task = $deal->tasks()->create([
                 'title' => $title,
                 'status' => 'new',
                 'priority' => 'high',
-                'assignee_id' => $fin->id,
-                'creator_id' => $deal->responsible_user_id ?? $fin->id,
+                'assignee_id' => $assignee->id,
+                'creator_id' => $deal->responsible_user_id ?? $assignee->id,
                 'start_date' => now(),
-                'due_date' => now()->addDays($days),
+                'due_date' => now()->addDays((int) $stage->gate_task_days),
             ]);
-            $fin->notify(new \App\Notifications\TaskAssigned($task));
+            $assignee->notify(new \App\Notifications\TaskAssigned($task));
         }
     }
 }

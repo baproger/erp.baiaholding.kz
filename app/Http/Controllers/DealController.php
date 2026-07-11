@@ -132,13 +132,13 @@ class DealController extends Controller
         $dealBonusRate = \App\Services\PayrollService::bonusRateForMargin($dealMarginPct);
         $dealBonus = \App\Services\PayrollService::marginBonus($dealBudget, $dealRemainder, $dealTax);
 
-        // Галочка бухгалтера для текущего этапа (Акт/ЭСФ): показана на карточке.
-        $stageTaskPrefix = self::stageTaskPrefix($deal);
+        // Галочка-гейт текущего этапа (настраивается в Настройки → Этапы).
+        $gateStage = self::gateStage($deal);
         $stageTask = null;
-        if ($stageTaskPrefix) {
-            $openTask = $deal->tasks()->where('title', 'like', $stageTaskPrefix.'%')->where('status', '!=', 'done')->orderBy('due_date')->first();
+        if ($gateStage) {
+            $openTask = $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')->orderBy('due_date')->first();
             $stageTask = [
-                'label' => $stageTaskPrefix === 'Выставить акт' ? 'Акт выставлен' : 'ЭСФ выставлен',
+                'label' => $gateStage->gate_task_title.' — выполнено',
                 'done' => $openTask === null,
                 'due' => optional($openTask?->due_date)->toDateTimeString(),
             ];
@@ -185,19 +185,18 @@ class DealController extends Controller
     }
 
     /**
-     * Галочка бухгалтера на этапах «Акт утверждение» / «ЭСФ»: закрывает
-     * задачу «Выставить акт…» / «Выставить ЭСФ…», после чего сделку можно
-     * двигать дальше. Только financist / admin.
+     * Галочка-гейт текущего этапа: закрывает гейт-задачу («Выставить акт…»
+     * и т.п.), после чего сделку можно двигать дальше. Только financist / admin.
      */
     public function completeStageTask(Request $request, Deal $deal): RedirectResponse
     {
         $this->authorize('update', $deal);
         abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Галочку ставит только бухгалтер или админ.');
 
-        $prefix = self::stageTaskPrefix($deal);
-        abort_unless($prefix !== null, 404);
+        $gateStage = self::gateStage($deal);
+        abort_unless($gateStage !== null, 404);
 
-        $deal->tasks()->where('title', 'like', $prefix.'%')->where('status', '!=', 'done')
+        $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')
             ->get()->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
 
         return back()->with('success', 'Галочка поставлена — сделку можно переводить дальше.');
@@ -227,18 +226,12 @@ class DealController extends Controller
         );
     }
 
-    /** Префикс задачи-галочки для текущего этапа сделки (или null). */
-    private static function stageTaskPrefix(Deal $deal): ?string
+    /** Текущий этап сделки, если на нём настроен гейт (или null). */
+    private static function gateStage(Deal $deal): ?DealStage
     {
-        $companyId = $deal->company_id ? (int) $deal->company_id : null;
-        if ($deal->deal_stage_id === DealStage::actStage($companyId)?->id) {
-            return 'Выставить акт';
-        }
-        if ($deal->deal_stage_id === DealStage::esfStage($companyId)?->id) {
-            return 'Выставить ЭСФ';
-        }
+        $stage = $deal->stage ?? DealStage::find($deal->deal_stage_id);
 
-        return null;
+        return $stage && $stage->hasGate() ? $stage : null;
     }
 
     public function updateStage(Request $request, Deal $deal, StageTransitionService $transitions): RedirectResponse
