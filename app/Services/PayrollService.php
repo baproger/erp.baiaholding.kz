@@ -99,9 +99,9 @@ class PayrollService
         $wonStageIds = $stages->where('is_won', true)->pluck('id');
         $stageNames = $stages->pluck('name', 'id');
 
-        // «На подходе» = сделки на Акте и ЭСФ (по имени, не по позиции — этапы
-        // перемещаются в настройках, и у каждой компании своя воронка).
-        $pendingIds = $stages->filter(fn ($s) => mb_stripos($s->name, 'акт') !== false || mb_stripos($s->name, 'эсф') !== false)->pluck('id');
+        // «На подходе» = сделки на Акте и ЭСФ (по stage_type, не по имени/позиции —
+        // этапы переименовываются и перемещаются в настройках).
+        $pendingIds = $stages->whereIn('stage_type', ['act', 'esf'])->pluck('id');
         if ($pendingIds->isEmpty() && ($fallback = $stages->slice(-2, 1)->first())) {
             $pendingIds = collect([$fallback->id]);
         }

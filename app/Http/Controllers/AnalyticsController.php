@@ -20,14 +20,20 @@ class AnalyticsController extends Controller
 
         $wonIds = Deal::won()->forCurrentCompany()->pluck('id');
 
-        // Deals by stage (funnel).
-        $stages = DealStage::with('translations')->where('is_active', true)->orderBy('order')->get();
+        // Deals by stage (funnel) — этапы ТЕКУЩЕЙ компании (иначе одинаковые
+        // названия воронок BAIA и ASU выглядят как дубли); в режиме «Все
+        // компании» показываем обе воронки с пометкой фирмы.
+        $companyId = \App\Support\CurrentCompany::id() ?: null;
+        $stages = DealStage::with('translations')->where('is_active', true)
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+            ->orderBy('order')->get();
+        $companyNames = \App\Models\Company::pluck('name', 'id');
         $dealsByStage = Deal::query()->forCurrentCompany()
             ->selectRaw('deal_stage_id, count(*) as cnt, coalesce(sum(budget),0) as total')
             ->groupBy('deal_stage_id')->get()->keyBy('deal_stage_id');
 
         $funnel = $stages->map(fn ($s) => [
-            'name' => $s->translatedName(),
+            'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : ''),
             'color' => $s->color,
             'count' => (int) ($dealsByStage[$s->id]->cnt ?? 0),
             'total' => (float) ($dealsByStage[$s->id]->total ?? 0),
@@ -91,9 +97,9 @@ class AnalyticsController extends Controller
         $payroll = app(PayrollService::class);
         $salaryRows = $payroll->perUser();
         $companyTotals = $payroll->companyTotals();
-        // «На подходе» = Акт + ЭСФ (по имени, у каждой компании своя воронка).
+        // «На подходе» = Акт + ЭСФ (по stage_type, у каждой компании своя воронка).
         $allStages = DealStage::where('is_active', true)->orderBy('order')->get();
-        $pendingIds = $allStages->filter(fn ($s) => mb_stripos($s->name, 'акт') !== false || mb_stripos($s->name, 'эсф') !== false)->pluck('id');
+        $pendingIds = $allStages->whereIn('stage_type', ['act', 'esf'])->pluck('id');
         if ($pendingIds->isEmpty() && ($fallback = $allStages->slice(-2, 1)->first())) {
             $pendingIds = collect([$fallback->id]);
         }
