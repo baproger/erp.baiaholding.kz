@@ -90,4 +90,36 @@ class WorkflowTest extends TestCase
         $emp = $this->user('employee');
         $this->actingAs($emp)->get(route('stages.index'))->assertForbidden();
     }
+
+    public function test_each_company_has_own_workshop_funnel(): void
+    {
+        // Цех раздельный: BAIA — мебельный, ASU — швейный. Заказ попадает
+        // в цех СВОЕЙ компании, этап чужого цеха недоступен.
+        $this->seedAll();
+        $admin = $this->user('admin');
+        $baia = \App\Models\Company::where('code', 'BAIA')->firstOrFail();
+        $asu = \App\Models\Company::where('code', 'ASU')->firstOrFail();
+        $admin->companies()->attach([$baia->id, $asu->id]);
+
+        $baiaCut = ProjectStage::create(['company_id' => $baia->id, 'name' => 'Кесу (мебель)', 'order' => 100, 'type' => 'project', 'is_active' => true, 'checklist' => []]);
+        $asuSew = ProjectStage::create(['company_id' => $asu->id, 'name' => 'Тігу (швейный)', 'order' => 100, 'type' => 'project', 'is_active' => true, 'checklist' => []]);
+
+        $deal = Deal::create([
+            'company_id' => $asu->id, 'number' => 'ASU-W-1', 'name' => 'Швейный заказ', 'budget' => 100000,
+            'status' => 'active', 'deal_stage_id' => DealStage::orderBy('order')->first()->id,
+        ]);
+        $this->actingAs($admin)->post(route('deals.toWorkshop', $deal))->assertRedirect();
+
+        $project = Project::where('deal_id', $deal->id)->firstOrFail();
+        // Первый этап воронки ASU (сидерные общие этапы + свой) — НЕ этап BAIA.
+        $this->assertNotEquals($baiaCut->id, $project->project_stage_id);
+
+        // Перенос заказа ASU на этап цеха BAIA запрещён.
+        $this->actingAs($admin)->patch(route('projects.stage', $project), ['project_stage_id' => $baiaCut->id]);
+        $this->assertNotEquals($baiaCut->id, $project->fresh()->project_stage_id);
+
+        // На свой швейный этап — можно.
+        $this->actingAs($admin)->patch(route('projects.stage', $project), ['project_stage_id' => $asuSew->id]);
+        $this->assertEquals($asuSew->id, $project->fresh()->project_stage_id);
+    }
 }

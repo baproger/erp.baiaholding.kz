@@ -21,7 +21,8 @@ class ProjectService
             return $deal->project;
         }
 
-        $firstStage = ProjectStage::where('is_active', true)->orderBy('order')->first();
+        // Заказ попадает в цех СВОЕЙ компании (BAIA — мебельный, ASU — швейный).
+        $firstStage = ProjectStage::funnel($deal->company_id ? (int) $deal->company_id : null)->first();
 
         return Project::create([
             'number' => $this->numbers->generate(),

@@ -14,14 +14,16 @@ const props = defineProps({
     stageTypes: Object, gateRoles: Object, missingTypes: Object,
 });
 
-// Выбор воронки: компании (BAIA/ASU/…) + общая воронка цеха.
-const funnel = ref(props.selectedCompanyId); // company id | 'workshop'
-const isWorkshop = computed(() => funnel.value === 'workshop');
-const kind = computed(() => (isWorkshop.value ? 'project' : 'deal'));
+// Выбор воронки: компания (BAIA/ASU/…) × вид (сделки | цех). Цех у каждой
+// компании СВОЙ: BAIA — мебельный, ASU — швейный.
+const funnel = ref(props.selectedCompanyId); // company id
+const kindTab = ref('deal'); // deal | project
+const isWorkshop = computed(() => kindTab.value === 'project');
+const kind = computed(() => kindTab.value);
 const stages = computed(() => (isWorkshop.value ? props.projectStages : props.dealStages));
 const switchFunnel = (v) => {
     funnel.value = v;
-    if (v !== 'workshop') router.get(route('stages.index'), { company: v }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('stages.index'), { company: v }, { preserveState: true, preserveScroll: true, replace: true });
 };
 
 const newForm = useForm({ kind: 'deal', name: '', color: '#6B7280' });
@@ -29,7 +31,7 @@ const adding = ref(false);
 const startAdd = () => { adding.value = true; newForm.reset(); newForm.kind = kind.value; newForm.color = '#6B7280'; };
 const add = () => newForm
     .transform((d) => ({ ...d, kind: kind.value }))
-    .post(route('stages.store', isWorkshop.value ? {} : { company: funnel.value }), { preserveScroll: true, onSuccess: () => (adding.value = false) });
+    .post(route('stages.store', { company: funnel.value }), { preserveScroll: true, onSuccess: () => (adding.value = false) });
 
 const move = (stage, direction) => router.patch(route('stages.move', [kind.value, stage.id]), { direction }, { preserveScroll: true });
 const recolor = (stage, e) => router.put(route('stages.update', [kind.value, stage.id]), { color: e.target.value }, { preserveScroll: true });
@@ -93,17 +95,23 @@ const typeBadge = (s) => s.stage_type ? (props.stageTypes[s.stage_type] ?? s.sta
             <Link :href="route('custom-fields.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Доп. поля</Link>
         </div>
 
-        <!-- Выбор воронки -->
-        <div class="mb-4 flex flex-wrap gap-2">
+        <!-- Выбор воронки: компания × (сделки | цех) -->
+        <div class="mb-4 flex flex-wrap items-center gap-2">
             <button v-for="c in companies" :key="c.id" type="button" @click="switchFunnel(c.id)"
                 class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
-                :class="!isWorkshop && funnel === c.id ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                :class="funnel === c.id ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                 {{ c.name }}
             </button>
-            <button type="button" @click="switchFunnel('workshop')"
+            <span class="mx-1 h-6 w-px bg-slate-200"></span>
+            <button type="button" @click="kindTab = 'deal'"
+                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                :class="!isWorkshop ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                Воронка сделок
+            </button>
+            <button type="button" @click="kindTab = 'project'"
                 class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
                 :class="isWorkshop ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
-                Цех (общая)
+                Цех
             </button>
         </div>
 
@@ -116,7 +124,7 @@ const typeBadge = (s) => s.stage_type ? (props.stageTypes[s.stage_type] ?? s.sta
 
         <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="mb-4 flex items-center justify-between">
-                <h3 class="font-semibold text-slate-700">{{ isWorkshop ? 'Этапы цеха — общие для всех компаний' : 'Воронка сделок · ' + (companies.find((c) => c.id === funnel)?.name ?? '') }}</h3>
+                <h3 class="font-semibold text-slate-700">{{ (isWorkshop ? 'Цех · ' : 'Воронка сделок · ') + (companies.find((c) => c.id === funnel)?.name ?? '') }}</h3>
                 <button class="text-sm text-indigo-600 hover:underline" @click="startAdd">+ Добавить этап</button>
             </div>
 

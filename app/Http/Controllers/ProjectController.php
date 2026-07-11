@@ -53,7 +53,11 @@ class ProjectController extends Controller
         $base->when($request->string('search')->toString(), fn ($q, $s) => $q
             ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"));
 
-        $stages = ProjectStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+        // Канбан показывает воронку цеха ТЕКУЩЕЙ компании (BAIA — мебельный,
+        // ASU — швейный); в режиме «Все компании» — этапы обоих цехов.
+        $stages = ProjectStage::with('translations')->where('is_active', true)
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+            ->orderBy('order')->get()
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]);
 
         $projects = $view === 'list'
@@ -131,7 +135,10 @@ class ProjectController extends Controller
         return Inertia::render('Projects/Show', [
             'project' => $project,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'stages' => ProjectStage::with('translations')->where('is_active', true)->orderBy('order')->get()
+            'stages' => ProjectStage::with('translations')->where('is_active', true)
+                // Этапы цеха компании этого заказа (по исходной сделке).
+                ->when($project->deal?->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+                ->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
             'finance' => $canSeeMoney ? $finance->summaryFor($source) : null,
             'financeEntityType' => $project->deal_id ? 'deal' : 'project',
@@ -149,6 +156,11 @@ class ProjectController extends Controller
 
         $validated = $request->validate(['project_stage_id' => ['required', 'exists:project_stages,id']]);
         $stage = ProjectStage::findOrFail($validated['project_stage_id']);
+        // Изоляция цехов: этап чужой компании (BAIA↔ASU) недоступен.
+        $companyId = $project->deal?->company_id ? (int) $project->deal->company_id : null;
+        if ($stage->company_id && (int) $stage->company_id !== $companyId) {
+            return back()->with('error', 'Этап принадлежит цеху другой компании.');
+        }
         $project->project_stage_id = $stage->id;
         if ($stage->is_completed) {
             // Завершение заказа ЛЮБЫМ путём возвращает сделку на «Логистику» —
@@ -163,7 +175,9 @@ class ProjectController extends Controller
     public function advance(Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
-        $next = ProjectStage::where('is_active', true)->where('order', '>', optional($project->stage)->order ?? 0)->orderBy('order')->first();
+        // «Далее» двигает по воронке цеха СВОЕЙ компании.
+        $next = ProjectStage::funnel($project->deal?->company_id ? (int) $project->deal->company_id : null)
+            ->first(fn ($s) => $s->order > (optional($project->stage)->order ?? 0));
         if (! $next) {
             return back()->with('error', 'Это последний этап.');
         }

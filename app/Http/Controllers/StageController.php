@@ -53,7 +53,10 @@ class StageController extends Controller
 
         return Inertia::render('Settings/Stages', [
             'dealStages' => $dealStages,
-            'projectStages' => ProjectStage::withCount('projects')->orderBy('order')->get(),
+            // Цех у каждой компании свой (BAIA — мебельный, ASU — швейный).
+            'projectStages' => ProjectStage::withCount('projects')
+                ->where(fn ($w) => $w->where('company_id', $companyId)->orWhereNull('company_id'))
+                ->orderBy('order')->get(),
             'companies' => Company::orderBy('id')->get(['id', 'name']),
             'selectedCompanyId' => $companyId,
             'stageTypes' => DealStage::STAGE_TYPES,
@@ -71,8 +74,8 @@ class StageController extends Controller
         $data = $this->validated($request);
         $model = $this->model($data['kind']);
 
-        // Новый этап сделок попадает в воронку, выбранную на странице.
-        $companyId = $data['kind'] === 'deal' ? $this->funnelCompanyId($request) : null;
+        // Новый этап попадает в воронку (сделок или цеха), выбранную на странице.
+        $companyId = $this->funnelCompanyId($request);
 
         $max = $model::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
@@ -84,7 +87,8 @@ class StageController extends Controller
             'is_active' => true,
             'checklist' => [],
             'type' => $data['kind'] === 'project' ? 'project' : 'sale',
-        ] + ($data['kind'] === 'deal' ? ['company_id' => $companyId] : []));
+            'company_id' => $companyId,
+        ]);
         $stage->translations()->updateOrCreate(['locale' => app()->getLocale()], ['name' => $data['name']]);
 
         return back()->with('success', 'Этап добавлен.');
@@ -144,8 +148,8 @@ class StageController extends Controller
         $model = $this->model($kind);
         $stage = $model::findOrFail($id);
         $neighbor = $model::query()
-            // Обмен местами только внутри воронки своей компании.
-            ->when($kind === 'deal', fn ($q) => $q->where('company_id', $stage->company_id))
+            // Обмен местами только внутри воронки своей компании (сделки и цех).
+            ->where('company_id', $stage->company_id)
             ->when($dir === 'up', fn ($q) => $q->where('order', '<', $stage->order)->orderByDesc('order'))
             ->when($dir === 'down', fn ($q) => $q->where('order', '>', $stage->order)->orderBy('order'))
             ->first();
@@ -183,7 +187,7 @@ class StageController extends Controller
                 ]);
             }
             $target = $model::findOrFail($transferTo);
-            if ($target->id === $stage->id || ($kind === 'deal' && $target->company_id !== $stage->company_id)) {
+            if ($target->id === $stage->id || $target->company_id !== $stage->company_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'transfer_to' => 'Этап переноса должен быть другим этапом той же воронки.',
                 ]);
@@ -195,7 +199,7 @@ class StageController extends Controller
 
         // Re-index remaining stages (внутри воронки своей компании) — 1..N без пробелов.
         $model::query()
-            ->when($kind === 'deal', fn ($q) => $q->where('company_id', $stage->company_id))
+            ->where('company_id', $stage->company_id)
             ->orderBy('order')->orderBy('id')->get()->each(fn ($s, $i) => $s->update(['order' => $i + 1]));
 
         return back()->with('success', 'Этап удалён'.($transferTo ? ' — записи перенесены.' : '.'));

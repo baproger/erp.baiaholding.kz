@@ -11,7 +11,7 @@ class ProjectStage extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name', 'order', 'color', 'checklist', 'type', 'is_completed', 'is_active',
+        'company_id', 'name', 'order', 'color', 'checklist', 'type', 'is_completed', 'is_active',
     ];
 
     protected $casts = [
@@ -19,6 +19,17 @@ class ProjectStage extends Model
         'is_completed' => 'boolean',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Цех у каждой компании СВОЙ (BAIA — мебельный, ASU — швейный): этапы с
+     * company_id видны только своей фирме; без company_id — общие (легаси/тесты).
+     */
+    public static function funnel(?int $companyId = null): \Illuminate\Support\Collection
+    {
+        return static::where('is_active', true)
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+            ->orderBy('order')->get();
+    }
 
     public function projects(): HasMany
     {
