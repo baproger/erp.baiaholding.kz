@@ -46,7 +46,7 @@ const allNav = [
     { key: 'nav.profile', name: 'Профиль', route: 'profile.edit', icon: '🪪' },
     { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
     { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },
-    { key: 'nav.audit', name: 'Аудит', route: 'audit.index', icon: '❑', perm: 'setting.viewAny' },
+    { key: 'nav.audit', name: 'Аудит', route: 'audit.index', icon: '❑', roles: ['admin'] },
     { key: 'nav.departments', name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny', leadershipOnly: true },
     { key: 'nav.users', name: 'Сотрудники', route: 'users.index', icon: '☻', perm: 'user.viewAny' },
     { key: 'nav.settings', name: 'Настройки', route: 'settings.index', icon: '⚙', perm: 'setting.update' },

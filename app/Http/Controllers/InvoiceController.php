@@ -149,7 +149,17 @@ class InvoiceController extends Controller
     {
         $this->authorize('update', $invoice);
         $this->assertOwnership($request->user(), $invoice->invoiceable);
-        $invoice->update($request->validated());
+
+        $data = $request->validated();
+        // Полиморфную привязку не меняем (иначе счёт увели бы на чужую сделку).
+        unset($data['invoiceable_type'], $data['invoiceable_id']);
+        // paid/partially_paid/overdue — производные от платежей (FinanceService::
+        // recalcInvoiceStatus). Вручную допустимы только draft/sent/cancelled,
+        // иначе можно выставить «оплачено» без единого платежа.
+        if (isset($data['status']) && ! in_array($data['status'], ['draft', 'sent', 'cancelled'], true)) {
+            unset($data['status']);
+        }
+        $invoice->update($data);
 
         return back()->with('success', 'Счёт обновлён.');
     }

@@ -11,7 +11,11 @@ class AuditController extends Controller
 {
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->can('setting.viewAny') || $request->user()->hasRole('admin'), 403);
+        // Только админ: журнал — generic-таблица (diff всех сущностей обеих
+        // фирм, включая зарплаты/бюджеты), корректно разделить по компаниям
+        // нельзя, поэтому доступ у глобального владельца (admin), а не у
+        // директора/бухгалтера, привязанных к одной фирме.
+        abort_unless($request->user()->hasRole('admin'), 403);
 
         $logs = AuditLog::query()
             ->with('user:id,name')

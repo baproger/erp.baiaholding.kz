@@ -114,14 +114,16 @@ class WarehouseController extends Controller
         ]);
 
         $delta = (float) $data['quantity'] - (float) $receipt->quantity;
-        $material = $receipt->material;
-        if ((float) $material->quantity + $delta < 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'quantity' => 'Так остаток уйдёт в минус: на складе '.number_format((float) $material->quantity, 2, '.', ' ').' '.$material->unit.' (часть уже списана в расходы).',
-            ]);
-        }
 
-        DB::transaction(function () use ($receipt, $material, $data, $delta) {
+        DB::transaction(function () use ($receipt, $data, $delta) {
+            // Блокируем материал и проверяем уход в минус под блокировкой —
+            // защита от гонки с параллельным списанием расхода по материалу.
+            $material = Material::whereKey($receipt->material_id)->lockForUpdate()->first();
+            if ((float) $material->quantity + $delta < 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'quantity' => 'Так остаток уйдёт в минус: на складе '.number_format((float) $material->quantity, 2, '.', ' ').' '.$material->unit.' (часть уже списана в расходы).',
+                ]);
+            }
             $receipt->update([
                 'quantity' => $data['quantity'],
                 'price' => array_key_exists('price', $data) ? $data['price'] : $receipt->price,
@@ -145,16 +147,24 @@ class WarehouseController extends Controller
         abort_unless($this->canManage($request), 403, 'Приходы удаляет бухгалтер или админ.');
         abort_unless($request->user()->worksInCompany($receipt->material?->company_id ? (int) $receipt->material->company_id : null), 403);
 
-        $material = $receipt->material;
-        if ((float) $material->quantity - (float) $receipt->quantity < 0) {
+        if ((float) $receipt->material->quantity - (float) $receipt->quantity < 0) {
             return back()->with('error', 'Нельзя удалить приход: остаток уйдёт в минус (часть уже списана в расходы).');
         }
 
-        DB::transaction(function () use ($receipt, $material) {
-            $material->decrement('quantity', $receipt->quantity);
-            $receipt->delete();
-            $this->syncLastPurchasePrice($material);
-        });
+        try {
+            DB::transaction(function () use ($receipt) {
+                // Блокировка + перепроверка под ней: гонка с параллельным списанием.
+                $material = Material::whereKey($receipt->material_id)->lockForUpdate()->first();
+                if ((float) $material->quantity - (float) $receipt->quantity < 0) {
+                    throw new \RuntimeException('negative');
+                }
+                $material->decrement('quantity', $receipt->quantity);
+                $receipt->delete();
+                $this->syncLastPurchasePrice($material);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', 'Нельзя удалить приход: остаток уйдёт в минус (часть уже списана в расходы).');
+        }
 
         return back()->with('success', 'Приход удалён — остаток пересчитан.');
     }

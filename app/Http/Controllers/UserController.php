@@ -66,6 +66,7 @@ class UserController extends Controller
             'is_active' => $data['is_active'] ?? true,
             'language' => 'ru',
         ]);
+        $this->guardRoleAssignment($request, $data['role']);
         $user->assignRole($data['role']);
 
         if ($user->department_id) {
@@ -99,6 +100,7 @@ class UserController extends Controller
         if (! empty($data['password'])) {
             $user->update(['password' => Hash::make($data['password'])]);
         }
+        $this->guardRoleAssignment($request, $data['role'], $user);
         $user->syncRoles([$data['role']]);
         $user->companies()->sync($this->companyIds($request));
 
@@ -136,9 +138,39 @@ class UserController extends Controller
         return ($picked->isEmpty() ? $valid : $picked)->values()->all();
     }
 
+    /**
+     * Роль admin назначает/снимает ТОЛЬКО действующий admin (директор — нет,
+     * иначе наблюдатель выдал бы себе полный доступ). Плюс защита последнего
+     * активного администратора от разжалования при обновлении.
+     */
+    private function guardRoleAssignment(Request $request, string $role, ?User $target = null): void
+    {
+        $actorIsAdmin = $request->user()->hasRole('admin');
+        $targetWasAdmin = $target?->hasRole('admin') ?? false;
+
+        // Выдать или снять роль admin может только admin.
+        if (($role === 'admin' || $targetWasAdmin) && ! $actorIsAdmin) {
+            abort(403, 'Роль «Администратор» назначает и снимает только администратор.');
+        }
+        // Нельзя разжаловать последнего активного админа.
+        if ($targetWasAdmin && $role !== 'admin' && $this->activeAdminCount() <= 1) {
+            abort(403, 'Нельзя снять роль с последнего администратора.');
+        }
+    }
+
+    private function activeAdminCount(): int
+    {
+        return User::where('is_active', true)->role('admin')->count();
+    }
+
     public function destroy(User $user): RedirectResponse
     {
         $this->authorize('delete', $user);
+        // Последнего активного админа нельзя деактивировать — иначе система
+        // останется без владельца (Gate::before на admin).
+        if ($user->hasRole('admin') && $this->activeAdminCount() <= 1) {
+            abort(403, 'Нельзя деактивировать последнего администратора.');
+        }
 
         // Soft-delete + deactivate rather than hard removal.
         $user->update(['is_active' => false]);

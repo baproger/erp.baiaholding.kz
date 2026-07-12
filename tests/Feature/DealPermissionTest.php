@@ -57,10 +57,11 @@ class DealPermissionTest extends TestCase
 
     public function test_leadership_can_change_responsible(): void
     {
-        // (Re)assigning the responsible person is an "update" — only the owner or
-        // leadership may do it, so a plain manager cannot grab an unowned deal.
+        // (Re)assigning the responsible person is an "update" — leadership with
+        // deal.update (financist/admin) may do it. Директор — наблюдатель без
+        // права правки (см. test ниже).
         $lead = User::factory()->create();
-        $lead->assignRole('director');
+        $lead->assignRole('financist');
         $newResp = User::factory()->create();
         $deal = $this->deal(null);
 
@@ -69,6 +70,19 @@ class DealPermissionTest extends TestCase
         ])->assertRedirect();
 
         $this->assertEquals($newResp->id, $deal->fresh()->responsible_user_id);
+    }
+
+    public function test_director_is_observer_cannot_change_responsible(): void
+    {
+        // Директор — наблюдатель: правка сделки (в т.ч. смена ответственного)
+        // ему недоступна (закрытие эскалации прав из аудита).
+        $director = User::factory()->create();
+        $director->assignRole('director');
+        $deal = $this->deal(null);
+
+        $this->actingAs($director)->patch(route('deals.responsible', $deal), [
+            'responsible_user_id' => User::factory()->create()->id,
+        ])->assertForbidden();
     }
 
     public function test_non_owner_manager_cannot_change_responsible(): void

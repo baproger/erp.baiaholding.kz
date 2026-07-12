@@ -50,8 +50,10 @@ class ProjectController extends Controller
             ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name,address,deadline,description,note'])
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())]);
         $this->scope($base, $request);
+        // Поиск во вложенной скобке — иначе orWhere «вырывается» из скоупа
+        // компании/владельца и показал бы чужие заказы (утечка между фирмами).
         $base->when($request->string('search')->toString(), fn ($q, $s) => $q
-            ->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"));
+            ->where(fn ($w) => $w->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%")));
 
         // Канбан показывает воронку цеха ТЕКУЩЕЙ компании (BAIA — мебельный,
         // ASU — швейный); в режиме «Все компании» — этапы обоих цехов.

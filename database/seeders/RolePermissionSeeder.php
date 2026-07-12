@@ -28,8 +28,16 @@ class RolePermissionSeeder extends Seeder
         $admin = Role::findOrCreate('admin', 'web');
         $admin->syncPermissions(Permission::all());
 
+        // Директор — НАБЛЮДАТЕЛЬ: видит всё, но не меняет пользователей/роли/
+        // настройки (иначе мог бы выдать себе admin и захватить систему). Права
+        // только на просмотр + отчёты/ЗП; создание групп в чате не через Spatie.
         $director = Role::findOrCreate('director', 'web');
-        $director->syncPermissions(Permission::all());
+        $director->syncPermissions(Permission::where(fn ($q) => $q
+            ->where('name', 'like', '%.viewAny')->orWhere('name', 'like', '%.view'))
+            ->whereNotIn('name', ['user.viewAny', 'user.view', 'role.viewAny', 'role.view'])
+            ->pluck('name')
+            ->push('report.viewAny', 'payroll.view', 'user.viewAny', 'user.view')
+            ->all());
 
         $financist = Role::findOrCreate('financist', 'web');
         $financist->syncPermissions(Permission::whereIn('name', [

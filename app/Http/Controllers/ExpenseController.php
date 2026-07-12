@@ -60,6 +60,8 @@ class ExpenseController extends Controller
                     'material_id' => 'Материал со склада другой компании.',
                 ]);
             }
+            // Первичная проверка (быстрый отказ + подсказка остатка); финальная,
+            // защищённая от гонки, — под блокировкой строки внутри транзакции.
             if ((float) $material->quantity < (float) $data['qty']) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'qty' => 'Недостаточно на складе: остаток '.rtrim(rtrim(number_format((float) $material->quantity, 2, '.', ' '), '0'), '.').' '.$material->unit.'.',
@@ -86,8 +88,16 @@ class ExpenseController extends Controller
                 : 'Материал: '.$material->name.' × '.rtrim(rtrim(number_format((float) $data['qty'], 2, '.', ''), '0'), '.').' '.$material->unit;
 
             \Illuminate\Support\Facades\DB::transaction(function () use ($data, $material) {
+                // Блокируем строку материала и перечитываем остаток ВНУТРИ
+                // транзакции: два параллельных списания не уведут склад в минус.
+                $locked = \App\Models\Material::whereKey($material->id)->lockForUpdate()->first();
+                if ((float) $locked->quantity < (float) $data['qty']) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'qty' => 'Недостаточно на складе: остаток '.rtrim(rtrim(number_format((float) $locked->quantity, 2, '.', ' '), '0'), '.').' '.$locked->unit.'.',
+                    ]);
+                }
                 Expense::create($data);
-                $material->decrement('quantity', $data['qty']);
+                $locked->decrement('quantity', $data['qty']);
             });
 
             return back()->with('success', 'Расход по материалам добавлен — остаток на складе списан.');
@@ -199,6 +209,12 @@ class ExpenseController extends Controller
         // Материал/количество после создания не меняются (иначе разъедется склад) —
         // удалите расход (остаток вернётся) и создайте заново.
         unset($data['material_id'], $data['qty']);
+        // Статус, способ оплаты, подтверждающий и полиморфная привязка — НЕ через
+        // update(): статус/оплату ставит только confirm() (бухгалтер, с чеком),
+        // родитель расхода неизменен. Иначе менеджер сам себе подтвердил бы расход
+        // (обход бухгалтера) или увёл его на чужую сделку/компанию.
+        unset($data['status'], $data['payment_method'], $data['confirmed_by'], $data['confirmed_at'],
+            $data['expenseable_type'], $data['expenseable_id']);
         // Сумма материального расхода — производная (кол-во × цена), руками не
         // правится: попытка её изменить получает честную ошибку, а не молчаливый
         // игнор с флешем «Расход обновлён».

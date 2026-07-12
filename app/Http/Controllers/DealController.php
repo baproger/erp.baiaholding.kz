@@ -342,8 +342,10 @@ class DealController extends Controller
             return response()->json(['match' => null, 'history' => []]);
         }
 
+        // Изоляция фирм: подсказки по БИН — только по сделкам ТЕКУЩЕЙ компании,
+        // иначе менеджер BAIA по БИН увидел бы бюджеты/сделки ASU.
         $client = Client::where('inn', $bin)->first();
-        $deal = Deal::where('bin', $bin)->whereNotNull('company_name')->latest()->first();
+        $deal = Deal::forCurrentCompany()->where('bin', $bin)->whereNotNull('company_name')->latest()->first();
 
         $match = null;
         if ($client) {
@@ -352,8 +354,8 @@ class DealController extends Controller
             $match = ['company_name' => $deal->company_name, 'bin' => $deal->bin, 'phone' => null, 'address' => null];
         }
 
-        // All deals ever created for this БИН — the "История по БИН" list.
-        $history = Deal::where('bin', $bin)->with('stage:id,name,color')
+        // История по БИН — тоже только текущая компания.
+        $history = Deal::forCurrentCompany()->where('bin', $bin)->with('stage:id,name,color')
             ->latest()->limit(30)
             ->get(['id', 'number', 'company_name', 'client_name', 'budget', 'deadline', 'deal_stage_id', 'created_at'])
             ->map(fn ($d) => [
