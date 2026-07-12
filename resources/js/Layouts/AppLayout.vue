@@ -89,6 +89,11 @@ const canAllCompanies = computed(() => roles.value.some((r) => ['admin', 'financ
 const switchCompany = (id) => { if (id !== currentCompanyId.value) router.patch(route('company.switch'), { company_id: id }); };
 
 const markRead = (id) => router.patch(route('notifications.read', id), {}, { preserveScroll: true, preserveState: true });
+// Клик по уведомлению: отмечаем прочитанным и открываем связанную сделку/заказ.
+const openNotification = (n) => {
+    markRead(n.id);
+    if (n.data?.url) router.get(n.data.url);
+};
 const markAllRead = () => router.patch(route('notifications.readAll'), {}, { preserveScroll: true });
 const setLocale = (l) => router.patch(route('locale.update'), { locale: l }, { preserveScroll: true });
 // Иконка/цвет уведомления по смыслу заголовка (просрочка, назначение, этап).
@@ -230,7 +235,7 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                                 <div class="max-h-96 overflow-y-auto">
                                     <div v-for="n in notifications.items" :key="n.id"
                                         class="relative flex cursor-pointer gap-3 border-b border-slate-50 px-4 py-3 transition-colors hover:bg-slate-50"
-                                        :class="!n.read_at ? 'bg-indigo-50/40' : ''" @click="markRead(n.id)">
+                                        :class="!n.read_at ? 'bg-indigo-50/40' : ''" @click="openNotification(n)">
                                         <span v-if="!n.read_at" class="absolute left-0 top-0 h-full w-0.5 bg-indigo-500"></span>
                                         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm" :class="notifMeta(n).cls">{{ notifMeta(n).icon }}</span>
                                         <div class="min-w-0 flex-1">
@@ -239,7 +244,10 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                                                 <span v-if="!n.read_at" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-500"></span>
                                             </div>
                                             <div class="mt-0.5 text-xs leading-snug text-slate-500">{{ n.data.message }}</div>
-                                            <div class="mt-1 text-[11px] text-slate-400">{{ relTime(n.created_at) }}</div>
+                                            <div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+                                                <span>{{ relTime(n.created_at) }}</span>
+                                                <span v-if="n.data.url" class="font-medium text-indigo-500">→ {{ n.data.deal_number || 'Открыть' }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div v-if="!notifications.items.length" class="flex flex-col items-center gap-2 px-4 py-10 text-center">

@@ -145,13 +145,13 @@ const applyBinMatch = () => {
         <!-- KANBAN -->
         <div v-if="view === 'kanban'" class="flex gap-3 overflow-x-auto pb-4">
             <div v-for="stage in stages" :key="stage.id" class="flex w-64 flex-shrink-0 flex-col rounded-xl bg-slate-100/80" @dragover.prevent @drop="onDrop(stage)">
-                <div class="flex items-center justify-between px-3 py-2">
+                <div class="px-3 py-2">
                     <div class="flex items-center gap-2">
-                        <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: stage.color }"></span>
-                        <span class="text-sm font-semibold text-slate-700">{{ stage.name }}</span>
-                        <span class="text-xs text-slate-400">{{ byStage(stage.id).length }}</span>
+                        <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: stage.color }"></span>
+                        <span class="truncate text-sm font-semibold text-slate-700">{{ stage.name }}</span>
+                        <span class="shrink-0 text-xs text-slate-400">{{ byStage(stage.id).length }}</span>
                     </div>
-                    <span class="text-[11px] font-medium text-slate-400">{{ money(stageTotal(stage.id)) }}</span>
+                    <div class="mt-0.5 pl-4 text-[11px] font-medium tabular-nums text-slate-400">{{ money(stageTotal(stage.id)) }}</div>
                 </div>
                 <div class="flex-1 space-y-2 px-2 pb-2">
                     <!-- Кнопка создания всегда СВЕРХУ колонки «Заключение договора» -->
