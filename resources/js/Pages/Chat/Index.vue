@@ -32,8 +32,16 @@ const editingMsg = ref(null); // сообщение, которое редакт
 // ---- Persisted UI state (unread + pins) ----
 const readState = reactive(JSON.parse(localStorage.getItem('chat_seen') || '{}'));
 const pins = ref(JSON.parse(localStorage.getItem('chat_pins') || '[]'));
+const archived = ref(JSON.parse(localStorage.getItem('chat_archived') || '[]'));
+const showArchived = ref(false);
 const persistSeen = () => localStorage.setItem('chat_seen', JSON.stringify(readState));
 const persistPins = () => localStorage.setItem('chat_pins', JSON.stringify(pins.value));
+const persistArchived = () => localStorage.setItem('chat_archived', JSON.stringify(archived.value));
+const isArchived = (c) => archived.value.includes(c.id);
+const toggleArchive = (c) => {
+    archived.value = isArchived(c) ? archived.value.filter((x) => x !== c.id) : [...archived.value, c.id];
+    persistArchived();
+};
 
 const isPinned = (c) => pins.value.includes(c.id);
 const togglePin = (c) => {
@@ -51,7 +59,8 @@ const filtered = computed(() => {
         || (c.participants || []).some((p) => p.name.toLowerCase().includes(q)));
 });
 const sections = computed(() => {
-    const list = filtered.value;
+    // Архивные — вне обычных секций (показываются отдельным блоком).
+    const list = filtered.value.filter((c) => !isArchived(c));
     const pinned = list.filter(isPinned);
     const rest = list.filter((c) => !isPinned(c));
     return [
@@ -62,6 +71,7 @@ const sections = computed(() => {
         { key: 'project', title: 'Проектные каналы', items: rest.filter((c) => c.deal_id) },
     ].filter((g) => g.items.length);
 });
+const archivedChats = computed(() => filtered.value.filter(isArchived));
 
 // ---- Helpers ----
 const initial = (name) => (name ?? '?').trim().charAt(0).toUpperCase();
@@ -315,7 +325,34 @@ onUnmounted(() => clearInterval(timer));
                             <button @click.stop="togglePin(c)" :title="isPinned(c) ? 'Открепить' : 'Закрепить'"
                                 class="absolute right-1.5 top-1.5 hidden text-xs text-slate-300 hover:text-indigo-500 group-hover:block"
                                 :class="{ '!block text-indigo-400': isPinned(c) }">📌</button>
+                            <button @click.stop="toggleArchive(c)" title="В архив"
+                                class="absolute right-1.5 bottom-1.5 hidden text-slate-300 hover:text-indigo-500 group-hover:block">
+                                <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+                            </button>
                         </button>
+                    </div>
+
+                    <!-- Архив -->
+                    <div v-if="archivedChats.length" class="mb-2">
+                        <button @click="showArchived = !showArchived" class="flex w-full items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600">
+                            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+                            Архив ({{ archivedChats.length }})
+                            <span class="ml-auto">{{ showArchived ? '▲' : '▼' }}</span>
+                        </button>
+                        <template v-if="showArchived">
+                            <button v-for="c in archivedChats" :key="c.id" @click="selectChat(c)"
+                                :class="activeChat?.id === c.id ? 'bg-white shadow-sm ring-1 ring-indigo-100' : 'hover:bg-white/70'"
+                                class="group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left opacity-70 transition-all">
+                                <span class="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white" :class="avatarColor(c.name)">
+                                    <img v-if="c.avatar" :src="c.avatar" class="h-full w-full object-cover" alt="" />
+                                    <span v-else-if="c.type === 'group' || c.type === 'global'">#</span>
+                                    <template v-else>{{ initial(c.name) }}</template>
+                                </span>
+                                <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-600">{{ c.name }}</span>
+                                <button @click.stop="toggleArchive(c)" title="Вернуть из архива"
+                                    class="flex-shrink-0 text-xs text-slate-400 hover:text-indigo-500">Вернуть</button>
+                            </button>
+                        </template>
                     </div>
                     <div v-if="!sections.length" class="px-3 py-8 text-center text-sm text-slate-400">Ничего не найдено</div>
                 </div>
