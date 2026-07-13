@@ -104,6 +104,20 @@ class PayrollTest extends TestCase
             ->assertInertia(fn (Assert $p) => $p->where('totals.bonus', 0));
     }
 
+    public function test_expense_on_not_won_deal_is_counted_immediately(): void
+    {
+        // Расход считается сразу, ещё до «Оплата успешно» (деньги потрачены).
+        $mgr = $this->user('manager');
+        $stage = DealStage::where('is_won', false)->orderBy('order')->first()->id;
+        $deal = Deal::create(['number' => 'E-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 500000, 'status' => 'active', 'deal_stage_id' => $stage, 'responsible_user_id' => $mgr->id]);
+        Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 75000, 'date' => now()->toDateString(), 'status' => 'confirmed']);
+
+        $totals = app(\App\Services\PayrollService::class)->companyTotals();
+        $this->assertEquals(75000.0, (float) $totals['expense']);
+        // Доход/бонус по НЕ-won сделке по-прежнему не считаются (факт прихода).
+        $this->assertEquals(0.0, (float) $totals['income']);
+    }
+
     // Цех employees may see their OWN salary only (no company-wide figures, no other people's rows).
     public function test_cex_employee_sees_only_own_salary(): void
     {

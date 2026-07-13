@@ -47,7 +47,10 @@ class AnalyticsController extends Controller
         $monthsCount = in_array((int) $request->integer('months', 6), [3, 6, 12], true) ? (int) $request->integer('months', 6) : 6;
         $months = collect(range($monthsCount - 1, 0))->map(fn ($i) => now()->subMonths($i)->format('Y-m'));
         $payments = Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $wonIds))->get(['amount', 'payment_date']);
-        $expenses = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')->whereIn('expenseable_id', $wonIds)->get(['amount', 'date']);
+        // Расходы по месяцам — по ВСЕМ сделкам компании (не только won): затрата
+        // видна в месяце, когда потрачена, а не когда сделка станет успешной.
+        $expenses = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', Deal::forCurrentCompany()->select('id'))->get(['amount', 'date']);
 
         $monthly = $months->map(function ($m) use ($payments, $expenses) {
             $income = $payments->filter(fn ($p) => optional($p->payment_date)->format('Y-m') === $m)->sum('amount');

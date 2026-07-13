@@ -71,10 +71,14 @@ class PayrollService
     {
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
         $wonIds = Deal::won()->forCurrentCompany()->pluck('id');
-
+        // Доход/бюджет — только по успешным (won) сделкам (факт прихода денег).
         $budget = (float) Deal::whereIn('id', $wonIds)->sum('budget');
         $income = (float) Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $wonIds))->sum('amount');
-        $expense = (float) Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')->whereIn('expenseable_id', $wonIds)->sum('amount');
+        // Расход — по ВСЕМ сделкам компании (не только won): деньги потрачены
+        // сразу, как подтверждён расход, ещё до оплаты сделки. Иначе затраты
+        // «прячутся» до won и бухгалтерия видит их задним числом.
+        $expense = (float) Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', Deal::forCurrentCompany()->select('id'))->sum('amount');
         $tax = round($budget * $taxRate, 2);
         $remainder = round($budget - $tax - $expense, 2);
         $bonus = round($this->perUser()->sum('bonus'), 2);
