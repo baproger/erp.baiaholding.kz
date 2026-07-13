@@ -264,9 +264,11 @@ class DealController extends Controller
     public function advance(Deal $deal, StageTransitionService $transitions): \Illuminate\Http\RedirectResponse
     {
         $this->authorize('update', $deal);
-        // Следующий этап в воронке компании этой сделки.
-        $next = DealStage::funnel($deal->company_id ? (int) $deal->company_id : null)
-            ->first(fn ($s) => $s->order > (optional($deal->stage)->order ?? 0));
+        // Следующий этап — по ПОЗИЦИИ в воронке (не по order > current): при
+        // задвоенном order переход не перескакивает соседний этап.
+        $funnel = DealStage::funnel($deal->company_id ? (int) $deal->company_id : null)->values();
+        $idx = $funnel->search(fn ($s) => $s->id === $deal->deal_stage_id);
+        $next = $idx !== false ? $funnel->get($idx + 1) : $funnel->first();
         if ($next) {
             try {
                 $transitions->moveToStage($deal, $next);

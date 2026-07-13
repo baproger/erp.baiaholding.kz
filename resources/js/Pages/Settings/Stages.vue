@@ -144,7 +144,7 @@ const typeBadge = (s) => s.stage_type ? (props.stageTypes[s.stage_type] ?? s.sta
                         </div>
                         <input type="color" :value="stage.color" class="h-6 w-6 rounded border-0" @change="recolor(stage, $event)" />
                         <span class="flex-1 text-sm font-medium text-slate-800">
-                            {{ stage.order }}. {{ stage.name }}
+                            {{ idx + 1 }}. {{ stage.name }}
                             <span v-if="typeBadge(stage)" class="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">{{ typeBadge(stage) }}</span>
                             <span v-if="stage.gate_task_title" class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" :title="`Задача: ${stage.gate_task_title} · ${gateRoles[stage.gate_task_role] ?? stage.gate_task_role} · ${stage.gate_task_days} дн.`">🔒 гейт</span>
                             <span v-if="occupants(stage)" class="ml-1 text-[10px] text-slate-400">{{ occupants(stage) }} {{ isWorkshop ? 'заказ.' : 'сдел.' }}</span>

@@ -46,6 +46,12 @@ class StageController extends Controller
         $this->guard($request);
 
         $companyId = $this->funnelCompanyId($request);
+
+        // Авто-починка порядка: если order задвоился (например после переноса
+        // данных), перенумеровываем воронку 1..N по (order, id). Идемпотентно.
+        $this->reindexFunnel(DealStage::class, $companyId);
+        $this->reindexFunnel(ProjectStage::class, $companyId);
+
         $dealStages = DealStage::query()
             ->withCount(['deals as active_deals_count' => fn ($q) => $q->whereNotIn('status', ['closed', 'cancelled'])])
             ->where(fn ($w) => $w->where('company_id', $companyId)->orWhereNull('company_id'))
@@ -66,6 +72,17 @@ class StageController extends Controller
                 ->reject(fn ($label, $type) => $dealStages->contains('stage_type', $type))
                 ->all(),
         ]);
+    }
+
+    /** Перенумеровать воронку компании 1..N (лечит задвоенный/дырявый order). */
+    private function reindexFunnel(string $model, ?int $companyId): void
+    {
+        $stages = $model::where('company_id', $companyId)->orderBy('order')->orderBy('id')->get();
+        foreach ($stages as $i => $s) {
+            if ((int) $s->order !== $i + 1) {
+                $s->update(['order' => $i + 1]);
+            }
+        }
     }
 
     public function store(Request $request): RedirectResponse

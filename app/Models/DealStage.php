@@ -53,9 +53,11 @@ class DealStage extends Model
     /** Активная воронка компании (+ общие этапы без компании). */
     public static function funnel(?int $companyId = null): \Illuminate\Support\Collection
     {
+        // orderBy('id') — детерминированный тай-брейк, если order задвоился:
+        // порядок в воронке и переход «Далее» остаются стабильными.
         return static::where('is_active', true)
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
-            ->orderBy('order')->get();
+            ->orderBy('order')->orderBy('id')->get();
     }
 
     /** Этап воронки по системному типу. */
