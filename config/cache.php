@@ -15,7 +15,8 @@ return [
     |
     */
 
-    'default' => env('CACHE_STORE', 'database'),
+    // В production форсируем file: кэш из файлов быстрее и не грузит БД на Plesk.
+    'default' => env('APP_ENV') === 'production' ? 'file' : env('CACHE_STORE', 'database'),
 
     /*
     |--------------------------------------------------------------------------

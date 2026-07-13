@@ -18,7 +18,9 @@ return [
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'database'),
+    // В production форсируем file: на Plesk сессии в БД дают запись на КАЖДЫЙ
+    // запрос → лишняя нагрузка и таймауты WAF. Тесты/локалка уважают env.
+    'driver' => env('APP_ENV') === 'production' ? 'file' : env('SESSION_DRIVER', 'database'),
 
     /*
     |--------------------------------------------------------------------------

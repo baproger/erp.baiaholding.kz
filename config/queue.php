@@ -13,7 +13,9 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'database'),
+    // В production форсируем sync: обработчика очереди на сервере нет — иначе
+    // задачи копились бы в БД и не выполнялись. sync выполняет их сразу, inline.
+    'default' => env('APP_ENV') === 'production' ? 'sync' : env('QUEUE_CONNECTION', 'database'),
 
     /*
     |--------------------------------------------------------------------------
