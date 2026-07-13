@@ -52,14 +52,21 @@ php artisan config:cache && php artisan route:cache
 Включить галочку «Включить дополнительные действия развертывания» и вставить:
 
 ```bash
-composer install --no-dev --optimize-autoloader
+php composer.phar install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 ```
 
-(Node/npm тут не нужны — фронт уже собран в `public/build` и приходит с гитом.)
+⚠️ **Composer и Node НЕ установлены в Plesk-шелле** (`command not found`).
+Решение:
+- **Composer** — сам `composer.phar` лежит в репозитории; вызываем через PHP:
+  `php composer.phar install --no-dev` (PHP в шелле есть). Ставит `vendor/` на
+  сервере под правильную версию PHP. Нужен исходящий интернет с сервера (обычно
+  есть на Plesk).
+- **Node/npm НЕ нужен** — собранный фронт `public/build/` уже в репозитории и
+  приезжает с гитом.
 
 ## Права на папки (один раз, если 500-е ошибки)
 
