@@ -30,9 +30,10 @@ return new class extends Migration
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
                 foreach (['ru' => 'ЭСФ', 'kk' => 'ЭШФ'] as $locale => $name) {
+                    // deal_stage_translations без timestamps-колонок — created_at/
+                    // updated_at сюда писать нельзя (иначе Unknown column при re-run).
                     DB::table('deal_stage_translations')->insert([
                         'deal_stage_id' => $esfId, 'locale' => $locale, 'name' => $name,
-                        'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
             } else {

@@ -27,6 +27,8 @@ class DepartmentController extends Controller
             'filters' => $request->only('search'),
             'can' => [
                 'create' => $request->user()->can('create', Department::class),
+                'update' => $request->user()->can('update', Department::class),
+                'delete' => $request->user()->can('delete', Department::class),
             ],
         ]);
     }

@@ -26,6 +26,9 @@ class ProjectPolicy
         return $p->responsible_user_id === $user->id || $p->deal?->responsible_user_id === $user->id;
     }
     public function create(User $user): bool { return $user->can('project.create'); }
-    public function update(User $user, Project $p): bool { return $user->can('project.update'); }
-    public function delete(User $user, Project $p): bool { return $user->can('project.delete'); }
+    // update/delete требуют и права, и доступа к заказу (view уже проверяет
+    // компанию/владение) — иначе через custom-fields можно было бы править
+    // заказ чужой фирмы (IDOR).
+    public function update(User $user, Project $p): bool { return $user->can('project.update') && $this->view($user, $p); }
+    public function delete(User $user, Project $p): bool { return $user->can('project.delete') && $this->view($user, $p); }
 }

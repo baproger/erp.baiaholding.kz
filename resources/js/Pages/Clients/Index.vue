@@ -75,8 +75,8 @@ const doSearch = () => router.get(route('clients.index'), { search: search.value
                         </td>
                         <td class="px-4 py-3 text-slate-500">{{ c.responsible?.name ?? '—' }}</td>
                         <td class="px-4 py-3 text-right space-x-2">
-                            <button class="text-indigo-600 hover:underline" @click="openEdit(c)">Изменить</button>
-                            <button class="text-red-600 hover:underline" @click="destroy(c)">Удалить</button>
+                            <button v-if="can.update" class="text-indigo-600 hover:underline" @click="openEdit(c)">Изменить</button>
+                            <button v-if="can.delete" class="text-red-600 hover:underline" @click="destroy(c)">Удалить</button>
                         </td>
                     </tr>
                     <tr v-if="!clients.data.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>

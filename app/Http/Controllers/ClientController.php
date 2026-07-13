@@ -33,6 +33,8 @@ class ClientController extends Controller
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'can' => [
                 'create' => $request->user()->can('create', Client::class),
+                'update' => $request->user()->can('update', Client::class),
+                'delete' => $request->user()->can('delete', Client::class),
             ],
         ]);
     }

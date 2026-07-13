@@ -82,8 +82,8 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right space-x-2">
-                            <button class="text-indigo-600 hover:underline" @click="openEdit(d)">Изменить</button>
-                            <button class="text-red-600 hover:underline" @click="destroy(d)">Удалить</button>
+                            <button v-if="can.update" class="text-indigo-600 hover:underline" @click="openEdit(d)">Изменить</button>
+                            <button v-if="can.delete" class="text-red-600 hover:underline" @click="destroy(d)">Удалить</button>
                         </td>
                     </tr>
                     <tr v-if="!departments.data.length">

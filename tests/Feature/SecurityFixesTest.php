@@ -184,4 +184,31 @@ class SecurityFixesTest extends TestCase
         $this->actingAs($this->user('financist'))->get(route('audit.index'))->assertForbidden();
         $this->actingAs($this->user('admin'))->get(route('audit.index'))->assertOk();
     }
+
+    public function test_manager_cannot_write_custom_fields_to_other_company_project(): void
+    {
+        // IDOR: менеджер BAIA не должен править доп-поля заказа/сделки ASU.
+        $asuMgr = $this->user('manager', $this->asu);
+        $asuDeal = $this->deal($asuMgr, $this->asu);
+        $field = \App\Models\CustomField::create([
+            'entity_type' => 'deal', 'name' => 'Секретное', 'type' => 'text', 'is_visible' => true, 'order' => 1,
+        ]);
+
+        $baiaMgr = $this->user('manager', $this->baia);
+        $this->actingAs($baiaMgr)->post(route('custom-field-values.sync'), [
+            'entity_type' => 'deal', 'entity_id' => $asuDeal->id,
+            'values' => [$field->id => 'взлом'],
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('custom_field_values', ['entity_id' => $asuDeal->id, 'value' => 'взлом']);
+    }
+
+    public function test_salary_hidden_from_serialized_user(): void
+    {
+        $u = $this->user('manager');
+        $u->update(['salary' => 500000]);
+        // При сериализации модели во фронт зарплата не утекает.
+        $this->assertArrayNotHasKey('salary', $u->fresh()->toArray());
+        $this->assertArrayNotHasKey('contract_path', $u->fresh()->toArray());
+    }
 }

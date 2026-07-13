@@ -15,7 +15,10 @@ use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password', 'department_id', 'phone', 'salary', 'contract_path', 'avatar', 'language', 'is_active'])]
-#[Hidden(['password', 'remember_token'])]
+// salary/contract_path скрыты по умолчанию: не утекут при случайной
+// сериализации сырой модели User во фронт. Админ-список читает их явно
+// ($u->salary) — на прямой доступ $hidden не влияет.
+#[Hidden(['password', 'remember_token', 'salary', 'contract_path'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
