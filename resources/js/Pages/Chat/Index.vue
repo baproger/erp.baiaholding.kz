@@ -469,7 +469,6 @@ onUnmounted(() => clearInterval(timer));
                             <div v-else class="group flex items-end gap-2" :class="m.user_id === me?.id ? 'flex-row-reverse' : ''">
                                 <Avatar v-if="m.user_id !== me?.id" :name="m.user_name" :src="m.user_avatar" :size="28" />
                                 <div class="max-w-[72%]">
-                                    <div v-if="m.user_id !== me?.id && (activeChat?.type !== 'personal')" class="mb-0.5 ml-1 text-[11px] font-semibold text-indigo-500">{{ m.user_name }}</div>
                                     <div :class="m.user_id === me?.id ? 'rounded-br-md bg-indigo-600 text-white' : 'rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-100'"
                                         class="rounded-2xl px-3.5 py-2 text-sm shadow-sm">
                                         <!-- Цитата: ответ на сообщение -->
@@ -495,7 +494,8 @@ onUnmounted(() => clearInterval(timer));
                                             </a>
                                         </div>
                                         <div v-if="m.message" class="whitespace-pre-line break-words">{{ m.message }}</div>
-                                        <div class="mt-0.5 flex items-center justify-end gap-1 text-[10px]" :class="m.user_id === me?.id ? 'text-indigo-200' : 'text-slate-400'">
+                                        <div class="mt-0.5 flex items-center gap-1.5 text-[10px]" :class="m.user_id === me?.id ? 'justify-end text-indigo-200' : 'text-slate-400'">
+                                            <span v-if="m.user_id !== me?.id && activeChat?.type !== 'personal'" class="font-semibold text-indigo-500">{{ m.user_name }}</span>
                                             <span v-if="m.edited">изменено</span>
                                             <span>{{ fmtTime(m.created_at) }}</span>
                                         </div>
