@@ -123,6 +123,17 @@ class StageController extends Controller
             'order' => $data['order'] ?? null,
         ], fn ($v) => $v !== null);
 
+        // «Завершающий этап» — только у цеха: по нему заказ считается готовым
+        // и сделка возвращается на «Логистику». Завершающий один на воронку.
+        if ($kind === 'project' && $request->has('is_completed')) {
+            $isCompleted = (bool) $data['is_completed'];
+            if ($isCompleted) {
+                ProjectStage::where('company_id', $stage->company_id)->where('id', '!=', $stage->id)
+                    ->update(['is_completed' => false]);
+            }
+            $updates['is_completed'] = $isCompleted;
+        }
+
         // Тип и гейт — только у этапов сделок.
         if ($kind !== 'project' && $request->hasAny(['stage_type', 'gate_task_title', 'gate_task_role', 'gate_task_days'])) {
             if ($request->has('stage_type')) {
@@ -236,6 +247,7 @@ class StageController extends Controller
             'gate_task_title' => ['nullable', 'string', 'max:255'],
             'gate_task_role' => ['nullable', Rule::in(['financist', 'manager', 'director', 'admin'])],
             'gate_task_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'is_completed' => ['nullable', 'boolean'],
         ]);
     }
 }

@@ -38,7 +38,7 @@ const recolor = (stage, e) => router.put(route('stages.update', [kind.value, sta
 
 // Редактор этапа: имя + (для сделок) тип и гейт-задача.
 const editing = ref(null);
-const editForm = useForm({ name: '', stage_type: '', gate_task_title: '', gate_task_role: 'financist', gate_task_days: '' });
+const editForm = useForm({ name: '', stage_type: '', gate_task_title: '', gate_task_role: 'financist', gate_task_days: '', is_completed: false });
 const startEdit = (stage) => {
     editing.value = stage.id;
     editForm.clearErrors();
@@ -47,9 +47,10 @@ const startEdit = (stage) => {
     editForm.gate_task_title = stage.gate_task_title ?? '';
     editForm.gate_task_role = stage.gate_task_role ?? 'financist';
     editForm.gate_task_days = stage.gate_task_days ?? '';
+    editForm.is_completed = !!stage.is_completed;
 };
 const saveEdit = (stage) => editForm
-    .transform((d) => isWorkshop.value ? { name: d.name } : {
+    .transform((d) => isWorkshop.value ? { name: d.name, is_completed: d.is_completed } : {
         ...d,
         stage_type: d.stage_type || null,
         gate_task_title: d.gate_task_title || null,
@@ -147,6 +148,7 @@ const typeBadge = (s) => s.stage_type ? (props.stageTypes[s.stage_type] ?? s.sta
                             {{ idx + 1 }}. {{ stage.name }}
                             <span v-if="typeBadge(stage)" class="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">{{ typeBadge(stage) }}</span>
                             <span v-if="stage.gate_task_title" class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" :title="`Задача: ${stage.gate_task_title} · ${gateRoles[stage.gate_task_role] ?? stage.gate_task_role} · ${stage.gate_task_days} дн.`">🔒 гейт</span>
+                            <span v-if="stage.is_completed" class="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title="Заказ готов, сделка возвращается на Логистику">🏁 завершающий</span>
                             <span v-if="occupants(stage)" class="ml-1 text-[10px] text-slate-400">{{ occupants(stage) }} {{ isWorkshop ? 'заказ.' : 'сдел.' }}</span>
                         </span>
                         <button class="text-xs text-indigo-600 hover:underline" @click="startEdit(stage)">Изменить</button>
@@ -169,6 +171,11 @@ const typeBadge = (s) => s.stage_type ? (props.stageTypes[s.stage_type] ?? s.sta
                                 <div v-if="editForm.errors.stage_type" class="mt-1 text-xs text-red-600">{{ editForm.errors.stage_type }}</div>
                             </div>
                         </div>
+                        <!-- Цех: отметить завершающий этап (заказ готов → сделка на Логистику) -->
+                        <label v-if="isWorkshop" class="mt-2 flex items-center gap-2 text-sm text-slate-600">
+                            <input type="checkbox" v-model="editForm.is_completed" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                            🏁 Завершающий этап — на нём заказ считается готовым, сделка возвращается на «Логистику»
+                        </label>
                         <template v-if="!isWorkshop">
                             <div class="mt-2 text-xs font-semibold text-slate-500">Гейт: задача при входе на этап (пока не закрыта — сделка дальше не идёт). Оставьте текст пустым, чтобы отключить.</div>
                             <div class="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">

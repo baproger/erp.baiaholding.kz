@@ -91,6 +91,25 @@ class WorkflowTest extends TestCase
         $this->actingAs($emp)->get(route('stages.index'))->assertForbidden();
     }
 
+    public function test_admin_marks_workshop_stage_as_completing_and_it_is_unique(): void
+    {
+        // Админ сам назначает завершающий этап цеха; завершающий один на воронку.
+        $this->seedAll();
+        $admin = $this->user('admin');
+        $a = ProjectStage::create(['name' => 'Отправка', 'order' => 1, 'type' => 'project', 'is_active' => true, 'checklist' => [], 'is_completed' => true]);
+        $b = ProjectStage::create(['name' => 'Приёмка', 'order' => 2, 'type' => 'project', 'is_active' => true, 'checklist' => []]);
+
+        // Назначаем завершающим B — с A флаг снимается (один на воронку).
+        $this->actingAs($admin)->put(route('stages.update', ['project', $b->id]), ['is_completed' => true])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertTrue((bool) $b->fresh()->is_completed);
+        $this->assertFalse((bool) $a->fresh()->is_completed);
+
+        // Снять флаг тоже можно.
+        $this->actingAs($admin)->put(route('stages.update', ['project', $b->id]), ['is_completed' => false])->assertRedirect();
+        $this->assertFalse((bool) $b->fresh()->is_completed);
+    }
+
     public function test_each_company_has_own_workshop_funnel(): void
     {
         // Цех раздельный: BAIA — мебельный, ASU — швейный. Заказ попадает
