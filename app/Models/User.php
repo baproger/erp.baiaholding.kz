@@ -69,6 +69,13 @@ class User extends Authenticatable
      */
     public function worksInCompany(?int $companyId): bool
     {
+        // Админ — глобальный доступ ко всем фирмам (полный доступ везде),
+        // как и Gate::before для политик. Иначе изоляция по компаниям в
+        // ExpenseController/InvoiceController/… блокировала бы и админа.
+        if ($this->hasRole('admin')) {
+            return true;
+        }
+
         return $companyId === null || $this->companies()->where('companies.id', $companyId)->exists();
     }
 
