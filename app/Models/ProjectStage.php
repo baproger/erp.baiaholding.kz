@@ -28,7 +28,7 @@ class ProjectStage extends Model
     {
         return static::where('is_active', true)
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
-            ->orderBy('order')->get();
+            ->orderBy('order')->orderBy('id')->get();
     }
 
     public function projects(): HasMany

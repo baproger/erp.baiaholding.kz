@@ -177,9 +177,11 @@ class ProjectController extends Controller
     public function advance(Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
-        // «Далее» двигает по воронке цеха СВОЕЙ компании.
-        $next = ProjectStage::funnel($project->deal?->company_id ? (int) $project->deal->company_id : null)
-            ->first(fn ($s) => $s->order > (optional($project->stage)->order ?? 0));
+        // «Далее» — по ПОЗИЦИИ в воронке цеха своей компании (не по order >
+        // current): при задвоенном order соседний этап не перескакивается.
+        $funnel = ProjectStage::funnel($project->deal?->company_id ? (int) $project->deal->company_id : null)->values();
+        $idx = $funnel->search(fn ($s) => $s->id === $project->project_stage_id);
+        $next = $idx !== false ? $funnel->get($idx + 1) : $funnel->first();
         if (! $next) {
             return back()->with('error', 'Это последний этап.');
         }
