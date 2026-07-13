@@ -16,6 +16,11 @@ class ChatMessage extends Model
         return $this->belongsTo(ChatMessage::class, 'reply_to_id');
     }
 
+    public function reactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ChatMessageReaction::class);
+    }
+
     public function chat(): BelongsTo
     {
         return $this->belongsTo(Chat::class);

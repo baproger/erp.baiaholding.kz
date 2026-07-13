@@ -192,6 +192,23 @@ const deleteMessage = async (m) => {
     }
 };
 
+// ---- Реакции-эмодзи ----
+const REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏'];
+const reactPickerFor = ref(null); // id сообщения, у которого открыт выбор реакции
+const react = async (m, emoji) => {
+    reactPickerFor.value = null;
+    try { await window.axios.post(route('chat.messages.react', m.id), { emoji }); loadMessages(true); } catch (e) { /* ignore */ }
+};
+
+// ---- Закрепление сообщения (админ/директор) ----
+const pinMessage = async (m) => {
+    const chatId = activeChat.value?.id;
+    try {
+        await window.axios.post(route('chat.messages.pin', m.id));
+        router.reload({ only: ['chats'], onSuccess: () => { if (chatId) syncActive(chatId); } });
+    } catch (e) { /* ignore */ }
+};
+
 // Auto-resize textarea.
 const resizeInput = () => nextTick(() => {
     const el = textarea.value;
@@ -390,6 +407,16 @@ onUnmounted(() => clearInterval(timer));
                     </div>
                 </header>
 
+                <!-- Закреплённое сообщение -->
+                <div v-if="activeChat?.pinned" class="flex items-center gap-2 border-b border-amber-100 bg-amber-50/70 px-4 py-2 text-xs">
+                    <svg viewBox="0 0 24 24" class="h-4 w-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7Z"/></svg>
+                    <div class="min-w-0 flex-1">
+                        <span class="font-semibold text-amber-700">Закреплено · {{ activeChat.pinned.author }}: </span>
+                        <span class="text-slate-600">{{ activeChat.pinned.message }}</span>
+                    </div>
+                    <button v-if="canCreateGroup" @click="pinMessage({ id: activeChat.pinned.id })" title="Открепить" class="flex-shrink-0 text-slate-400 hover:text-rose-500">✕</button>
+                </div>
+
                 <!-- Messages -->
                 <div ref="scroller" class="relative flex-1 overflow-y-auto px-4 py-4">
                     <TransitionGroup name="msg" tag="div" class="space-y-1.5">
@@ -431,18 +458,34 @@ onUnmounted(() => clearInterval(timer));
                                             <span>{{ fmtTime(m.created_at) }}</span>
                                         </div>
                                     </div>
+                                    <!-- Реакции-эмодзи под сообщением -->
+                                    <div v-if="m.reactions && m.reactions.length" class="mt-1 flex flex-wrap gap-1" :class="m.user_id === me?.id ? 'justify-end' : ''">
+                                        <button v-for="r in m.reactions" :key="r.emoji" @click="react(m, r.emoji)"
+                                            class="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs ring-1 transition-colors"
+                                            :class="r.mine ? 'bg-indigo-50 ring-indigo-300' : 'bg-white ring-slate-200 hover:bg-slate-50'">
+                                            <span>{{ r.emoji }}</span><span class="text-[10px] font-semibold text-slate-500">{{ r.count }}</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <!-- Действия наведением: ответить / изменить (своё) / удалить -->
-                                <div class="mb-1 hidden flex-shrink-0 items-center gap-0.5 group-hover:flex">
+                                <!-- Действия наведением: реакция / ответить / изменить / закрепить / удалить -->
+                                <div class="relative mb-1 hidden flex-shrink-0 items-center gap-0.5 group-hover:flex">
+                                    <button @click="reactPickerFor = reactPickerFor === m.id ? null : m.id" title="Реакция" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-amber-50 hover:text-amber-500">😊</button>
                                     <button @click="startReply(m)" title="Ответить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-indigo-50 hover:text-indigo-500">
                                         <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 5 5v1"/></svg>
                                     </button>
                                     <button v-if="m.can_edit" @click="startEditMsg(m)" title="Изменить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-indigo-50 hover:text-indigo-500">
                                         <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                                     </button>
+                                    <button v-if="canCreateGroup && activeChat?.type !== 'personal'" @click="pinMessage(m)" title="Закрепить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-indigo-50 hover:text-indigo-500">
+                                        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7Z"/></svg>
+                                    </button>
                                     <button v-if="m.can_delete" @click="deleteMessage(m)" title="Удалить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500">
                                         <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
                                     </button>
+                                    <!-- Быстрый выбор реакции -->
+                                    <div v-if="reactPickerFor === m.id" class="absolute -top-9 left-0 z-10 flex gap-0.5 rounded-full bg-white px-1.5 py-1 shadow-lg ring-1 ring-slate-200">
+                                        <button v-for="e in REACTIONS" :key="e" @click="react(m, e)" class="rounded-full px-1 text-base transition-transform hover:scale-125">{{ e }}</button>
+                                    </div>
                                 </div>
                             </div>
                         </template>

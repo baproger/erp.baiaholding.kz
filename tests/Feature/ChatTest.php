@@ -187,4 +187,40 @@ class ChatTest extends TestCase
         // Чужое сообщение редактировать нельзя.
         $this->actingAs($a)->patch(route('chat.messages.update', $reply), ['message' => 'взлом'])->assertForbidden();
     }
+
+    public function test_reaction_toggle(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $u = User::factory()->create(); $u->assignRole('employee');
+        $this->actingAs($u)->get(route('chat.index'));
+        $chat = Chat::where('type', 'global')->first();
+        $this->actingAs($u)->post(route('chat.send', $chat), ['message' => 'привет']);
+        $msg = \App\Models\ChatMessage::first();
+
+        // Поставить реакцию.
+        $this->actingAs($u)->post(route('chat.messages.react', $msg), ['emoji' => '👍'])->assertOk();
+        $this->assertDatabaseHas('chat_message_reactions', ['chat_message_id' => $msg->id, 'user_id' => $u->id, 'emoji' => '👍']);
+        // Повторно — снимает (тумблер).
+        $this->actingAs($u)->post(route('chat.messages.react', $msg), ['emoji' => '👍'])->assertOk();
+        $this->assertDatabaseMissing('chat_message_reactions', ['chat_message_id' => $msg->id, 'user_id' => $u->id, 'emoji' => '👍']);
+    }
+
+    public function test_pin_message_admin_only(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $admin = User::factory()->create(); $admin->assignRole('admin');
+        $emp = User::factory()->create(); $emp->assignRole('employee');
+        $this->actingAs($admin)->post(route('chat.store'), ['type' => 'group', 'name' => 'Г', 'participants' => [$emp->id]]);
+        $chat = Chat::where('type', 'group')->first();
+        $this->actingAs($admin)->post(route('chat.send', $chat), ['message' => 'важное']);
+        $msg = \App\Models\ChatMessage::first();
+
+        // Сотрудник закрепить не может.
+        $this->actingAs($emp)->post(route('chat.messages.pin', $msg))->assertForbidden();
+        // Админ закрепляет / открепляет (тумблер).
+        $this->actingAs($admin)->post(route('chat.messages.pin', $msg))->assertOk();
+        $this->assertEquals($msg->id, $chat->fresh()->pinned_message_id);
+        $this->actingAs($admin)->post(route('chat.messages.pin', $msg))->assertOk();
+        $this->assertNull($chat->fresh()->pinned_message_id);
+    }
 }

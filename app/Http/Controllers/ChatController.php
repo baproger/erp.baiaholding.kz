@@ -35,7 +35,7 @@ class ChatController extends Controller
         $chats = Chat::query()
             ->where(fn ($q) => $q->where('type', 'global')
                 ->orWhereHas('participants', fn ($p) => $p->where('users.id', $user->id)))
-            ->with(['participants:id,name,avatar', 'lastMessage.user:id,name'])
+            ->with(['participants:id,name,avatar', 'lastMessage.user:id,name', 'pinnedMessage.user:id,name'])
             ->withCount('messages')
             ->orderByDesc('updated_at')
             ->get()
@@ -62,6 +62,12 @@ class ChatController extends Controller
                     'avatar' => $avatar,
                     'deal_id' => $c->deal_id,
                     'messages_count' => $c->messages_count,
+                    // Закреплённое сообщение (баннер сверху чата).
+                    'pinned' => $c->pinnedMessage ? [
+                        'id' => $c->pinnedMessage->id,
+                        'author' => $c->pinnedMessage->user?->name,
+                        'message' => \Illuminate\Support\Str::limit((string) $c->pinnedMessage->message, 90) ?: '📎 вложение',
+                    ] : null,
                     'participants' => $c->participants->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'avatar' => $p->avatar])->values(),
                     'last' => $last ? [
                         'id' => $last->id,
@@ -84,8 +90,9 @@ class ChatController extends Controller
     {
         $this->authorizeParticipant($request, $chat);
 
+        $uid = $request->user()->id;
         $messages = $chat->messages()
-            ->with(['user:id,name,avatar', 'replyTo:id,user_id,message', 'replyTo.user:id,name'])
+            ->with(['user:id,name,avatar', 'replyTo:id,user_id,message', 'replyTo.user:id,name', 'reactions:id,chat_message_id,user_id,emoji'])
             ->when($request->integer('after'), fn ($q, $after) => $q->where('id', '>', $after))
             ->orderBy('id')
             ->limit(100)
@@ -110,6 +117,12 @@ class ChatController extends Controller
                     'message' => Str::limit((string) $m->replyTo->message, 120),
                 ] : null,
                 'edited' => $m->edited_at !== null,
+                // Реакции, сгруппированные по эмодзи: [{emoji, count, mine}].
+                'reactions' => $m->reactions->groupBy('emoji')->map(fn ($g, $emoji) => [
+                    'emoji' => $emoji,
+                    'count' => $g->count(),
+                    'mine' => $g->contains('user_id', $uid),
+                ])->values(),
                 'can_delete' => $this->canDeleteMessage($request->user(), $m),
                 'can_edit' => $m->user_id === $request->user()->id,
                 'created_at' => $m->created_at->toIso8601String(),
@@ -167,6 +180,37 @@ class ChatController extends Controller
 
         $data = $request->validate(['message' => ['required', 'string', 'max:5000']]);
         $message->update(['message' => $data['message'], 'edited_at' => now()]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Поставить/снять реакцию-эмодзи (тумблер) — любой участник чата. */
+    public function react(Request $request, ChatMessage $message): JsonResponse
+    {
+        $this->authorizeParticipant($request, $message->chat);
+        $data = $request->validate(['emoji' => ['required', 'string', 'max:16']]);
+
+        $existing = $message->reactions()
+            ->where('user_id', $request->user()->id)->where('emoji', $data['emoji'])->first();
+        if ($existing) {
+            $existing->delete();
+        } else {
+            $message->reactions()->create(['user_id' => $request->user()->id, 'emoji' => $data['emoji']]);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Закрепить/открепить сообщение чата (тумблер) — админ/директор. */
+    public function pinMessage(Request $request, ChatMessage $message): JsonResponse
+    {
+        $chat = $message->chat;
+        $this->authorizeParticipant($request, $chat);
+        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403, 'Закрепляет админ или директор.');
+
+        $chat->update([
+            'pinned_message_id' => $chat->pinned_message_id === $message->id ? null : $message->id,
+        ]);
 
         return response()->json(['ok' => true]);
     }
