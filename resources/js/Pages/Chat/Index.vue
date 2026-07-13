@@ -25,7 +25,7 @@ const infoOpen = ref(false);   // right info panel
 const infoTab = ref('members');
 const showEmoji = ref(false);
 
-const form = useForm({ message: '', file: null, reply_to_id: null });
+const form = useForm({ message: '', file: null, reply_to_id: null, mention_ids: [] });
 const replyTo = ref(null); // сообщение, на которое отвечаем (цитата)
 const editingMsg = ref(null); // сообщение, которое редактируем
 
@@ -48,8 +48,16 @@ const togglePin = (c) => {
     pins.value = isPinned(c) ? pins.value.filter((id) => id !== c.id) : [...pins.value, c.id];
     persistPins();
 };
-const isUnread = (c) => c.last && c.last.id > (readState[c.id] ?? 0) && c.last.author_id !== me.value?.id;
-const markSeen = (c) => { if (c && c.last) { readState[c.id] = c.last.id; persistSeen(); } };
+// Непрочитанные — серверный счётчик (c.unread); открытые в этой сессии гасим сразу.
+const locallyRead = reactive({});
+const unreadCount = (c) => locallyRead[c.id] ? 0 : (c.unread ?? 0);
+const isUnread = (c) => unreadCount(c) > 0;
+const markSeen = (c) => {
+    if (!c) return;
+    if (c.last) { readState[c.id] = c.last.id; persistSeen(); }
+    locallyRead[c.id] = true;
+    window.axios.post(route('chat.read', c.id)).catch(() => {});
+};
 
 // ---- Chat list sections ----
 const filtered = computed(() => {
@@ -151,12 +159,46 @@ const send = () => {
     if ((!form.message.trim() && !form.file) || !activeChat.value) return;
     showEmoji.value = false;
     form.reply_to_id = replyTo.value?.id ?? null;
+    // Упоминания: отправляем id тех, чьё @имя реально осталось в тексте.
+    form.mention_ids = mentioned.value.filter((m) => form.message.includes('@' + m.name)).map((m) => m.id);
     form.post(route('chat.send', activeChat.value.id), {
         preserveScroll: true, preserveState: true, forceFormData: true,
-        onSuccess: () => { form.reset('message', 'reply_to_id'); form.file = null; replyTo.value = null; resizeInput(); loadMessages(); },
+        onSuccess: () => { form.reset('message', 'reply_to_id', 'mention_ids'); form.file = null; replyTo.value = null; mentioned.value = []; resizeInput(); loadMessages(); },
     });
 };
-const onEnter = (e) => { if (!e.shiftKey) { e.preventDefault(); send(); } };
+
+// ---- Упоминания @имя ----
+const mentioned = ref([]); // [{id, name}] упомянутые в текущем черновике
+const mentionQuery = ref(null);
+const mentionList = computed(() => {
+    if (mentionQuery.value === null) return [];
+    const q = mentionQuery.value.toLowerCase();
+    const pool = activeChat.value?.participants?.length ? activeChat.value.participants : props.users;
+    return pool.filter((u) => u.id !== me.value?.id && u.name.toLowerCase().includes(q)).slice(0, 6);
+});
+const onComposerInput = () => {
+    resizeInput();
+    const el = textarea.value;
+    const upto = el ? form.message.slice(0, el.selectionStart) : form.message;
+    const m = upto.match(/@([\p{L}\p{N} ]{0,24})$/u);
+    mentionQuery.value = m ? m[1].replace(/^\s+/, '') : null;
+};
+const pickMention = (u) => {
+    const el = textarea.value;
+    const pos = el ? el.selectionStart : form.message.length;
+    const before = form.message.slice(0, pos).replace(/@([\p{L}\p{N} ]*)$/u, '@' + u.name + ' ');
+    form.message = before + form.message.slice(pos);
+    if (!mentioned.value.some((x) => x.id === u.id)) mentioned.value.push({ id: u.id, name: u.name });
+    mentionQuery.value = null;
+    nextTick(() => { textarea.value?.focus(); resizeInput(); });
+};
+const onEnter = (e) => {
+    if (e.shiftKey) return;
+    e.preventDefault();
+    // Если открыт список @упоминаний — Enter выбирает первого.
+    if (mentionList.value.length) { pickMention(mentionList.value[0]); return; }
+    send();
+};
 
 // ---- Ответ-цитата ----
 const startReply = (m) => { editingMsg.value = null; replyTo.value = m; textarea.value?.focus(); };
@@ -336,7 +378,7 @@ onUnmounted(() => clearInterval(timer));
                                     <span class="truncate text-xs" :class="isUnread(c) ? 'font-semibold text-slate-600' : 'text-slate-400'">
                                         {{ c.last ? c.last.text : 'Нет сообщений' }}
                                     </span>
-                                    <span v-if="isUnread(c)" class="flex h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500"></span>
+                                    <span v-if="unreadCount(c) > 0" class="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500 px-1 text-[10px] font-bold text-white">{{ unreadCount(c) > 99 ? '99+' : unreadCount(c) }}</span>
                                 </div>
                             </div>
                             <button @click.stop="togglePin(c)" :title="isPinned(c) ? 'Открепить' : 'Закрепить'"
@@ -526,7 +568,14 @@ onUnmounted(() => clearInterval(timer));
                         <button title="Прикрепить файл" class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100" @click="pickFile">
                             <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.44 11.05 12.25 20.24a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.48-8.49"/></svg>
                         </button>
-                        <textarea ref="textarea" v-model="form.message" @keydown.enter="onEnter" @input="resizeInput" rows="1" placeholder="Напишите сообщение…  (Enter — отправить, Shift+Enter — новая строка)"
+                        <!-- Выпадающий список упоминаний @имя -->
+                        <div v-if="mentionList.length" class="absolute bottom-full left-2 mb-2 w-64 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-slate-200">
+                            <button v-for="u in mentionList" :key="u.id" @click="pickMention(u)" class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-indigo-50">
+                                <Avatar :name="u.name" :src="u.avatar" :size="26" />
+                                <span class="text-slate-700">{{ u.name }}</span>
+                            </button>
+                        </div>
+                        <textarea ref="textarea" v-model="form.message" @keydown.enter="onEnter" @input="onComposerInput" rows="1" placeholder="Напишите сообщение…  (@ — упомянуть, Enter — отправить)"
                             class="max-h-[140px] flex-1 resize-none border-0 bg-transparent py-2 text-sm text-slate-800 placeholder-slate-400 focus:ring-0"></textarea>
                         <button @click="send" :disabled="form.processing || (!form.message.trim() && !form.file)"
                             class="send-btn flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm transition-all hover:bg-indigo-700 disabled:opacity-40">

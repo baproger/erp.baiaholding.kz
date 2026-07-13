@@ -38,8 +38,18 @@ class ChatController extends Controller
             ->with(['participants:id,name,avatar', 'lastMessage.user:id,name', 'pinnedMessage.user:id,name'])
             ->withCount('messages')
             ->orderByDesc('updated_at')
-            ->get()
-            ->map(function ($c) use ($user) {
+            ->get();
+
+        // Непрочитанные на пользователя: сообщения новее last_read_message_id и
+        // не свои. Один запрос с коррелированным подзапросом (без N+1).
+        $unread = \App\Models\ChatMessage::query()
+            ->where('user_id', '!=', $user->id)
+            ->whereIn('chat_id', $chats->pluck('id'))
+            ->whereRaw('id > COALESCE((select last_read_message_id from chat_reads where chat_reads.chat_id = chat_messages.chat_id and chat_reads.user_id = ?), 0)', [$user->id])
+            ->selectRaw('chat_id, count(*) c')->groupBy('chat_id')->pluck('c', 'chat_id');
+
+        $chats = $chats
+            ->map(function ($c) use ($user, $unread) {
                 // For a personal chat with no explicit name, show the other participant.
                 $name = $c->name;
                 if (! $name && $c->type === 'personal') {
@@ -62,6 +72,7 @@ class ChatController extends Controller
                     'avatar' => $avatar,
                     'deal_id' => $c->deal_id,
                     'messages_count' => $c->messages_count,
+                    'unread' => (int) ($unread[$c->id] ?? 0),
                     // Закреплённое сообщение (баннер сверху чата).
                     'pinned' => $c->pinnedMessage ? [
                         'id' => $c->pinnedMessage->id,
@@ -138,6 +149,8 @@ class ChatController extends Controller
         $validated = $request->validate([
             'message' => ['nullable', 'string', 'max:5000'],
             'reply_to_id' => ['nullable', 'integer', 'exists:chat_messages,id'],
+            'mention_ids' => ['nullable', 'array'],
+            'mention_ids.*' => ['integer'],
             'file' => ['nullable', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg,gif,webp,zip,rar,txt,csv'],
         ]);
 
@@ -161,7 +174,7 @@ class ChatController extends Controller
             ];
         }
 
-        $chat->messages()->create([
+        $msg = $chat->messages()->create([
             'user_id' => $request->user()->id,
             'reply_to_id' => $replyToId,
             'message' => $validated['message'] ?? '',
@@ -169,7 +182,31 @@ class ChatController extends Controller
         ]);
         $chat->touch();
 
+        // Упоминания @имя: уведомляем упомянутых участников (кроме себя).
+        $mentionIds = collect($validated['mention_ids'] ?? [])->map(fn ($v) => (int) $v)
+            ->reject(fn ($id) => $id === $request->user()->id)->unique();
+        if ($mentionIds->isNotEmpty()) {
+            $participantIds = $chat->type === 'global'
+                ? User::where('is_active', true)->pluck('id')
+                : $chat->participants()->pluck('users.id');
+            User::whereIn('id', $mentionIds->intersect($participantIds))->get()
+                ->each(fn ($u) => $u->notify(new \App\Notifications\ChatMention($chat, $request->user(), $msg)));
+        }
+
         return back();
+    }
+
+    /** Отметить чат прочитанным до последнего сообщения (серверный учёт). */
+    public function markRead(Request $request, Chat $chat): JsonResponse
+    {
+        $this->authorizeParticipant($request, $chat);
+        $lastId = (int) $chat->messages()->max('id');
+        \Illuminate\Support\Facades\DB::table('chat_reads')->updateOrInsert(
+            ['chat_id' => $chat->id, 'user_id' => $request->user()->id],
+            ['last_read_message_id' => $lastId, 'updated_at' => now(), 'created_at' => now()]
+        );
+
+        return response()->json(['ok' => true]);
     }
 
     /** Редактирование сообщения — ТОЛЬКО автор своего. Ставит метку «изменено». */

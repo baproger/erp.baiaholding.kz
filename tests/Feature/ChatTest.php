@@ -205,6 +205,24 @@ class ChatTest extends TestCase
         $this->assertDatabaseMissing('chat_message_reactions', ['chat_message_id' => $msg->id, 'user_id' => $u->id, 'emoji' => '👍']);
     }
 
+    public function test_mention_notifies_user_and_read_marks_chat(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $a = User::factory()->create(); $a->assignRole('admin');
+        $b = User::factory()->create(); $b->assignRole('employee');
+        $this->actingAs($a)->post(route('chat.store'), ['type' => 'group', 'name' => 'Г', 'participants' => [$b->id]]);
+        $chat = Chat::where('type', 'group')->first();
+
+        // Упоминание @B → уведомление b.
+        $this->actingAs($a)->post(route('chat.send', $chat), ['message' => 'привет @'.$b->name, 'mention_ids' => [$b->id]])->assertRedirect();
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $b->id, 'type' => \App\Notifications\ChatMention::class]);
+
+        // b отмечает чат прочитанным → счётчик непрочитанных 0.
+        $this->actingAs($b)->post(route('chat.read', $chat))->assertOk();
+        $lastId = \App\Models\ChatMessage::max('id');
+        $this->assertDatabaseHas('chat_reads', ['chat_id' => $chat->id, 'user_id' => $b->id, 'last_read_message_id' => $lastId]);
+    }
+
     public function test_pin_message_admin_only(): void
     {
         $this->seed(RolePermissionSeeder::class);

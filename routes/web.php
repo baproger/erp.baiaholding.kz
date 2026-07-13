@@ -145,6 +145,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('chat/messages/{message}', [ChatController::class, 'updateMessage'])->middleware('throttle:60,1')->name('chat.messages.update');
     Route::post('chat/messages/{message}/react', [ChatController::class, 'react'])->middleware('throttle:120,1')->name('chat.messages.react');
     Route::post('chat/messages/{message}/pin', [ChatController::class, 'pinMessage'])->middleware('throttle:60,1')->name('chat.messages.pin');
+    Route::post('chat/{chat}/read', [ChatController::class, 'markRead'])->middleware('throttle:120,1')->name('chat.read');
     Route::delete('chat/messages/{message}', [ChatController::class, 'destroyMessage'])->name('chat.messages.destroy');
     Route::get('chat/messages/{message}/attachment/{index}', [ChatController::class, 'downloadAttachment'])->name('chat.attachment');
     Route::get('chat/{chat}/attachments', [ChatController::class, 'attachments'])->name('chat.attachments');
