@@ -85,7 +85,7 @@ class ChatController extends Controller
         $this->authorizeParticipant($request, $chat);
 
         $messages = $chat->messages()
-            ->with('user:id,name,avatar')
+            ->with(['user:id,name,avatar', 'replyTo:id,user_id,message', 'replyTo.user:id,name'])
             ->when($request->integer('after'), fn ($q, $after) => $q->where('id', '>', $after))
             ->orderBy('id')
             ->limit(100)
@@ -103,7 +103,15 @@ class ChatController extends Controller
                     'is_image' => Str::startsWith($a['mime'] ?? '', 'image/'),
                     'url' => route('chat.attachment', [$m->id, $i]),
                 ]),
+                // Цитата: на какое сообщение отвечают (автор + короткий текст).
+                'reply_to' => $m->replyTo ? [
+                    'id' => $m->replyTo->id,
+                    'user_name' => $m->replyTo->user?->name,
+                    'message' => Str::limit((string) $m->replyTo->message, 120),
+                ] : null,
+                'edited' => $m->edited_at !== null,
                 'can_delete' => $this->canDeleteMessage($request->user(), $m),
+                'can_edit' => $m->user_id === $request->user()->id,
                 'created_at' => $m->created_at->toIso8601String(),
             ]);
 
@@ -116,11 +124,18 @@ class ChatController extends Controller
 
         $validated = $request->validate([
             'message' => ['nullable', 'string', 'max:5000'],
+            'reply_to_id' => ['nullable', 'integer', 'exists:chat_messages,id'],
             'file' => ['nullable', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg,gif,webp,zip,rar,txt,csv'],
         ]);
 
         if (blank($validated['message'] ?? null) && ! $request->hasFile('file')) {
             throw ValidationException::withMessages(['message' => 'Введите сообщение или прикрепите файл.']);
+        }
+
+        // Отвечать можно только на сообщение ЭТОГО чата.
+        $replyToId = null;
+        if (! empty($validated['reply_to_id'])) {
+            $replyToId = ChatMessage::where('id', $validated['reply_to_id'])->where('chat_id', $chat->id)->value('id');
         }
 
         $attachments = [];
@@ -135,6 +150,7 @@ class ChatController extends Controller
 
         $chat->messages()->create([
             'user_id' => $request->user()->id,
+            'reply_to_id' => $replyToId,
             'message' => $validated['message'] ?? '',
             'attachments' => $attachments ?: null,
         ]);
@@ -143,7 +159,19 @@ class ChatController extends Controller
         return back();
     }
 
-    /** Delete a message: admins/directors can delete anyone's, authors their own. */
+    /** Редактирование сообщения — ТОЛЬКО автор своего. Ставит метку «изменено». */
+    public function updateMessage(Request $request, ChatMessage $message): JsonResponse
+    {
+        $this->authorizeParticipant($request, $message->chat);
+        abort_unless($message->user_id === $request->user()->id, 403, 'Редактировать можно только свои сообщения.');
+
+        $data = $request->validate(['message' => ['required', 'string', 'max:5000']]);
+        $message->update(['message' => $data['message'], 'edited_at' => now()]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Удаление сообщения: любое — ТОЛЬКО админ; автор — своё. */
     public function destroyMessage(Request $request, ChatMessage $message): JsonResponse
     {
         $this->authorizeParticipant($request, $message->chat);
@@ -202,7 +230,8 @@ class ChatController extends Controller
 
     private function canDeleteMessage(User $user, ChatMessage $message): bool
     {
-        return $user->hasAnyRole(['admin', 'director']) || $message->user_id === $user->id;
+        // Любое чужое сообщение удаляет ТОЛЬКО админ; своё — автор.
+        return $user->hasRole('admin') || $message->user_id === $user->id;
     }
 
     public function store(Request $request): RedirectResponse

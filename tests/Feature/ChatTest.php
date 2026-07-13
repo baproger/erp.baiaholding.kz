@@ -148,4 +148,43 @@ class ChatTest extends TestCase
         $this->actingAs($admin)->delete(route('chat.messages.destroy', $msg))->assertOk();
         $this->assertDatabaseMissing('chat_messages', ['id' => $msg->id]);
     }
+
+    public function test_director_cannot_delete_others_message_only_admin(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $author = User::factory()->create(); $author->assignRole('employee');
+        $director = User::factory()->create(); $director->assignRole('director');
+        $this->actingAs($author)->get(route('chat.index'));
+        $chat = Chat::where('type', 'global')->first();
+        $this->actingAs($author)->post(route('chat.send', $chat), ['message' => 'моё']);
+        $msg = \App\Models\ChatMessage::first();
+
+        // Директор больше НЕ может удалять чужие (только админ).
+        $this->actingAs($director)->delete(route('chat.messages.destroy', $msg))->assertForbidden();
+    }
+
+    public function test_reply_and_edit_own_message(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $a = User::factory()->create(); $a->assignRole('employee');
+        $b = User::factory()->create(); $b->assignRole('employee');
+        $this->actingAs($a)->get(route('chat.index'));
+        $chat = Chat::where('type', 'global')->first();
+
+        $this->actingAs($a)->post(route('chat.send', $chat), ['message' => 'Первое']);
+        $first = \App\Models\ChatMessage::first();
+
+        // Ответ-цитата на первое сообщение.
+        $this->actingAs($b)->post(route('chat.send', $chat), ['message' => 'Отвечаю', 'reply_to_id' => $first->id])->assertRedirect();
+        $reply = \App\Models\ChatMessage::where('message', 'Отвечаю')->first();
+        $this->assertEquals($first->id, $reply->reply_to_id);
+
+        // Автор редактирует своё → метка edited_at.
+        $this->actingAs($b)->patch(route('chat.messages.update', $reply), ['message' => 'Исправлено'])->assertOk();
+        $this->assertEquals('Исправлено', $reply->fresh()->message);
+        $this->assertNotNull($reply->fresh()->edited_at);
+
+        // Чужое сообщение редактировать нельзя.
+        $this->actingAs($a)->patch(route('chat.messages.update', $reply), ['message' => 'взлом'])->assertForbidden();
+    }
 }

@@ -25,7 +25,9 @@ const infoOpen = ref(false);   // right info panel
 const infoTab = ref('members');
 const showEmoji = ref(false);
 
-const form = useForm({ message: '', file: null });
+const form = useForm({ message: '', file: null, reply_to_id: null });
+const replyTo = ref(null); // сообщение, на которое отвечаем (цитата)
+const editingMsg = ref(null); // сообщение, которое редактируем
 
 // ---- Persisted UI state (unread + pins) ----
 const readState = reactive(JSON.parse(localStorage.getItem('chat_seen') || '{}'));
@@ -134,14 +136,38 @@ const selectChat = async (chat) => {
 };
 
 const send = () => {
+    // Режим редактирования своего сообщения.
+    if (editingMsg.value) { saveEditMsg(); return; }
     if ((!form.message.trim() && !form.file) || !activeChat.value) return;
     showEmoji.value = false;
+    form.reply_to_id = replyTo.value?.id ?? null;
     form.post(route('chat.send', activeChat.value.id), {
         preserveScroll: true, preserveState: true, forceFormData: true,
-        onSuccess: () => { form.reset('message'); form.file = null; resizeInput(); loadMessages(); },
+        onSuccess: () => { form.reset('message', 'reply_to_id'); form.file = null; replyTo.value = null; resizeInput(); loadMessages(); },
     });
 };
 const onEnter = (e) => { if (!e.shiftKey) { e.preventDefault(); send(); } };
+
+// ---- Ответ-цитата ----
+const startReply = (m) => { editingMsg.value = null; replyTo.value = m; textarea.value?.focus(); };
+const cancelReply = () => { replyTo.value = null; };
+
+// ---- Редактирование своего сообщения ----
+const startEditMsg = (m) => {
+    replyTo.value = null;
+    editingMsg.value = m;
+    form.message = m.message || '';
+    resizeInput();
+    textarea.value?.focus();
+};
+const cancelEditMsg = () => { editingMsg.value = null; form.reset('message'); resizeInput(); };
+const saveEditMsg = async () => {
+    if (!form.message.trim()) return;
+    try {
+        await window.axios.patch(route('chat.messages.update', editingMsg.value.id), { message: form.message });
+        editingMsg.value = null; form.reset('message'); resizeInput(); loadMessages(true);
+    } catch (e) { /* ignore */ }
+};
 
 // ---- File attachment ----
 const fileInput = ref(null);
@@ -340,6 +366,12 @@ onUnmounted(() => clearInterval(timer));
                                     <div v-if="m.user_id !== me?.id && (activeChat?.type !== 'personal')" class="mb-0.5 ml-1 text-[11px] font-semibold text-indigo-500">{{ m.user_name }}</div>
                                     <div :class="m.user_id === me?.id ? 'rounded-br-md bg-indigo-600 text-white' : 'rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-100'"
                                         class="rounded-2xl px-3.5 py-2 text-sm shadow-sm">
+                                        <!-- Цитата: ответ на сообщение -->
+                                        <div v-if="m.reply_to" class="mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs"
+                                            :class="m.user_id === me?.id ? 'border-white/50 bg-white/10' : 'border-indigo-300 bg-indigo-50/70'">
+                                            <div class="font-semibold" :class="m.user_id === me?.id ? 'text-white' : 'text-indigo-600'">{{ m.reply_to.user_name }}</div>
+                                            <div class="truncate" :class="m.user_id === me?.id ? 'text-indigo-100' : 'text-slate-500'">{{ m.reply_to.message || '📎 вложение' }}</div>
+                                        </div>
                                         <!-- Attachments -->
                                         <div v-for="(a, i) in m.attachments" :key="i" class="mb-1.5">
                                             <a v-if="a.is_image" :href="a.url" target="_blank" class="block overflow-hidden rounded-xl">
@@ -357,13 +389,24 @@ onUnmounted(() => clearInterval(timer));
                                             </a>
                                         </div>
                                         <div v-if="m.message" class="whitespace-pre-line break-words">{{ m.message }}</div>
-                                        <div class="mt-0.5 text-right text-[10px]" :class="m.user_id === me?.id ? 'text-indigo-200' : 'text-slate-400'">{{ fmtTime(m.created_at) }}</div>
+                                        <div class="mt-0.5 flex items-center justify-end gap-1 text-[10px]" :class="m.user_id === me?.id ? 'text-indigo-200' : 'text-slate-400'">
+                                            <span v-if="m.edited">изменено</span>
+                                            <span>{{ fmtTime(m.created_at) }}</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <button v-if="m.can_delete" @click="deleteMessage(m)" title="Удалить сообщение"
-                                    class="mb-1 hidden h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500 group-hover:flex">
-                                    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-                                </button>
+                                <!-- Действия наведением: ответить / изменить (своё) / удалить -->
+                                <div class="mb-1 hidden flex-shrink-0 items-center gap-0.5 group-hover:flex">
+                                    <button @click="startReply(m)" title="Ответить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-indigo-50 hover:text-indigo-500">
+                                        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 5 5v1"/></svg>
+                                    </button>
+                                    <button v-if="m.can_edit" @click="startEditMsg(m)" title="Изменить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-indigo-50 hover:text-indigo-500">
+                                        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                    </button>
+                                    <button v-if="m.can_delete" @click="deleteMessage(m)" title="Удалить" class="flex h-6 w-6 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500">
+                                        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                                    </button>
+                                </div>
                             </div>
                         </template>
                     </TransitionGroup>
@@ -375,6 +418,18 @@ onUnmounted(() => clearInterval(timer));
 
                 <!-- Composer -->
                 <div v-if="activeChat" class="border-t border-slate-200 bg-white/80 p-3 backdrop-blur">
+                    <!-- Баннер ответа/редактирования -->
+                    <div v-if="replyTo || editingMsg" class="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-indigo-400 bg-indigo-50/70 px-3 py-1.5 text-xs">
+                        <svg viewBox="0 0 24 24" class="h-4 w-4 flex-shrink-0 text-indigo-500" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path v-if="editingMsg" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                            <path v-else d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 5 5v1"/>
+                        </svg>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-semibold text-indigo-600">{{ editingMsg ? 'Редактирование' : ('Ответ · ' + (replyTo?.user_name ?? '')) }}</div>
+                            <div class="truncate text-slate-500">{{ (editingMsg?.message || replyTo?.message) || '📎 вложение' }}</div>
+                        </div>
+                        <button @click="editingMsg ? cancelEditMsg() : cancelReply()" class="flex-shrink-0 text-slate-400 hover:text-rose-500">✕</button>
+                    </div>
                     <!-- Pending attachment chip -->
                     <div v-if="form.file" class="mb-2 flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-1.5 text-xs">
                         <span class="text-base">📎</span>

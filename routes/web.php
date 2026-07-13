@@ -142,6 +142,7 @@ Route::middleware('auth')->group(function () {
     Route::post('chat/{chat}/messages', [ChatController::class, 'sendMessage'])->middleware('throttle:120,1')->name('chat.send');
     Route::put('chat/{chat}', [ChatController::class, 'update'])->middleware('throttle:30,1')->name('chat.update');
     Route::delete('chat/{chat}', [ChatController::class, 'destroy'])->name('chat.destroy');
+    Route::patch('chat/messages/{message}', [ChatController::class, 'updateMessage'])->middleware('throttle:60,1')->name('chat.messages.update');
     Route::delete('chat/messages/{message}', [ChatController::class, 'destroyMessage'])->name('chat.messages.destroy');
     Route::get('chat/messages/{message}/attachment/{index}', [ChatController::class, 'downloadAttachment'])->name('chat.attachment');
     Route::get('chat/{chat}/attachments', [ChatController::class, 'attachments'])->name('chat.attachments');
