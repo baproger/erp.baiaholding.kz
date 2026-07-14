@@ -55,24 +55,25 @@ const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { pr
 const toWorkshop = (deal) => router.post(route('deals.toWorkshop', deal.id), {}, { preserveScroll: true, preserveState: false });
 const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
 
+// Серверные фильтры: поиск, менеджер, этап, срок с—по. Один набор параметров
+// для всех контролов — состояние не «разъезжается» между поиском и фильтрами.
 const search = ref(props.filters?.search ?? '');
-let searchTimer = null;
-const onSearch = () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-        router.get(route('deals.index'), { ...props.filters, search: search.value, view: props.view }, { preserveState: true, preserveScroll: true, replace: true });
-    }, 350);
-};
-
-// Filters: manager + deadline range.
 const fResponsible = ref(props.filters?.responsible ?? '');
+const fStage = ref(props.filters?.stage ?? '');
 const fFrom = ref(props.filters?.date_from ?? '');
 const fTo = ref(props.filters?.date_to ?? '');
 const applyFilters = () => router.get(route('deals.index'), {
-    ...props.filters, view: props.view, search: search.value,
-    responsible: fResponsible.value || undefined, date_from: fFrom.value || undefined, date_to: fTo.value || undefined,
+    view: props.view,
+    search: search.value || undefined,
+    responsible: fResponsible.value || undefined,
+    stage: fStage.value || undefined,
+    date_from: fFrom.value || undefined,
+    date_to: fTo.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
-const resetFilters = () => { fResponsible.value = ''; fFrom.value = ''; fTo.value = ''; applyFilters(); };
+let searchTimer = null;
+const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 350); };
+const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value);
+const resetFilters = () => { search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = ''; applyFilters(); };
 
 const showModal = ref(false);
 const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
@@ -115,31 +116,35 @@ const applyBinMatch = () => {
                 <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-l-lg px-4 py-1.5 text-sm transition-colors" @click="switchView('kanban')">Канбан</button>
                 <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-r-lg px-4 py-1.5 text-sm transition-colors" @click="switchView('list')">Список</button>
             </div>
-            <div class="relative order-last w-full sm:order-none sm:w-auto sm:flex-1 sm:max-w-sm">
-                <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, № договора…"
-                    class="w-full rounded-lg border-slate-200 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
-            </div>
             <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:scale-[1.02] hover:bg-indigo-700 active:scale-95" @click="openCreate">+ Новая сделка</button>
         </div>
 
-        <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div v-if="isLeadership">
-                <label class="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Менеджер</label>
-                <select v-model="fResponsible" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
-                    <option value="">Все</option>
-                    <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-                </select>
+        <!-- Единый фильтр-бар: поиск, менеджер (руководству), этап, срок с—по -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div class="relative w-full sm:w-60">
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, договор…"
+                    class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <div>
-                <label class="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Срок с</label>
-                <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
-            </div>
-            <div>
-                <label class="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Срок по</label>
-                <input v-model="fTo" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
-            </div>
-            <button v-if="fResponsible || fFrom || fTo" type="button" @click="resetFilters" class="ml-auto rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700">Сбросить фильтры</button>
+            <select v-if="isLeadership" v-model="fResponsible" @change="applyFilters"
+                class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
+                <option value="">Все менеджеры</option>
+                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+            <select v-model="fStage" @change="applyFilters"
+                class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
+                <option value="">Все этапы</option>
+                <option v-for="s in stages" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </select>
+            <label class="flex items-center gap-1 text-xs text-slate-400">срок с
+                <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <label class="flex items-center gap-1 text-xs text-slate-400">по
+                <input v-model="fTo" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <button v-if="hasFilters" type="button" @click="resetFilters"
+                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+            <span class="ml-auto hidden text-[11px] tabular-nums text-slate-300 lg:block">найдено: {{ Array.isArray(deals) ? list.length : deals.total ?? list.length }}</span>
         </div>
 
         <!-- KANBAN -->
