@@ -105,7 +105,7 @@ const expLink = (e) => e.expenseable_type === 'project'
 
             <!-- Сводка по расходам: плитки-фильтры (клик фильтрует таблицу).
                  Нал + банк = прочие: у материальных списаний способа оплаты нет. -->
-            <div class="grid grid-cols-2 gap-3 px-6 py-4 lg:grid-cols-6">
+            <div class="grid grid-cols-2 gap-3 px-6 py-4 lg:grid-cols-5">
                 <button type="button" @click="setTile('', '', '')"
                     class="rounded-xl bg-slate-900 p-3 text-left transition hover:opacity-90"
                     :class="tileActive('', '', '') ? 'ring-2 ring-slate-900 ring-offset-2' : ''">
@@ -118,22 +118,16 @@ const expLink = (e) => e.expenseable_type === 'project'
                     <div class="text-[11px] font-medium text-indigo-700">Материальные (склад)</div>
                     <div class="mt-0.5 text-base font-bold tabular-nums text-indigo-700">{{ money(expenseTotals.material) }}</div>
                 </button>
-                <button type="button" @click="setTile('other', '', 'confirmed')"
-                    class="rounded-xl bg-slate-100 p-3 text-left transition hover:bg-slate-200"
-                    :class="tileActive('other', '', 'confirmed') ? 'ring-2 ring-slate-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-slate-600">Прочие</div>
-                    <div class="mt-0.5 text-base font-bold tabular-nums text-slate-700">{{ money(expenseTotals.other) }}</div>
-                </button>
-                <button type="button" @click="setTile('', 'cash', 'confirmed')"
+                <button type="button" @click="setTile('other', 'cash', 'confirmed')"
                     class="rounded-xl bg-emerald-50 p-3 text-left transition hover:bg-emerald-100"
-                    :class="tileActive('', 'cash', 'confirmed') ? 'ring-2 ring-emerald-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-emerald-700">Наличными <span class="text-emerald-400">· из прочих</span></div>
+                    :class="tileActive('other', 'cash', 'confirmed') ? 'ring-2 ring-emerald-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-emerald-700">Прочие расходы (нал)</div>
                     <div class="mt-0.5 text-base font-bold tabular-nums text-emerald-700">{{ money(expenseTotals.cash) }}</div>
                 </button>
-                <button type="button" @click="setTile('', 'bank', 'confirmed')"
+                <button type="button" @click="setTile('other', 'bank', 'confirmed')"
                     class="rounded-xl bg-sky-50 p-3 text-left transition hover:bg-sky-100"
-                    :class="tileActive('', 'bank', 'confirmed') ? 'ring-2 ring-sky-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-sky-700">Банк (счёт) <span class="text-sky-400">· из прочих</span></div>
+                    :class="tileActive('other', 'bank', 'confirmed') ? 'ring-2 ring-sky-400 ring-offset-1' : ''">
+                    <div class="text-[11px] font-medium text-sky-700">Прочие расходы (банк)</div>
                     <div class="mt-0.5 text-base font-bold tabular-nums text-sky-700">{{ money(expenseTotals.bank) }}</div>
                 </button>
                 <button type="button" @click="setTile('', '', 'pending')"

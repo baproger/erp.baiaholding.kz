@@ -38,6 +38,7 @@ router.on('finish', () => {
 const allNav = [
     // Дашборд слит с Аналитикой: financist видит её по роли (как раньше дашборд).
     { key: 'nav.analytics', name: 'Аналитика', route: 'analytics.index', icon: '◊', leadershipOnly: true },
+    { key: 'nav.reports', name: 'Реестр сделок', route: 'reports.deals', icon: '▦', roles: ['admin', 'director'] },
     { key: 'nav.deals', name: 'Сделки', route: 'deals.index', icon: '◈', perm: 'deal.viewAny' },
     { key: 'nav.overdue', name: 'Просроченные', route: 'deals.overdue', icon: '⏰', perm: 'deal.viewAny' },
     { key: 'nav.workshop', name: 'Цех', route: 'projects.index', icon: '◇', perm: 'project.viewAny' },
@@ -58,6 +59,7 @@ const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes
 // Чисто презентационно: массив allNav и его perm/leadershipOnly не тронуты.
 const navIcons = {
     'analytics.index': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 15v-4M12 15V7M17 15v-6"/>',
+    'reports.deals': '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
     'deals.index': '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
     'deals.overdue': '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/>',
     'projects.index': '<path d="M2 20h20"/><path d="M4 20V10l5 4v-4l5 4V6h6v14"/>',

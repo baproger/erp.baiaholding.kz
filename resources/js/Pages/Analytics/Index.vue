@@ -99,22 +99,25 @@ const trend = (key) => {
                 <span class="ml-auto hidden text-[11px] text-slate-300 sm:block">фильтры действуют на воронку, «за период» и топ менеджеров</span>
             </div>
 
-            <!-- KPI row: деньги (клик — в раздел) -->
+            <!-- KPI row: деньги (клик — в раздел). Налог и ЗП — без графика (нет помесячной серии). -->
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <Link v-for="k in [
-                        { label: 'Сумма договоров', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up', sub: 'оплачено ' + money(totals.income), params: {} },
-                        { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down', sub: 'ЗП/бонусы −' + money(totals.bonus), params: { exp_status: 'confirmed' } },
-                        { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-emerald-600', good: 'up', sub: 'после налога ' + totals.taxRate + '%', params: {} },
-                    ]" :key="k.label" :href="route('finance.index', k.params)"
+                        { label: 'Общая сумма договоров', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up', sub: 'успешные (won) сделки', href: route('finance.index') },
+                        { label: 'Оплачено', value: totals.income, key: 'income', accent: 'text-emerald-600', good: 'up', sub: 'фактически поступило', href: route('finance.index') },
+                        { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down', sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
+                        { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-slate-900', good: 'up', sub: 'после налога, расходов и ЗП', href: route('finance.index') },
+                        { label: 'Налог', value: totals.tax, accent: 'text-rose-500', sub: 'ставка ' + totals.taxRate + '%', href: route('finance.index') },
+                        { label: 'ЗП (бонусы)', value: totals.bonus, accent: 'text-emerald-600', sub: 'бонусы менеджеров', href: route('payroll.index') },
+                    ]" :key="k.label" :href="k.href"
                     class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-medium text-slate-500">{{ k.label }}</span>
-                        <span :class="(k.good==='up' ? trend(k.key)>=0 : trend(k.key)<=0) ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
+                        <span v-if="k.key" :class="(k.good==='up' ? trend(k.key)>=0 : trend(k.key)<=0) ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
                             class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{{ trend(k.key)>=0 ? '+' : '' }}{{ trend(k.key) }}%</span>
                     </div>
                     <div class="mt-1.5 text-2xl font-semibold tracking-tight" :class="k.accent">{{ money(k.value) }}</div>
                     <div class="mt-1 text-xs text-slate-400">{{ k.sub }}</div>
-                    <div class="mt-3 flex h-8 items-end gap-0.5">
+                    <div v-if="k.key" class="mt-3 flex h-8 items-end gap-0.5">
                         <div v-for="(v, i) in spark(k.key)" :key="i" class="flex-1 rounded-sm bg-slate-100">
                             <div class="rounded-sm bg-slate-300" :style="{ height: Math.max(2, Math.abs(v) / maxMonthly * 32) + 'px' }"></div>
                         </div>

@@ -154,6 +154,9 @@ Route::middleware('auth')->group(function () {
     // Analytics
     Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
 
+    // Реестр сделок (Excel-подобный отчёт, только admin/director)
+    Route::get('reports/deals', [\App\Http\Controllers\ReportController::class, 'deals'])->name('reports.deals');
+
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
 
