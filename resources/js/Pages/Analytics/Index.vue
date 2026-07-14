@@ -102,7 +102,7 @@ const trend = (key) => {
             <!-- KPI row: деньги (клик — в раздел). Налог и ЗП — без графика (нет помесячной серии). -->
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <Link v-for="k in [
-                        { label: 'Общая сумма договоров', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up', sub: 'успешные (won) сделки', href: route('finance.index') },
+                        { label: 'Общая сумма договоров', value: totals.contracts, accent: 'text-slate-900', sub: 'все сделки (кроме отменённых) · won: ' + money(totals.budget), href: route('finance.index') },
                         { label: 'Оплачено', value: totals.income, key: 'income', accent: 'text-emerald-600', good: 'up', sub: 'фактически поступило', href: route('finance.index') },
                         { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down', sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
                         { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-slate-900', good: 'up', sub: 'после налога, расходов и ЗП', href: route('finance.index') },

@@ -276,7 +276,10 @@ class AnalyticsController extends Controller
                 'rate' => $total > 0 ? round($won / $total * 100, 1) : 0,
             ],
             // Canonical company figures (identical to Finance, via PayrollService).
+            // 'contracts' — сумма договоров ВСЕХ сделок (кроме отменённых);
+            // budget/tax/net из companyTotals считаются только по won-сделкам.
             'totals' => array_merge($companyTotals, [
+                'contracts' => (float) Deal::forCurrentCompany()->where('status', '!=', 'cancelled')->sum('budget'),
                 'net' => $companyTotals['company'],
                 'debt' => max(0, $invoiced - $invoicePaid),
                 'taxRate' => $taxRate * 100,
