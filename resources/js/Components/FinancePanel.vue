@@ -132,7 +132,11 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
             </div>
             <div v-if="showInvoice" class="mb-3 rounded-xl border border-dashed border-slate-300 p-4">
                 <div class="grid grid-cols-2 gap-2">
-                    <TextInput v-model="invoiceForm.amount" type="number" step="0.01" placeholder="Сумма" />
+                    <div>
+                        <TextInput v-model="invoiceForm.amount" type="number" step="0.01" placeholder="Сумма *"
+                            :class="Number(invoiceForm.amount) <= 0 ? 'border-red-400 focus:border-red-400 focus:ring-red-300' : ''" class="w-full" />
+                        <div v-if="Number(invoiceForm.amount) <= 0" class="mt-1 text-xs font-medium text-red-600">Введите сумму счёта</div>
+                    </div>
                     <TextInput v-model="invoiceForm.due_date" type="date" />
                 </div>
                 <TextInput v-model="invoiceForm.description" placeholder="Описание" class="mt-2 w-full" />
