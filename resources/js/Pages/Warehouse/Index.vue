@@ -13,7 +13,7 @@ import { formatDate } from '@/utils/format';
 
 const props = defineProps({
     materials: Array, receipts: Array, units: Array,
-    canManage: Boolean, allMode: Boolean, companyName: String,
+    canManage: Boolean, allMode: Boolean, companyName: String, filters: Object,
 });
 
 const qty = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
@@ -61,10 +61,26 @@ const removeReceipt = async (r) => {
     }
 };
 
+// Фильтры: поиск / ед.изм / остаток — клиентские (данные уже загружены);
+// период поступления — серверный (суммы считаются в контроллере).
 const search = ref('');
+const fUnit = ref('');
+const fStock = ref(''); // '' все | 'in' в наличии | 'zero' на нуле
+const fFrom = ref(props.filters?.from ?? '');
+const fTo = ref(props.filters?.to ?? '');
+const applyPeriod = () => router.get(route('warehouse.index'), {
+    from: fFrom.value || undefined, to: fTo.value || undefined,
+}, { preserveState: true, preserveScroll: true, replace: true });
+const hasFilters = computed(() => search.value || fUnit.value || fStock.value || fFrom.value || fTo.value);
+const resetFilters = () => { search.value = ''; fUnit.value = ''; fStock.value = ''; fFrom.value = ''; fTo.value = ''; applyPeriod(); };
+// Ед. изм. в фильтре — только реально имеющиеся на складе.
+const unitOptions = computed(() => [...new Set(props.materials.map((m) => m.unit).filter(Boolean))]);
 const filtered = computed(() => {
     const s = search.value.trim().toLowerCase();
-    return s ? props.materials.filter((m) => m.name.toLowerCase().includes(s)) : props.materials;
+    return props.materials
+        .filter((m) => !s || m.name.toLowerCase().includes(s))
+        .filter((m) => !fUnit.value || m.unit === fUnit.value)
+        .filter((m) => !fStock.value || (fStock.value === 'zero' ? Number(m.quantity) <= 0 : Number(m.quantity) > 0));
 });
 const lowStock = (m) => Number(m.quantity) <= 0;
 </script>
@@ -79,13 +95,35 @@ const lowStock = (m) => Number(m.quantity) <= 0;
             </div>
         </template>
 
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div class="relative w-full sm:w-auto sm:flex-1 sm:max-w-sm">
+        <div class="mb-4 flex justify-end">
+            <PrimaryButton v-if="canManage" @click="openReceipt">+ Приход товара</PrimaryButton>
+        </div>
+
+        <!-- Фильтры: поиск, ед.изм, остаток, период поступления -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div class="relative w-full sm:w-56">
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
                 <input v-model="search" type="text" placeholder="Поиск материала…"
-                    class="w-full rounded-xl border-slate-200 py-2 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                    class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <PrimaryButton v-if="canManage" @click="openReceipt">+ Приход товара</PrimaryButton>
+            <select v-model="fUnit" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
+                <option value="">Все ед. изм.</option>
+                <option v-for="u in unitOptions" :key="u" :value="u">{{ u }}</option>
+            </select>
+            <select v-model="fStock" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
+                <option value="">Все остатки</option>
+                <option value="in">В наличии</option>
+                <option value="zero">На нуле</option>
+            </select>
+            <label class="flex items-center gap-1 text-xs text-slate-400">поступление с
+                <input v-model="fFrom" @change="applyPeriod" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <label class="flex items-center gap-1 text-xs text-slate-400">по
+                <input v-model="fTo" @change="applyPeriod" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <button v-if="hasFilters" type="button" @click="resetFilters"
+                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+            <span class="ml-auto hidden text-[11px] tabular-nums text-slate-300 lg:block">найдено: {{ filtered.length }}</span>
         </div>
 
         <!-- Остатки -->
@@ -97,8 +135,10 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         <th v-if="allMode" class="px-4 py-3">Компания</th>
                         <th class="px-4 py-3">Ед. изм.</th>
                         <th class="px-4 py-3 text-right">Цена за ед.</th>
-                        <th class="px-4 py-3 text-right">Остаток</th>
+                        <th class="px-4 py-3 text-right">Поступление</th>
                         <th class="px-4 py-3 text-right">Сумма</th>
+                        <th class="px-4 py-3 text-right">Списание</th>
+                        <th class="px-4 py-3 text-right">Остаток</th>
                         <th v-if="canManage" class="px-4 py-3"></th>
                     </tr>
                 </thead>
@@ -111,15 +151,23 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                             <template v-if="Number(m.price) > 0">{{ money(m.price) }}</template>
                             <span v-else class="text-slate-300">—</span>
                         </td>
+                        <td class="px-4 py-3 text-right tabular-nums text-emerald-600">
+                            <template v-if="Number(m.received_qty) > 0">+ {{ qty(m.received_qty) }}</template>
+                            <span v-else class="text-slate-300">—</span>
+                        </td>
+                        <td class="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
+                            <template v-if="Number(m.received_sum) > 0">{{ money(m.received_sum) }}</template>
+                            <span v-else class="text-slate-300">—</span>
+                        </td>
+                        <td class="px-4 py-3 text-right tabular-nums text-rose-500">
+                            <template v-if="Number(m.written_off_qty) > 0">− {{ qty(m.written_off_qty) }}</template>
+                            <span v-else class="text-slate-300">—</span>
+                        </td>
                         <td class="px-4 py-3 text-right">
                             <span class="rounded-full px-2.5 py-0.5 text-sm font-bold tabular-nums"
                                 :class="lowStock(m) ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'">
                                 {{ qty(m.quantity) }}
                             </span>
-                        </td>
-                        <td class="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
-                            <template v-if="Number(m.price) > 0">{{ money(Number(m.quantity) * Number(m.price)) }}</template>
-                            <span v-else class="text-slate-300">—</span>
                         </td>
                         <td v-if="canManage" class="px-4 py-3 text-right">
                             <button class="text-slate-300 transition-colors hover:text-rose-600" title="Удалить позицию" @click="removeMaterial(m)">
@@ -128,7 +176,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         </td>
                     </tr>
                     <tr v-if="!filtered.length">
-                        <td :colspan="canManage ? (allMode ? 7 : 6) : (allMode ? 6 : 5)" class="px-6 py-12 text-center">
+                        <td :colspan="canManage ? (allMode ? 10 : 9) : (allMode ? 9 : 8)" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-10 w-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
                             <p class="mt-3 text-sm text-slate-400">Склад пуст — оформите первый приход товара</p>
                             <PrimaryButton v-if="canManage" class="mt-4" @click="openReceipt">+ Приход товара</PrimaryButton>

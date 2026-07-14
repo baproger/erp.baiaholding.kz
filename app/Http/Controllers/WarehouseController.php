@@ -34,7 +34,37 @@ class WarehouseController extends Controller
             ->when($allMode, fn ($q) => $q->with('company:id,name'))
             ->orderBy('name')->get();
 
-        $receipts = MaterialReceipt::whereIn('material_id', $materials->pluck('id'))
+        // Период поступления/списания (необязательный) — влияет на колонки
+        // «Поступление», «Сумма», «Списание»; остаток всегда текущий.
+        $from = $request->string('from')->toString();
+        $to = $request->string('to')->toString();
+        $ids = $materials->pluck('id');
+
+        $received = MaterialReceipt::whereIn('material_id', $ids)
+            ->when($from, fn ($q, $d) => $q->whereDate('date', '>=', $d))
+            ->when($to, fn ($q, $d) => $q->whereDate('date', '<=', $d))
+            ->groupBy('material_id')
+            ->selectRaw('material_id, sum(quantity) as qty, sum(quantity * coalesce(price, 0)) as total')
+            ->get()->keyBy('material_id');
+
+        // Списание = материальные расходы со склада (qty), только confirmed.
+        $writtenOff = \App\Models\Expense::whereIn('material_id', $ids)
+            ->where('status', 'confirmed')
+            ->when($from, fn ($q, $d) => $q->whereDate('date', '>=', $d))
+            ->when($to, fn ($q, $d) => $q->whereDate('date', '<=', $d))
+            ->groupBy('material_id')
+            ->selectRaw('material_id, sum(coalesce(qty, 0)) as qty')
+            ->pluck('qty', 'material_id');
+
+        $materials->each(function ($m) use ($received, $writtenOff) {
+            $m->received_qty = (float) ($received[$m->id]->qty ?? 0);
+            // У легаси-приходов цена могла быть не указана — тогда сумма по последней закупочной.
+            $sum = (float) ($received[$m->id]->total ?? 0);
+            $m->received_sum = $sum > 0 ? $sum : round($m->received_qty * (float) ($m->price ?? 0), 2);
+            $m->written_off_qty = (float) ($writtenOff[$m->id] ?? 0);
+        });
+
+        $receipts = MaterialReceipt::whereIn('material_id', $ids)
             ->with(['material:id,name,unit', 'user:id,name'])
             ->latest()->limit(30)->get();
 
@@ -45,6 +75,7 @@ class WarehouseController extends Controller
             'canManage' => $this->canManage($request),
             'allMode' => $allMode,
             'companyName' => $allMode ? 'Все компании' : (CurrentCompany::get()?->name ?? ''),
+            'filters' => ['from' => $from, 'to' => $to],
         ]);
     }
 
