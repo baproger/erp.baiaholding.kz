@@ -10,6 +10,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
+import SearchSelect from '@/Components/SearchSelect.vue';
 import { deadlineClass } from '@/utils/deadline';
 import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, money } from '@/utils/format';
@@ -77,6 +78,9 @@ const applyFilters = () => router.get(route('deals.index'), {
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 350); };
 const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value || fContractFrom.value || fContractTo.value);
+// При фильтре по этапу канбан показывает ТОЛЬКО выбранную колонку —
+// остальные этапы скрываются (а не пустеют).
+const visibleStages = computed(() => fStage.value ? props.stages.filter((s) => String(s.id) === String(fStage.value)) : props.stages);
 const resetFilters = () => { search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = ''; fContractFrom.value = ''; fContractTo.value = ''; applyFilters(); };
 
 const showModal = ref(false);
@@ -130,16 +134,8 @@ const applyBinMatch = () => {
                 <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, договор…"
                     class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <select v-if="isLeadership" v-model="fResponsible" @change="applyFilters"
-                class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
-                <option value="">Все менеджеры</option>
-                <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
-            <select v-model="fStage" @change="applyFilters"
-                class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
-                <option value="">Все этапы</option>
-                <option v-for="s in stages" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </select>
+            <SearchSelect v-if="isLeadership" v-model="fResponsible" :options="users" placeholder="Все менеджеры" width="w-48" @change="applyFilters" />
+            <SearchSelect v-model="fStage" :options="stages" placeholder="Все этапы" width="w-52" @change="applyFilters" />
             <label class="flex items-center gap-1 text-xs text-slate-400">срок с
                 <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
             </label>
@@ -159,7 +155,7 @@ const applyBinMatch = () => {
 
         <!-- KANBAN -->
         <div v-if="view === 'kanban'" class="flex gap-3 overflow-x-auto pb-4">
-            <div v-for="stage in stages" :key="stage.id" class="flex w-64 flex-shrink-0 flex-col rounded-xl bg-slate-100/80" @dragover.prevent @drop="onDrop(stage)">
+            <div v-for="stage in visibleStages" :key="stage.id" class="flex w-64 flex-shrink-0 flex-col rounded-xl bg-slate-100/80" :class="fStage ? 'w-80' : ''" @dragover.prevent @drop="onDrop(stage)">
                 <div class="px-3 py-2">
                     <div class="flex items-center gap-2">
                         <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: stage.color }"></span>
