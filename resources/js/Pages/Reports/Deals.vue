@@ -3,21 +3,25 @@ import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ rows: Array, totals: Object, taxRate: Number, filters: Object });
+const props = defineProps({ rows: Array, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array });
 
 const money = (v) => new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v ?? 0));
 const money0 = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
-// Серверные фильтры: поиск + период по дате создания сделки.
+// Серверные фильтры: поиск, период (по дате создания), менеджер, этап.
 const search = ref(props.filters?.search ?? '');
 const from = ref(props.filters?.from ?? '');
 const to = ref(props.filters?.to ?? '');
+const manager = ref(props.filters?.manager ?? '');
+const stageF = ref(props.filters?.stage ?? '');
 const apply = () => router.get(route('reports.deals'), {
     search: search.value || undefined, from: from.value || undefined, to: to.value || undefined,
+    manager: manager.value || undefined, stage: stageF.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(apply, 350); };
-const reset = () => { search.value = ''; from.value = ''; to.value = ''; apply(); };
+const hasFilters = () => search.value || from.value || to.value || manager.value || stageF.value;
+const reset = () => { search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = ''; apply(); };
 
 const openDeal = (id) => router.get(route('deals.show', id));
 // Цвет маржи — та же шкала, что на Аналитике: ≥40 здоровая, 20–40 тонкая, ниже — плохая.
@@ -30,30 +34,38 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
 </script>
 
 <template>
-    <Head title="Реестр сделок" />
+    <Head title="Сводный отчет" />
     <AppLayout>
         <template #header>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <span class="flex items-center gap-2">Реестр сделок
-                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">{{ totals.count }}</span>
-                </span>
-                <div class="flex flex-wrap items-center gap-2">
-                    <div class="relative">
-                        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-                        <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: №, компания, договор, адрес…"
-                            class="w-64 rounded-xl border-slate-200 py-2 pl-9 pr-3 text-sm font-normal shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
-                    </div>
-                    <label class="flex items-center gap-1 text-xs font-normal text-slate-400">с
-                        <input v-model="from" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
-                    </label>
-                    <label class="flex items-center gap-1 text-xs font-normal text-slate-400">по
-                        <input v-model="to" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
-                    </label>
-                    <button v-if="search || from || to" @click="reset"
-                        class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
-                </div>
-            </div>
+            <span class="flex items-center gap-2">Сводный отчет
+                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">{{ totals.count }}</span>
+            </span>
         </template>
+
+        <!-- Фильтры: поиск, период, менеджер, этап (серверные) -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div class="relative">
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: №, компания, договор, адрес…"
+                    class="w-60 rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+            </div>
+            <label class="flex items-center gap-1 text-xs text-slate-400">с
+                <input v-model="from" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <label class="flex items-center gap-1 text-xs text-slate-400">по
+                <input v-model="to" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <select v-model="manager" @change="apply" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                <option value="">Все менеджеры</option>
+                <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+            </select>
+            <select v-model="stageF" @change="apply" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                <option value="">Все этапы</option>
+                <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </select>
+            <button v-if="hasFilters()" @click="reset"
+                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+        </div>
 
         <!-- Итоги: те же плитки, что на Аналитике/Дашборде -->
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">

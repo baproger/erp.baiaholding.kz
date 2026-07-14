@@ -28,6 +28,8 @@ class ReportController extends Controller
         $search = $request->string('search')->toString();
         $from = $request->string('from')->toString();
         $to = $request->string('to')->toString();
+        $managerId = $request->integer('manager') ?: null;
+        $stageId = $request->integer('stage') ?: null;
 
         $deals = Deal::forCurrentCompany()
             ->where('status', '!=', 'cancelled')
@@ -36,6 +38,8 @@ class ReportController extends Controller
                 ->where('number', 'like', "%{$s}%")->orWhere('company_name', 'like', "%{$s}%")
                 ->orWhere('client_name', 'like', "%{$s}%")->orWhere('bin', 'like', "%{$s}%")
                 ->orWhere('address', 'like', "%{$s}%")))
+            ->when($managerId, fn ($q, $m) => $q->where('responsible_user_id', $m))
+            ->when($stageId, fn ($q, $s) => $q->where('deal_stage_id', $s))
             ->when($from, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
             ->when($to, fn ($q, $d) => $q->whereDate('created_at', '<=', $d))
             ->latest()
@@ -110,11 +114,23 @@ class ReportController extends Controller
             'count' => $rows->count(),
         ];
 
+        // Опции фильтров: активные менеджеры и этапы воронки текущей компании
+        // (в режиме «Все компании» — обе воронки с пометкой фирмы).
+        $companyId = \App\Support\CurrentCompany::id() ?: null;
+        $companyNames = \App\Models\Company::pluck('name', 'id');
+        $stageOptions = \App\Models\DealStage::with('translations')->where('is_active', true)
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
+            ->orderBy('order')->get()
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : '')])
+            ->values();
+
         return Inertia::render('Reports/Deals', [
             'rows' => $rows,
             'totals' => $totals,
             'taxRate' => $taxRate * 100,
-            'filters' => ['search' => $search, 'from' => $from, 'to' => $to],
+            'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId],
+            'managers' => \App\Models\User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'stageOptions' => $stageOptions,
         ]);
     }
 }

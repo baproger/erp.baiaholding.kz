@@ -38,12 +38,12 @@ router.on('finish', () => {
 const allNav = [
     // Дашборд слит с Аналитикой: financist видит её по роли (как раньше дашборд).
     { key: 'nav.analytics', name: 'Аналитика', route: 'analytics.index', icon: '◊', leadershipOnly: true },
-    { key: 'nav.reports', name: 'Реестр сделок', route: 'reports.deals', icon: '▦', roles: ['admin', 'director'] },
     { key: 'nav.deals', name: 'Сделки', route: 'deals.index', icon: '◈', perm: 'deal.viewAny' },
     { key: 'nav.overdue', name: 'Просроченные', route: 'deals.overdue', icon: '⏰', perm: 'deal.viewAny' },
     { key: 'nav.workshop', name: 'Цех', route: 'projects.index', icon: '◇', perm: 'project.viewAny' },
     { key: 'nav.warehouse', name: 'Склад', route: 'warehouse.index', icon: '▤', roles: ['admin', 'director', 'financist', 'manager'] },
     { key: 'nav.chat', name: 'Чат', route: 'chat.index', icon: '✉' },
+    { key: 'nav.reports', name: 'Сводный отчет', route: 'reports.deals', icon: '▦', roles: ['admin', 'director'] },
     { key: 'nav.profile', name: 'Профиль', route: 'profile.edit', icon: '🪪' },
     { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
     { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },

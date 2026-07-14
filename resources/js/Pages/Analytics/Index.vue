@@ -49,16 +49,6 @@ const maxFunnel = computed(() => Math.max(1, ...props.funnel.map((f) => f.count)
 const maxMonthly = computed(() => Math.max(1, ...props.monthly.flatMap((m) => [m.income, m.expense])));
 const setMonths = (m) => apply({ months: m });
 const statusLabels = { draft: 'Черновик', active: 'Активные', closed: 'Закрыты', cancelled: 'Отменены' };
-
-// Trend: last vs previous month (for KPI +/- indicators and sparkline).
-const spark = (key) => props.monthly.map((m) => key === 'profit' ? (m.income - m.expense) : Number(m[key] ?? 0));
-const trend = (key) => {
-    const a = spark(key);
-    if (a.length < 2) return 0;
-    const prev = a[a.length - 2], last = a[a.length - 1];
-    if (prev === 0) return last > 0 ? 100 : 0;
-    return Math.round((last - prev) / Math.abs(prev) * 100);
-};
 </script>
 
 <template>
@@ -99,30 +89,35 @@ const trend = (key) => {
                 <span class="ml-auto hidden text-[11px] text-slate-300 sm:block">фильтры действуют на воронку, «за период» и топ менеджеров</span>
             </div>
 
-            <!-- KPI row: деньги (клик — в раздел). Налог и ЗП — без графика (нет помесячной серии). -->
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <Link v-for="k in [
-                        { label: 'Общая сумма договоров', value: totals.contracts, accent: 'text-slate-900', sub: 'все сделки (кроме отменённых) · won: ' + money(totals.budget), href: route('finance.index') },
-                        { label: 'Оплачено', value: totals.income, key: 'income', accent: 'text-emerald-600', good: 'up', sub: 'фактически поступило', href: route('finance.index') },
-                        { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down', sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
-                        { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-slate-900', good: 'up', sub: 'после налога, расходов и ЗП', href: route('finance.index') },
-                        { label: 'Налог', value: totals.tax, accent: 'text-rose-500', sub: 'ставка ' + totals.taxRate + '%', href: route('finance.index') },
-                        { label: 'ЗП (бонусы)', value: totals.bonus, accent: 'text-emerald-600', sub: 'бонусы менеджеров', href: route('payroll.index') },
-                    ]" :key="k.label" :href="k.href"
-                    class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">{{ k.label }}</span>
-                        <span v-if="k.key" :class="(k.good==='up' ? trend(k.key)>=0 : trend(k.key)<=0) ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
-                            class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{{ trend(k.key)>=0 ? '+' : '' }}{{ trend(k.key) }}%</span>
-                    </div>
-                    <div class="mt-1.5 text-2xl font-semibold tracking-tight" :class="k.accent">{{ money(k.value) }}</div>
-                    <div class="mt-1 text-xs text-slate-400">{{ k.sub }}</div>
-                    <div v-if="k.key" class="mt-3 flex h-8 items-end gap-0.5">
-                        <div v-for="(v, i) in spark(k.key)" :key="i" class="flex-1 rounded-sm bg-slate-100">
-                            <div class="rounded-sm bg-slate-300" :style="{ height: Math.max(2, Math.abs(v) / maxMonthly * 32) + 'px' }"></div>
+            <!-- Суммы в две колонки: слева договоры/расходы/прибыль, справа оплачено/налог/ЗП.
+                 Каждая строка кликабельна — переход в раздел. -->
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div v-for="col in [
+                        { rows: [
+                            { label: 'Общая сумма договоров', value: totals.contracts, accent: 'text-slate-900', sub: 'все сделки (кроме отменённых) · won: ' + money(totals.budget), href: route('finance.index') },
+                            { label: 'Расходы', value: totals.expense, accent: 'text-rose-600', minus: true, sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
+                            { label: 'Чистая прибыль', value: totals.net, accent: 'text-emerald-600', sub: 'после налога, расходов и ЗП', href: route('finance.index') },
+                        ] },
+                        { rows: [
+                            { label: 'Оплачено', value: totals.income, accent: 'text-emerald-600', sub: 'фактически поступило', href: route('finance.index') },
+                            { label: 'Налог', value: totals.tax, accent: 'text-rose-500', minus: true, sub: 'ставка ' + totals.taxRate + '%', href: route('finance.index') },
+                            { label: 'ЗП (бонусы)', value: totals.bonus, accent: 'text-slate-900', sub: 'бонусы менеджеров', href: route('payroll.index') },
+                        ] },
+                    ]" :key="col.rows[0].label"
+                    class="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <Link v-for="r in col.rows" :key="r.label" :href="r.href"
+                        class="flex items-center justify-between gap-3 px-5 py-3.5 transition first:rounded-t-xl last:rounded-b-xl hover:bg-slate-50">
+                        <div>
+                            <div class="text-sm font-medium text-slate-700">{{ r.label }}</div>
+                            <div class="mt-0.5 text-xs text-slate-400">{{ r.sub }}</div>
                         </div>
-                    </div>
-                </Link>
+                        <div class="text-right text-xl font-semibold tracking-tight tabular-nums" :class="r.accent">{{ r.minus ? '−' : '' }}{{ money(r.value) }}</div>
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Долг клиентов · За период · Конверсия -->
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <Link :href="route('finance.index')" class="block rounded-xl border p-4 shadow-sm transition hover:shadow-md"
                     :class="totals.debt > 0 ? 'border-rose-200 bg-rose-50 hover:border-rose-300' : 'border-slate-200 bg-white hover:border-slate-300'">
                     <span class="text-xs font-medium" :class="totals.debt > 0 ? 'text-rose-500' : 'text-slate-500'">Долг клиентов</span>
