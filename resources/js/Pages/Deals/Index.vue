@@ -62,6 +62,8 @@ const fResponsible = ref(props.filters?.responsible ?? '');
 const fStage = ref(props.filters?.stage ?? '');
 const fFrom = ref(props.filters?.date_from ?? '');
 const fTo = ref(props.filters?.date_to ?? '');
+const fContractFrom = ref(props.filters?.contract_from ?? '');
+const fContractTo = ref(props.filters?.contract_to ?? '');
 const applyFilters = () => router.get(route('deals.index'), {
     view: props.view,
     search: search.value || undefined,
@@ -69,11 +71,13 @@ const applyFilters = () => router.get(route('deals.index'), {
     stage: fStage.value || undefined,
     date_from: fFrom.value || undefined,
     date_to: fTo.value || undefined,
+    contract_from: fContractFrom.value || undefined,
+    contract_to: fContractTo.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 350); };
-const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value);
-const resetFilters = () => { search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = ''; applyFilters(); };
+const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value || fContractFrom.value || fContractTo.value);
+const resetFilters = () => { search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = ''; fContractFrom.value = ''; fContractTo.value = ''; applyFilters(); };
 
 const showModal = ref(false);
 const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
@@ -141,6 +145,12 @@ const applyBinMatch = () => {
             </label>
             <label class="flex items-center gap-1 text-xs text-slate-400">по
                 <input v-model="fTo" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <label class="flex items-center gap-1 text-xs text-slate-400">договор с
+                <input v-model="fContractFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+            </label>
+            <label class="flex items-center gap-1 text-xs text-slate-400">по
+                <input v-model="fContractTo" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
             </label>
             <button v-if="hasFilters" type="button" @click="resetFilters"
                 class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>

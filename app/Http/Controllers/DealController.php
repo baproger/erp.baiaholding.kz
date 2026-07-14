@@ -40,7 +40,9 @@ class DealController extends Controller
             ->when($request->string('responsible')->toString(), fn ($q, $r) => $q->where('responsible_user_id', $r))
             ->when($request->integer('stage'), fn ($q, $s) => $q->where('deal_stage_id', $s))
             ->when($request->date('date_from'), fn ($q, $d) => $q->whereDate('deadline', '>=', $d))
-            ->when($request->date('date_to'), fn ($q, $d) => $q->whereDate('deadline', '<=', $d));
+            ->when($request->date('date_to'), fn ($q, $d) => $q->whereDate('deadline', '<=', $d))
+            ->when($request->date('contract_from'), fn ($q, $d) => $q->whereDate('contract_date', '>=', $d))
+            ->when($request->date('contract_to'), fn ($q, $d) => $q->whereDate('contract_date', '<=', $d));
 
         // Воронка текущей компании; в режиме «Все компании» (id=0) — обе воронки,
         // колонки подписываются кодом фирмы.
@@ -63,7 +65,7 @@ class DealController extends Controller
             'deals' => $deals,
             'stages' => $stages,
             'view' => $view,
-            'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to'),
+            'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to'),
             'isLeadership' => $request->user()->hasAnyRole(['admin', 'director', 'financist']),
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
