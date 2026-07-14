@@ -4,9 +4,35 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
 
-const props = defineProps({ byEmployee: Array, monthsFilter: Number, funnel: Array, byStatus: Object, monthly: Array, abc: Array, abcSummary: Object, conversion: Object, totals: Object });
+const props = defineProps({
+    byEmployee: Array, monthsFilter: Number, funnel: Array, byStatus: Object, monthly: Array,
+    abc: Array, abcSummary: Object, conversion: Object, totals: Object,
+    attention: Object, period: Object, topManagers: Array, filters: Object, managers: Array, stageOptions: Array,
+});
 
 const tab = ref('general');
+
+// Серверные фильтры: период (для «за период»/топа менеджеров), менеджер,
+// этап, поиск — применяются к воронке, «за период» и топу менеджеров.
+const search = ref(props.filters?.search ?? '');
+const from = ref(props.filters?.from ?? '');
+const to = ref(props.filters?.to ?? '');
+const manager = ref(props.filters?.manager ?? '');
+const stageF = ref(props.filters?.stage ?? '');
+const params = (extra = {}) => ({
+    months: props.monthsFilter,
+    search: search.value || undefined,
+    from: from.value || undefined,
+    to: to.value || undefined,
+    manager: manager.value || undefined,
+    stage: stageF.value || undefined,
+    ...extra,
+});
+const apply = (extra = {}) => router.get(route('analytics.index'), params(extra), { preserveState: true, preserveScroll: true, replace: true });
+let searchTimer = null;
+const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(apply, 350); };
+const hasFilters = computed(() => search.value || manager.value || stageF.value);
+const resetFilters = () => { search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = ''; apply(); };
 const selected = ref(props.byEmployee?.[0] ?? null);
 // Фильтр по сотрудникам: поиск по имени, список и выбор обновляются сразу.
 const empSearch = ref('');
@@ -17,12 +43,11 @@ const filteredEmployees = computed(() => {
     return list;
 });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
-const initials = (name) => (name ?? '?').trim().charAt(0).toUpperCase();
 // Colour a per-deal margin badge: healthy ≥ 40%, thin 20–40%, poor/negative below.
 const marginClass = (m) => m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
 const maxFunnel = computed(() => Math.max(1, ...props.funnel.map((f) => f.count)));
 const maxMonthly = computed(() => Math.max(1, ...props.monthly.flatMap((m) => [m.income, m.expense])));
-const setMonths = (m) => router.get(route('analytics.index'), { months: m }, { preserveState: true, preserveScroll: true, replace: true });
+const setMonths = (m) => apply({ months: m });
 const statusLabels = { draft: 'Черновик', active: 'Активные', closed: 'Закрыты', cancelled: 'Отменены' };
 
 // Trend: last vs previous month (for KPI +/- indicators and sparkline).
@@ -48,25 +73,68 @@ const trend = (key) => {
 
         <!-- ============ BENTO: ОБЗОР ============ -->
         <div v-show="tab==='general'" class="space-y-4">
-            <!-- KPI row with trend + sparkline -->
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div v-for="k in [
-                        { label: 'Сумма договоров', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up' },
-                        { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down' },
-                        { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-emerald-600', good: 'up' },
-                    ]" :key="k.label" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <!-- Фильтры: поиск, период, менеджер, этап (серверные) -->
+            <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div class="relative">
+                    <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: №, контрагент, договор…"
+                        class="w-56 rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+                <label class="flex items-center gap-1 text-xs text-slate-400">с
+                    <input v-model="from" @change="apply()" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+                </label>
+                <label class="flex items-center gap-1 text-xs text-slate-400">по
+                    <input v-model="to" @change="apply()" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
+                </label>
+                <select v-model="manager" @change="apply()" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                    <option value="">Все менеджеры</option>
+                    <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+                </select>
+                <select v-model="stageF" @change="apply()" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                    <option value="">Все этапы</option>
+                    <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
+                </select>
+                <button v-if="hasFilters || from !== filters.from || to !== filters.to" @click="resetFilters"
+                    class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+                <span class="ml-auto hidden text-[11px] text-slate-300 sm:block">фильтры действуют на воронку, «за период» и топ менеджеров</span>
+            </div>
+
+            <!-- KPI row: деньги (клик — в раздел) -->
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <Link v-for="k in [
+                        { label: 'Сумма договоров', value: totals.budget, key: 'income', accent: 'text-slate-900', good: 'up', sub: 'оплачено ' + money(totals.income), params: {} },
+                        { label: 'Расходы', value: totals.expense, key: 'expense', accent: 'text-rose-600', good: 'down', sub: 'ЗП/бонусы −' + money(totals.bonus), params: { exp_status: 'confirmed' } },
+                        { label: 'Чистая прибыль', value: totals.net, key: 'profit', accent: 'text-emerald-600', good: 'up', sub: 'после налога ' + totals.taxRate + '%', params: {} },
+                    ]" :key="k.label" :href="route('finance.index', k.params)"
+                    class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-medium text-slate-500">{{ k.label }}</span>
                         <span :class="(k.good==='up' ? trend(k.key)>=0 : trend(k.key)<=0) ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
                             class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{{ trend(k.key)>=0 ? '+' : '' }}{{ trend(k.key) }}%</span>
                     </div>
                     <div class="mt-1.5 text-2xl font-semibold tracking-tight" :class="k.accent">{{ money(k.value) }}</div>
+                    <div class="mt-1 text-xs text-slate-400">{{ k.sub }}</div>
                     <div class="mt-3 flex h-8 items-end gap-0.5">
                         <div v-for="(v, i) in spark(k.key)" :key="i" class="flex-1 rounded-sm bg-slate-100">
                             <div class="rounded-sm bg-slate-300" :style="{ height: Math.max(2, Math.abs(v) / maxMonthly * 32) + 'px' }"></div>
                         </div>
                     </div>
-                </div>
+                </Link>
+                <Link :href="route('finance.index')" class="block rounded-xl border p-4 shadow-sm transition hover:shadow-md"
+                    :class="totals.debt > 0 ? 'border-rose-200 bg-rose-50 hover:border-rose-300' : 'border-slate-200 bg-white hover:border-slate-300'">
+                    <span class="text-xs font-medium" :class="totals.debt > 0 ? 'text-rose-500' : 'text-slate-500'">Долг клиентов</span>
+                    <div class="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums" :class="totals.debt > 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(totals.debt) }}</div>
+                    <div class="mt-1 text-xs" :class="totals.debt > 0 ? 'text-rose-400' : 'text-slate-400'">по выставленным счетам</div>
+                </Link>
+                <Link :href="route('finance.index', { exp_from: filters.from, exp_to: filters.to })"
+                    class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+                    <span class="text-xs font-medium text-slate-500">За период <span class="font-normal text-slate-300">{{ filters.from }} — {{ filters.to }}</span></span>
+                    <div class="mt-2 space-y-1 text-sm">
+                        <div class="flex justify-between"><span class="text-slate-400">Оплачено</span><b class="tabular-nums text-emerald-600">{{ money(period.paid) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-400">Расходы</span><b class="tabular-nums text-rose-600">−{{ money(period.expenses) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-400">Новых сделок</span><b class="tabular-nums text-slate-800">{{ period.newDeals }}</b></div>
+                    </div>
+                </Link>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <span class="text-xs font-medium text-slate-500">Конверсия</span>
                     <div class="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900">{{ conversion.rate }}%</div>
@@ -75,6 +143,26 @@ const trend = (key) => {
                     </div>
                     <div class="mt-2 text-xs text-slate-400">{{ conversion.won }} из {{ conversion.total }} сделок</div>
                 </div>
+            </div>
+
+            <!-- Требует внимания (клик — в раздел) -->
+            <div class="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                <Link :href="route('deals.overdue')" class="rounded-xl border p-4 shadow-sm transition hover:shadow-md" :class="attention.overdueDeals > 0 ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'">
+                    <div class="text-xs font-medium" :class="attention.overdueDeals > 0 ? 'text-rose-500' : 'text-slate-400'">⚠️ Просроченные сделки</div>
+                    <div class="mt-1 text-2xl font-bold tabular-nums" :class="attention.overdueDeals > 0 ? 'text-rose-600' : 'text-slate-900'">{{ attention.overdueDeals }}</div>
+                </Link>
+                <Link :href="route('deals.index')" class="rounded-xl border p-4 shadow-sm transition hover:shadow-md" :class="attention.overdueTasks > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'">
+                    <div class="text-xs font-medium" :class="attention.overdueTasks > 0 ? 'text-amber-600' : 'text-slate-400'">Просроченные задачи</div>
+                    <div class="mt-1 text-2xl font-bold tabular-nums" :class="attention.overdueTasks > 0 ? 'text-amber-600' : 'text-slate-900'">{{ attention.overdueTasks }}</div>
+                </Link>
+                <Link :href="route('finance.index', { exp_status: 'pending' })" class="rounded-xl border p-4 shadow-sm transition hover:shadow-md" :class="attention.pendingExpenses.count > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'">
+                    <div class="text-xs font-medium" :class="attention.pendingExpenses.count > 0 ? 'text-amber-600' : 'text-slate-400'">Расходы ждут бухгалтера ({{ attention.pendingExpenses.count }})</div>
+                    <div class="mt-1 text-2xl font-bold tabular-nums" :class="attention.pendingExpenses.count > 0 ? 'text-amber-600' : 'text-slate-900'">{{ money(attention.pendingExpenses.sum) }}</div>
+                </Link>
+                <Link :href="route('warehouse.index')" class="rounded-xl border p-4 shadow-sm transition hover:shadow-md" :class="attention.zeroMaterials > 0 ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'">
+                    <div class="text-xs font-medium" :class="attention.zeroMaterials > 0 ? 'text-rose-500' : 'text-slate-400'">Материалы на нуле</div>
+                    <div class="mt-1 text-2xl font-bold tabular-nums" :class="attention.zeroMaterials > 0 ? 'text-rose-600' : 'text-slate-900'">{{ attention.zeroMaterials }}</div>
+                </Link>
             </div>
 
             <!-- Bento cells -->
@@ -115,19 +203,39 @@ const trend = (key) => {
                     </div>
                 </div>
 
-                <!-- Funnel -->
+                <!-- Funnel: активные сделки по этапам (перенесено с Дашборда) -->
                 <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
-                    <h3 class="mb-4 text-sm font-semibold text-slate-900">Воронка продаж</h3>
+                    <div class="mb-4 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-slate-900">Воронка — активные сделки по этапам</h3>
+                        <Link :href="route('deals.index')" class="text-xs font-medium text-indigo-600 hover:text-indigo-700">Канбан →</Link>
+                    </div>
                     <div class="space-y-3">
-                        <div v-for="f in funnel" :key="f.name">
+                        <Link v-for="f in funnel" :key="f.name" :href="route('deals.index')" class="block rounded-lg px-1 py-0.5 transition hover:bg-slate-50">
                             <div class="mb-1 flex justify-between text-xs"><span class="text-slate-600">{{ f.name }}</span><span class="tabular-nums text-slate-400">{{ f.count }} · {{ money(f.total) }}</span></div>
                             <div class="h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full" :style="{ width: (f.count / maxFunnel * 100) + '%', backgroundColor: f.color }"></div></div>
-                        </div>
+                        </Link>
+                        <div v-if="!funnel.length" class="py-4 text-center text-sm text-slate-400">Нет этапов</div>
+                    </div>
+                </div>
+
+                <!-- Топ менеджеров за период (клик — сделки менеджера) -->
+                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
+                    <h3 class="mb-3 text-sm font-semibold text-slate-900">Топ менеджеров <span class="font-normal text-slate-400">за период</span></h3>
+                    <div class="space-y-2">
+                        <Link v-for="(m, i) in topManagers" :key="m.uid" :href="route('deals.index', { responsible: m.uid })"
+                            class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 transition hover:bg-indigo-50/60">
+                            <div class="flex items-center gap-2 text-sm"><span class="text-xs font-bold text-slate-300">{{ i + 1 }}</span><span class="font-medium text-slate-800">{{ m.user }}</span></div>
+                            <div class="text-right">
+                                <div class="text-sm font-bold tabular-nums text-slate-800">{{ money(m.budget) }}</div>
+                                <div class="text-[11px] text-slate-400">{{ m.deals }} сделок</div>
+                            </div>
+                        </Link>
+                        <div v-if="!topManagers.length" class="py-6 text-center text-sm text-slate-400">Нет сделок за период</div>
                     </div>
                 </div>
 
                 <!-- ABC summary -->
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
+                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-6">
                     <h3 class="mb-1 text-sm font-semibold text-slate-900">ABC-анализ</h3>
                     <p class="mb-3 text-xs text-slate-400">По фактическому доходу: A ≈ 80%, B ≈ 15%, C ≈ 5%</p>
                     <div class="grid grid-cols-3 gap-2">

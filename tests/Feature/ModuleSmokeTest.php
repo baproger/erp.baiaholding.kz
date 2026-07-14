@@ -30,9 +30,12 @@ class ModuleSmokeTest extends TestCase
     {
         $user = $this->admin();
 
-        foreach (['dashboard', 'deals.index', 'projects.index', 'clients.index', 'departments.index'] as $name) {
+        foreach (['analytics.index', 'deals.index', 'projects.index', 'clients.index', 'departments.index'] as $name) {
             $this->actingAs($user)->get(route($name))->assertOk();
         }
+
+        // Дашборд слит с Аналитикой: маршрут остался, но редиректит руководство туда.
+        $this->actingAs($user)->get(route('dashboard'))->assertRedirect(route('analytics.index'));
     }
 
     public function test_deal_creation_generates_number(): void

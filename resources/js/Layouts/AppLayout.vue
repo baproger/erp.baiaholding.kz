@@ -36,8 +36,8 @@ router.on('finish', () => {
 });
 
 const allNav = [
-    { key: 'nav.dashboard', name: 'Дашборд', route: 'dashboard', icon: '▧', leadershipOnly: true },
-    { key: 'nav.analytics', name: 'Аналитика', route: 'analytics.index', icon: '◊', perm: 'report.viewAny' },
+    // Дашборд слит с Аналитикой: financist видит её по роли (как раньше дашборд).
+    { key: 'nav.analytics', name: 'Аналитика', route: 'analytics.index', icon: '◊', leadershipOnly: true },
     { key: 'nav.deals', name: 'Сделки', route: 'deals.index', icon: '◈', perm: 'deal.viewAny' },
     { key: 'nav.overdue', name: 'Просроченные', route: 'deals.overdue', icon: '⏰', perm: 'deal.viewAny' },
     { key: 'nav.workshop', name: 'Цех', route: 'projects.index', icon: '◇', perm: 'project.viewAny' },
@@ -57,7 +57,6 @@ const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes
 // Инлайн-SVG иконки (Lucide-style outline) по route — заменяют псевдо-иконки.
 // Чисто презентационно: массив allNav и его perm/leadershipOnly не тронуты.
 const navIcons = {
-    'dashboard': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
     'analytics.index': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 15v-4M12 15V7M17 15v-6"/>',
     'deals.index': '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
     'deals.overdue': '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/>',

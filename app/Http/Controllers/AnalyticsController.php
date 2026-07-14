@@ -5,8 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Deal;
 use App\Models\DealStage;
 use App\Models\Expense;
+use App\Models\Invoice;
+use App\Models\Material;
 use App\Models\Payment;
+use App\Models\Project;
 use App\Models\Setting;
+use App\Models\Task;
+use App\Models\User;
 use App\Services\PayrollService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,9 +19,35 @@ use Inertia\Response;
 
 class AnalyticsController extends Controller
 {
+    /** Морф-условие «сущность принадлежит текущей компании» (deal | project). */
+    private function morphCompanyScope($q, string $typeCol, string $idCol, int $companyId): void
+    {
+        $q->where(fn ($w) => $w
+            ->where(fn ($d) => $d->where($typeCol, 'deal')
+                ->whereIn($idCol, Deal::where('company_id', $companyId)->select('id')))
+            ->orWhere(fn ($p) => $p->where($typeCol, 'project')
+                ->whereIn($idCol, Project::whereHas('deal', fn ($d) => $d->where('company_id', $companyId))->select('id'))));
+    }
+
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->can('report.viewAny') || $request->user()->hasRole('admin'), 403);
+        // financist — как на бывшем Дашборде: видит деньги, но без report.viewAny.
+        abort_unless($request->user()->can('report.viewAny') || $request->user()->hasAnyRole(['admin', 'financist']), 403);
+
+        // ---- Фильтры: период (для «за период» и топа менеджеров), менеджер,
+        // этап, поиск (№ / контрагент / договор). Применяются к воронке,
+        // блоку «за период» и топу менеджеров. ----
+        $from = $request->string('from')->toString() ?: now()->startOfMonth()->toDateString();
+        $to = $request->string('to')->toString() ?: now()->toDateString();
+        $managerId = $request->integer('manager') ?: null;
+        $stageId = $request->integer('stage') ?: null;
+        $search = $request->string('search')->toString();
+        $dealFilter = fn ($q) => $q
+            ->when($managerId, fn ($w, $m) => $w->where('responsible_user_id', $m))
+            ->when($stageId, fn ($w, $s) => $w->where('deal_stage_id', $s))
+            ->when($search, fn ($w, $s) => $w->where(fn ($ww) => $ww
+                ->where('number', 'like', "%{$s}%")->orWhere('company_name', 'like', "%{$s}%")
+                ->orWhere('client_name', 'like', "%{$s}%")->orWhere('bin', 'like', "%{$s}%")));
 
         $wonIds = Deal::won()->forCurrentCompany()->pluck('id');
 
@@ -28,7 +59,11 @@ class AnalyticsController extends Controller
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
             ->orderBy('order')->get();
         $companyNames = \App\Models\Company::pluck('name', 'id');
+        // Воронка — АКТИВНЫЕ сделки по этапам (перенесено с Дашборда: где затор),
+        // учитывает фильтры менеджер/этап/поиск.
         $dealsByStage = Deal::query()->forCurrentCompany()
+            ->whereNotIn('status', ['closed', 'cancelled'])
+            ->tap($dealFilter)
             ->selectRaw('deal_stage_id, count(*) as cnt, coalesce(sum(budget),0) as total')
             ->groupBy('deal_stage_id')->get()->keyBy('deal_stage_id');
 
@@ -175,6 +210,58 @@ class AnalyticsController extends Controller
             ];
         })->sortByDesc('bonus')->values();
 
+        // ---- Деньги (перенесено с Дашборда): дебиторка = выставлено − оплачено ----
+        $invBase = Invoice::query()->when($companyId, fn ($q, $c) => $this->morphCompanyScope($q, 'invoiceable_type', 'invoiceable_id', $c));
+        $invoiced = (float) (clone $invBase)->sum('amount');
+        $invoicePaid = (float) Payment::whereIn('invoice_id', (clone $invBase)->select('id'))->sum('amount');
+
+        // ---- «Требует внимания» (без фильтров — это сигналы по всей компании) ----
+        $overdueDeals = Deal::forCurrentCompany()->whereNotNull('deadline')->whereDate('deadline', '<', $today)
+            ->whereNotIn('status', ['closed', 'cancelled'])
+            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true))->count();
+
+        $overdueTasks = Task::where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
+                ->whereNull('taskable_type') // личные задачи не делятся по фирмам
+                ->orWhere(fn ($m) => $this->morphCompanyScope($m, 'taskable_type', 'taskable_id', $c))))
+            ->count();
+
+        $expBase = Expense::query()->when($companyId, fn ($q, $c) => $this->morphCompanyScope($q, 'expenseable_type', 'expenseable_id', $c));
+        $pendingExpenses = [
+            'count' => (clone $expBase)->where('status', 'pending')->count(),
+            'sum' => (float) (clone $expBase)->where('status', 'pending')->sum('amount'),
+        ];
+
+        $zeroMaterials = Material::forCurrentCompany()->where('quantity', '<=', 0)->count();
+
+        // ---- «За период»: при активном фильтре по сделкам деньги считаются
+        // только по счетам/расходам отфильтрованных сделок, иначе — по компании
+        // целиком (включая проекты), как на бывшем Дашборде. ----
+        $hasDealFilter = $managerId || $stageId || $search !== '';
+        $filteredDealIds = Deal::forCurrentCompany()->tap($dealFilter)->select('id');
+        $periodPaidBase = $hasDealFilter
+            ? Payment::whereIn('invoice_id', Invoice::where('invoiceable_type', 'deal')->whereIn('invoiceable_id', $filteredDealIds)->select('id'))
+            : Payment::whereIn('invoice_id', (clone $invBase)->select('id'));
+        $periodExpBase = $hasDealFilter
+            ? Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')->whereIn('expenseable_id', $filteredDealIds)
+            : (clone $expBase)->where('status', 'confirmed');
+
+        $period = [
+            'paid' => (float) $periodPaidBase->whereDate('payment_date', '>=', $from)->whereDate('payment_date', '<=', $to)->sum('amount'),
+            'expenses' => (float) $periodExpBase->whereDate('date', '>=', $from)->whereDate('date', '<=', $to)->sum('amount'),
+            'newDeals' => Deal::forCurrentCompany()->tap($dealFilter)
+                ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count(),
+        ];
+
+        // Топ менеджеров за период: созданные сделки + бюджет (uid — для ссылки).
+        $topManagers = Deal::forCurrentCompany()->where('status', '!=', 'cancelled')->tap($dealFilter)
+            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
+            ->whereNotNull('responsible_user_id')
+            ->selectRaw('responsible_user_id, count(*) deals, sum(budget) budget')
+            ->groupBy('responsible_user_id')->orderByDesc('budget')->limit(5)
+            ->with('responsible:id,name')->get()
+            ->map(fn ($r) => ['uid' => $r->responsible_user_id, 'user' => $r->responsible?->name ?? '—', 'deals' => (int) $r->deals, 'budget' => (float) $r->budget]);
+
         return Inertia::render('Analytics/Index', [
             'byEmployee' => $byEmployee,
             'monthsFilter' => $monthsCount,
@@ -188,8 +275,23 @@ class AnalyticsController extends Controller
                 'won' => $won,
                 'rate' => $total > 0 ? round($won / $total * 100, 1) : 0,
             ],
-            // Canonical company figures (identical to Dashboard & Finance).
-            'totals' => array_merge($companyTotals, ['net' => $companyTotals['company']]),
+            // Canonical company figures (identical to Finance, via PayrollService).
+            'totals' => array_merge($companyTotals, [
+                'net' => $companyTotals['company'],
+                'debt' => max(0, $invoiced - $invoicePaid),
+                'taxRate' => $taxRate * 100,
+            ]),
+            'attention' => [
+                'overdueDeals' => $overdueDeals,
+                'overdueTasks' => $overdueTasks,
+                'pendingExpenses' => $pendingExpenses,
+                'zeroMaterials' => $zeroMaterials,
+            ],
+            'period' => $period,
+            'topManagers' => $topManagers,
+            'filters' => ['from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId, 'search' => $search],
+            'managers' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'stageOptions' => $stages->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : '')])->values(),
         ]);
     }
 }
