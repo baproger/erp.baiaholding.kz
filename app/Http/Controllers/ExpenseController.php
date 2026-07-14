@@ -196,6 +196,14 @@ class ExpenseController extends Controller
         // Автору — уведомление о подтверждении.
         $expense->responsible?->notify(new \App\Notifications\ExpenseConfirmed($expense));
 
+        // Остальным бухгалтерам — «расход уже подтверждён (Имя)», чтобы не
+        // подтверждали повторно. Кроме того, кто подтвердил, и автора.
+        User::where('is_active', true)->role('financist')
+            ->where('id', '!=', $request->user()->id)
+            ->where('id', '!=', $expense->responsible_user_id)
+            ->get()
+            ->each(fn ($fin) => $fin->notify(new \App\Notifications\ExpenseHandled($expense, $request->user())));
+
         return back()->with('success', 'Расход подтверждён ('.($data['payment_method'] === 'cash' ? 'наличные' : 'банк').').');
     }
 

@@ -92,7 +92,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         <div class="space-y-4">
             <div class="grid grid-cols-3 gap-3">
                 <div class="rounded-xl bg-indigo-50 p-4"><div class="text-xs font-medium text-indigo-700">Сумма договора</div><div class="mt-0.5 text-lg font-bold tabular-nums text-indigo-700">{{ money(finance.budget) }}</div></div>
-                <div class="rounded-xl bg-emerald-50 p-4"><div class="text-xs font-medium text-emerald-700">Доход (оплачено)</div><div class="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{{ money(finance.income) }}</div></div>
+                <div class="rounded-xl bg-emerald-50 p-4"><div class="text-xs font-medium text-emerald-700">Аванс (оплачено)</div><div class="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{{ money(finance.income) }}</div></div>
                 <div class="rounded-xl bg-rose-50 p-4"><div class="text-xs font-medium text-rose-700">Расходы</div><div class="mt-0.5 text-lg font-bold tabular-nums text-rose-700">{{ money(finance.expense) }}</div></div>
             </div>
 
@@ -136,7 +136,8 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <TextInput v-model="invoiceForm.due_date" type="date" />
                 </div>
                 <TextInput v-model="invoiceForm.description" placeholder="Описание" class="mt-2 w-full" />
-                <div class="mt-2"><PrimaryButton :disabled="invoiceForm.processing" @click="addInvoice">Создать счёт</PrimaryButton></div>
+                <div v-if="invoiceForm.errors.amount" class="mt-1 text-xs text-red-600">{{ invoiceForm.errors.amount }}</div>
+                <div class="mt-2"><PrimaryButton :disabled="invoiceForm.processing || Number(invoiceForm.amount) <= 0" @click="addInvoice">Создать счёт</PrimaryButton></div>
             </div>
             <div class="space-y-2">
                 <div v-for="inv in invoices" :key="inv.id" class="rounded-xl bg-slate-50 p-4 text-sm">

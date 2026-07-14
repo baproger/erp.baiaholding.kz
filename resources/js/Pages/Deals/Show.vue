@@ -285,7 +285,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     <div class="mt-1 text-[28px] font-bold leading-tight tracking-tight text-indigo-600">{{ money(deal.budget) }}</div>
                     <div class="mt-4 space-y-2 text-sm">
                         <div class="flex justify-between"><span class="text-slate-500">Статус</span><StatusBadge :status="deal.status" /></div>
-                        <div class="flex justify-between"><span class="text-slate-500">Доход (оплачено)</span><span class="font-medium tabular-nums text-emerald-600">{{ money(finance.income) }}</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Аванс (оплачено)</span><span class="font-medium tabular-nums text-emerald-600">{{ money(finance.income) }}</span></div>
                         <div class="flex justify-between"><span class="text-slate-500">Остаток к оплате</span><span class="font-bold tabular-nums" :class="remainder > 0 ? 'text-rose-600' : 'text-emerald-600'">{{ remainder > 0 ? money(remainder) : 'оплачено ✓' }}</span></div>
                         <div class="mt-2 border-t border-slate-100 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Расчёт прибыли</div>
                         <div class="flex justify-between"><span class="text-slate-500">Налог {{ profit.taxRate }}%</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.tax) }}</span></div>

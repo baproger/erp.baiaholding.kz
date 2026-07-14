@@ -15,7 +15,7 @@ class InvoiceRequest extends FormRequest
             'invoiceable_type' => ['nullable', Rule::in(['deal', 'project'])],
             'invoiceable_id' => ['nullable', 'integer'],
             'client_id' => ['nullable', 'exists:clients,id'],
-            'amount' => ['required', 'numeric', 'min:0'],
+            'amount' => ['required', 'numeric', 'min:1'],
             'status' => ['nullable', Rule::in(['draft', 'sent', 'partially_paid', 'paid', 'overdue', 'cancelled'])],
             'issue_date' => ['nullable', 'date'],
             'due_date' => ['nullable', 'date'],
