@@ -27,7 +27,7 @@ const sendToAct = () => router.post(route('projects.toAct', props.project.id), {
         <template #header>
             <div class="flex items-center gap-3">
                 <Link :href="route('projects.index')" class="text-slate-400 hover:text-slate-600">← {{ $t('page.workshop', 'Цех') }}</Link>
-                <span>{{ project.name }}</span>
+                <span>{{ project.deal?.company_name || project.name }}</span>
                 <span class="text-sm text-slate-400">{{ project.number }}</span>
             </div>
         </template>

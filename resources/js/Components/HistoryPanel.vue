@@ -6,7 +6,7 @@ const actionColor = { created: 'bg-emerald-500', updated: 'bg-amber-500', delete
 const fieldRu = {
     name: 'Название', budget: 'Бюджет', status: 'Статус', deal_stage_id: 'Этап',
     project_stage_id: 'Этап', responsible_user_id: 'Ответственный', deadline: 'Срок',
-    description: 'Описание', client_name: 'Клиент', closed_at: 'Закрытие',
+    description: 'Описание', client_name: 'Клиент', company_name: 'Компания', closed_at: 'Закрытие',
 };
 const fmt = (t) => new Date(t).toLocaleString('ru-RU');
 </script>

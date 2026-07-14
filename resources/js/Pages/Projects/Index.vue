@@ -70,14 +70,14 @@ const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preser
             <table class="min-w-full divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                     <tr>
-                        <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Клиент</th>
+                        <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Компания</th><th class="px-4 py-3">Клиент</th>
                         <th class="px-4 py-3">Этап</th><th v-if="canSeeMoney" class="px-4 py-3">Бюджет</th><th class="px-4 py-3">Статус</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="p in projects.data" :key="p.id" class="cursor-pointer hover:bg-slate-50" @click="router.get(route('projects.show', p.id))">
                         <td class="px-4 py-3 text-slate-400">{{ p.number }}</td>
-                        <td class="px-4 py-3 font-medium text-slate-900">{{ p.name }}</td>
+                        <td class="px-4 py-3 font-medium text-slate-900">{{ p.deal?.company_name || p.name }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ p.client?.name ?? '—' }}</td>
                         <td class="px-4 py-3"><StatusBadge :status="p.stage?.name" :color="p.stage?.color" /></td>
                         <td v-if="canSeeMoney" class="px-4 py-3">{{ money(p.budget) }}</td>

@@ -75,7 +75,7 @@ const applyFilters = () => router.get(route('deals.index'), {
 const resetFilters = () => { fResponsible.value = ''; fFrom.value = ''; fTo.value = ''; applyFilters(); };
 
 const showModal = ref(false);
-const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', name: '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
+const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
 const openCreate = () => { form.reset(); form.company_id = props.currentCompanyId || props.companies[0]?.id || ''; binMatch.value = null; showBinModal.value = false; showModal.value = true; };
 const submit = () => form.post(route('deals.store'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
 
@@ -201,12 +201,12 @@ const applyBinMatch = () => {
         <div v-else class="overflow-hidden rounded-xl bg-white border border-slate-200 shadow-sm">
             <table class="min-w-full divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Название</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
+                    <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Компания</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors hover:bg-slate-50" @click="router.get(route('deals.show', deal.id))">
                         <td class="px-4 py-3 text-slate-400">{{ deal.number }}</td>
-                        <td class="px-4 py-3 font-medium text-slate-900">{{ deal.name }}</td>
+                        <td class="px-4 py-3 font-medium text-slate-900">{{ deal.company_name || deal.name }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ deal.client_name || deal.client?.name || '—' }}</td>
                         <td class="px-4 py-3"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
                         <td class="px-4 py-3">{{ money(deal.budget) }}</td>
@@ -233,7 +233,6 @@ const applyBinMatch = () => {
                             </button>
                         </div>
                     </div>
-                    <div class="col-span-2"><InputLabel value="Название сделки" /><TextInput v-model="form.name" class="mt-1 w-full" /><InputError :message="form.errors.name" class="mt-1" /></div>
                     <div><InputLabel value="Название компании *" /><TextInput v-model="form.company_name" class="mt-1 w-full" /><InputError :message="form.errors.company_name" class="mt-1" /></div>
                     <div><InputLabel value="Номер договора" /><TextInput v-model="form.bin" class="mt-1 w-full" @blur="checkBin" /><InputError :message="form.errors.bin" class="mt-1" /></div>
                     <div class="col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="form.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="form.errors.address" class="mt-1" /></div>

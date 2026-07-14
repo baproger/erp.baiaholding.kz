@@ -25,7 +25,8 @@ class DealRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            // 'name' из формы убран: название сделки = название компании
+            // (контроллер зеркалит name ← company_name, колонка живёт для легаси).
             'client_name' => ['required', 'string', 'max:255'],
             'company_name' => ['required', 'string', 'max:255'],
             'address' => ['required', 'string', 'max:255'],

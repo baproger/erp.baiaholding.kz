@@ -88,7 +88,7 @@ class ProjectController extends Controller
 
         $project->load([
             'client', 'responsible:id,name,avatar', 'department:id,name',
-            'stage', 'deal:id,number,name',
+            'stage', 'deal:id,number,name,company_name',
             'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),

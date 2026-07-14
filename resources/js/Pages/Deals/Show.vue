@@ -82,7 +82,7 @@ const showEdit = ref(false);
 // input[type=date] принимает только YYYY-MM-DD, а бэкенд отдаёт ISO-дату со временем.
 const dateOnly = (v) => (v ?? '').slice(0, 10);
 const editFields = () => ({
-    name: props.deal.name, company_name: props.deal.company_name ?? '', bin: props.deal.bin ?? '', client_name: props.deal.client_name ?? '',
+    company_name: props.deal.company_name ?? '', bin: props.deal.bin ?? '', client_name: props.deal.client_name ?? '',
     address: props.deal.address ?? '',
     contract_date: dateOnly(props.deal.contract_date), source: props.deal.source ?? '',
     lot_number: props.deal.lot_number ?? '', unit: props.deal.unit ?? '', budget: props.deal.budget, deadline: dateOnly(props.deal.deadline),
@@ -107,7 +107,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                     {{ $t('page.deals', 'Сделки') }}
                 </Link>
-                <span class="text-xl font-semibold tracking-tight text-slate-900">{{ deal.name }}</span>
+                <span class="text-xl font-semibold tracking-tight text-slate-900">{{ deal.company_name || deal.name }}</span>
                 <span class="text-sm font-medium text-slate-400">{{ deal.number }}</span>
                 <span v-if="overdue" class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
                     <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
@@ -315,7 +315,6 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
             <div class="p-6">
                 <h2 class="mb-4 text-lg font-semibold text-slate-900">Изменить сделку</h2>
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="col-span-2"><InputLabel value="Название сделки" /><TextInput v-model="editForm.name" class="mt-1 w-full" /><InputError :message="editForm.errors.name" class="mt-1" /></div>
                     <div><InputLabel value="Название компании *" /><TextInput v-model="editForm.company_name" class="mt-1 w-full" /><InputError :message="editForm.errors.company_name" class="mt-1" /></div>
                     <div><InputLabel value="Номер договора" /><TextInput v-model="editForm.bin" class="mt-1 w-full" /><InputError :message="editForm.errors.bin" class="mt-1" /></div>
                     <div class="col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="editForm.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="editForm.errors.address" class="mt-1" /></div>

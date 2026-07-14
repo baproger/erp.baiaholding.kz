@@ -38,10 +38,13 @@ class DealPermissionTest extends TestCase
         $deal = $this->deal($user->id);
 
         $this->actingAs($user)->put(route('deals.update', $deal), [
-            'name' => 'Отредактировано', 'client_name' => 'Иван', 'company_name' => 'ТОО', 'address' => 'Алматы', 'budget' => 2000,
+            'client_name' => 'Иван', 'company_name' => 'ТОО Отредактировано', 'address' => 'Алматы', 'budget' => 2000,
         ])->assertRedirect();
 
-        $this->assertEquals('Отредактировано', $deal->fresh()->name);
+        $fresh = $deal->fresh();
+        $this->assertEquals('ТОО Отредактировано', $fresh->company_name);
+        // Название сделки зеркалит название компании (поле убрано из UI).
+        $this->assertEquals('ТОО Отредактировано', $fresh->name);
     }
 
     public function test_non_responsible_without_permission_cannot_edit(): void

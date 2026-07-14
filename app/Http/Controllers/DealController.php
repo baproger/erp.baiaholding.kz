@@ -78,6 +78,8 @@ class DealController extends Controller
         $this->authorize('create', Deal::class);
 
         $data = $request->validated();
+        // Название сделки = название компании (поле «Название сделки» убрано из UI).
+        $data['name'] = $data['company_name'];
 
         // Deal belongs to a firm (BAIA / ASU): the one picked in the form if the
         // user is a member of it, otherwise the current session company.
@@ -179,7 +181,10 @@ class DealController extends Controller
     {
         $this->authorize('update', $deal);
         $this->assertNotFrozen($request, $deal);
-        $deal->update($request->validated());
+        $data = $request->validated();
+        // Название сделки зеркалит название компании (поле убрано из UI).
+        $data['name'] = $data['company_name'];
+        $deal->update($data);
 
         return back()->with('success', 'Сделка обновлена.');
     }

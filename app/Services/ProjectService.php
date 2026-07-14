@@ -26,7 +26,7 @@ class ProjectService
 
         return Project::create([
             'number' => $this->numbers->generate(),
-            'name' => $deal->name,
+            'name' => $deal->company_name ?: $deal->name,
             'deal_id' => $deal->id,
             'client_id' => $deal->client_id,
             'responsible_user_id' => $deal->responsible_user_id,

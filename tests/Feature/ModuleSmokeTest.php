@@ -55,6 +55,9 @@ class ModuleSmokeTest extends TestCase
         $deal = Deal::first();
         $this->assertNotNull($deal);
         $this->assertMatchesRegularExpression('/^BAIA-\d{3,}$/', $deal->number);
+        // Название сделки = название компании (поле «Название сделки» убрано из UI,
+        // присланный 'name' игнорируется).
+        $this->assertEquals('ТОО Тест', $deal->name);
     }
 
     public function test_moving_deal_to_won_stage_closes_it(): void

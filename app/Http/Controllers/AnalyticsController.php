@@ -110,8 +110,8 @@ class AnalyticsController extends Controller
             ->selectRaw('invoices.invoiceable_id as deal_id, SUM(payments.amount) as income')
             ->pluck('income', 'deal_id');
 
-        $ranked = Deal::whereIn('id', $dealIncome->keys())->get(['id', 'number', 'name'])
-            ->map(fn ($d) => ['number' => $d->number, 'name' => $d->name, 'value' => (float) $dealIncome[$d->id]])
+        $ranked = Deal::whereIn('id', $dealIncome->keys())->get(['id', 'number', 'name', 'company_name'])
+            ->map(fn ($d) => ['number' => $d->number, 'name' => $d->company_name ?: $d->name, 'value' => (float) $dealIncome[$d->id]])
             ->sortByDesc('value')->values();
         $totalIncome = (float) $ranked->sum('value');
         $cumulative = 0.0;
