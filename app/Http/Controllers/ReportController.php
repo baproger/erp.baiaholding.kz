@@ -33,7 +33,7 @@ class ReportController extends Controller
 
         $deals = Deal::forCurrentCompany()
             ->where('status', '!=', 'cancelled')
-            ->with(['responsible:id,name', 'stage:id,name,color,is_won'])
+            ->with(['responsible:id,name', 'stage:id,name,color,is_won,stage_type'])
             ->when($search, fn ($q, $s) => $q->where(fn ($w) => $w
                 ->where('number', 'like', "%{$s}%")->orWhere('company_name', 'like', "%{$s}%")
                 ->orWhere('client_name', 'like', "%{$s}%")->orWhere('bin', 'like', "%{$s}%")
@@ -96,6 +96,9 @@ class ReportController extends Controller
                 'stage' => $d->stage?->name,
                 'stage_color' => $d->stage?->color,
                 'is_won' => (bool) $d->stage?->is_won,
+                // «На подходе» = Акт утверждение / ЭСФ (по stage_type — этапы
+                // переименовываются в настройках, имя ненадёжно): скоро won.
+                'is_pending_won' => in_array($d->stage?->stage_type, ['act', 'esf'], true),
             ];
         })->values();
 

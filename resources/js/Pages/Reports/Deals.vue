@@ -29,6 +29,13 @@ const marginBadge = (m) => m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emeral
 const paidPct = (r) => r.budget > 0 ? Math.min(100, Math.round(r.paid / r.budget * 100)) : 0;
 const isOverdue = (r) => r.deadline && !r.is_won && new Date(r.deadline) < new Date(new Date().toDateString());
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU') : '—';
+// Подсветка строк: won — зелёный градиент по строке; Акт/ЭСФ — полупрозрачный
+// зелёный («скоро успешная»); остальные — обычные.
+const rowClass = (r) => r.is_won
+    ? 'row-won bg-gradient-to-r from-emerald-100/90 via-emerald-50/60 to-emerald-50/10 hover:from-emerald-100 hover:via-emerald-50'
+    : r.is_pending_won
+        ? 'row-pending bg-emerald-50/35 hover:bg-emerald-50/70'
+        : 'hover:bg-slate-50';
 // Доля от общей суммы договоров — как процентная строка в Excel-отчёте.
 const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).toFixed(1) + '%' : '—';
 </script>
@@ -101,8 +108,15 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             </div>
         </div>
 
+        <!-- Легенда подсветки строк -->
+        <div class="mt-4 flex flex-wrap items-center gap-4 px-1 text-[11px] text-slate-400">
+            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-emerald-200 to-emerald-50"></span> Оплата успешно</span>
+            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-emerald-50 ring-1 ring-inset ring-emerald-200/60"></span> Акт / ЭСФ — скоро успешная</span>
+            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-white ring-1 ring-inset ring-slate-200"></span> В работе</span>
+        </div>
+
         <!-- Таблица -->
-        <div class="rise mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" style="animation-delay: 240ms">
+        <div class="rise mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" style="animation-delay: 240ms">
             <div class="max-h-[70vh] overflow-auto">
                 <table class="min-w-full whitespace-nowrap text-xs">
                     <thead class="text-left uppercase tracking-wide text-slate-400">
@@ -124,7 +138,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="r in rows" :key="r.id" @click="openDeal(r.id)"
-                            class="group cursor-pointer transition-colors hover:bg-slate-50">
+                            class="group cursor-pointer transition-colors" :class="rowClass(r)">
                             <!-- Сделка: организация + № / договор -->
                             <td class="max-w-64 px-4 py-3">
                                 <div class="truncate text-[13px] font-semibold text-slate-800" :title="r.company_name">{{ r.company_name || '—' }}</div>
@@ -199,5 +213,12 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
 .rise {
     opacity: 0;
     animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+/* Зелёная линия слева: won — сплошная насыщенная, Акт/ЭСФ — мягкая полупрозрачная. */
+.row-won td:first-child {
+    box-shadow: inset 3px 0 0 0 #10b981;
+}
+.row-pending td:first-child {
+    box-shadow: inset 3px 0 0 0 rgba(16, 185, 129, 0.35);
 }
 </style>
