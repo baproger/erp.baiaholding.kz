@@ -326,8 +326,9 @@ class DealController extends Controller
             ->whereNotNull('deadline')
             ->whereDate('deadline', '<', $today)
             ->whereNotIn('status', ['closed', 'cancelled'])
-            // A deal on the won stage («Оплата успешно») is already successful — not overdue.
-            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true))
+            // Сделка на Акте/ЭСФ/«Оплата успешно» — уже у бухгалтера/успешна:
+            // из просроченных убирается сразу (по stage_type, имя ненадёжно).
+            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhereIn('stage_type', ['act', 'esf']))
             ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
             ->orderBy('deadline')
             ->get()

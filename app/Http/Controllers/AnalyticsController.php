@@ -152,7 +152,7 @@ class AnalyticsController extends Controller
                     ->orWhereIn('deal_stage_id', $pendingIds)
                     ->orWhere(fn ($o) => $o->whereNotNull('deadline')->whereDate('deadline', '<', $today)
                         ->whereNotIn('status', ['closed', 'cancelled'])
-                        ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)));
+                        ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhereIn('stage_type', ['act', 'esf'])));
             })
             ->get(['id', 'number', 'company_name', 'budget', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status']);
 
@@ -189,7 +189,8 @@ class AnalyticsController extends Controller
             $won = $deals->whereIn('deal_stage_id', $wonIdsList)->map($mapDeal)->values();
             $act = $deals->whereIn('deal_stage_id', $pendingIds->all())->map($mapDeal)->values();
             $overdue = $deals->filter(fn ($d) => $d->deadline && $d->deadline->startOfDay() < $today
-                    && ! in_array($d->deal_stage_id, $wonIdsList) && ! in_array($d->status, ['closed', 'cancelled']))
+                    && ! in_array($d->deal_stage_id, $wonIdsList) && ! $pendingIds->contains($d->deal_stage_id)
+                    && ! in_array($d->status, ['closed', 'cancelled']))
                 ->map(fn ($d) => array_merge($mapDeal($d), ['overdue_days' => (int) $d->deadline->startOfDay()->diffInDays($today)]))
                 ->sortByDesc('overdue_days')->values();
 
@@ -218,7 +219,8 @@ class AnalyticsController extends Controller
         // ---- «Требует внимания» (без фильтров — это сигналы по всей компании) ----
         $overdueDeals = Deal::forCurrentCompany()->whereNotNull('deadline')->whereDate('deadline', '<', $today)
             ->whereNotIn('status', ['closed', 'cancelled'])
-            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true))->count();
+            // Акт/ЭСФ/Оплата — не просрочка (сделка уже у бухгалтера/успешна).
+            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhereIn('stage_type', ['act', 'esf']))->count();
 
         $overdueTasks = Task::where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
