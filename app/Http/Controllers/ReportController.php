@@ -96,9 +96,10 @@ class ReportController extends Controller
                 'stage' => $d->stage?->name,
                 'stage_color' => $d->stage?->color,
                 'is_won' => (bool) $d->stage?->is_won,
-                // «На подходе» = Акт утверждение / ЭСФ (по stage_type — этапы
-                // переименовываются в настройках, имя ненадёжно): скоро won.
+                // Группы подсветки по stage_type (имя этапа ненадёжно):
+                // Акт/ЭСФ — зелёные как won; Логистика/Сборка — жёлтые.
                 'is_pending_won' => in_array($d->stage?->stage_type, ['act', 'esf'], true),
+                'is_logistics' => in_array($d->stage?->stage_type, ['logistics', 'assembly'], true),
             ];
         })->values();
 

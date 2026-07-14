@@ -30,12 +30,12 @@ const paidPct = (r) => r.budget > 0 ? Math.min(100, Math.round(r.paid / r.budget
 // Акт/ЭСФ и won просрочкой не считаются (сделка у бухгалтера / успешна).
 const isOverdue = (r) => r.deadline && !r.is_won && !r.is_pending_won && new Date(r.deadline) < new Date(new Date().toDateString());
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU') : '—';
-// Подсветка строк: won — зелёный градиент по строке; Акт/ЭСФ — полупрозрачный
-// зелёный («скоро успешная»); остальные — обычные.
-const rowClass = (r) => r.is_won
+// Подсветка строк: won и Акт/ЭСФ — зелёный градиент (успешная / вот-вот);
+// Логистика/Сборка — жёлтый; остальные — обычные.
+const rowClass = (r) => (r.is_won || r.is_pending_won)
     ? 'row-won bg-gradient-to-r from-emerald-100/90 via-emerald-50/60 to-emerald-50/10 hover:from-emerald-100 hover:via-emerald-50'
-    : r.is_pending_won
-        ? 'row-pending bg-emerald-50/35 hover:bg-emerald-50/70'
+    : r.is_logistics
+        ? 'row-logistics bg-gradient-to-r from-amber-100/80 via-amber-50/50 to-amber-50/10 hover:from-amber-100 hover:via-amber-50'
         : 'hover:bg-slate-50';
 // Доля от общей суммы договоров — как процентная строка в Excel-отчёте.
 const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).toFixed(1) + '%' : '—';
@@ -111,8 +111,8 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
 
         <!-- Легенда подсветки строк -->
         <div class="mt-4 flex flex-wrap items-center gap-4 px-1 text-[11px] text-slate-400">
-            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-emerald-200 to-emerald-50"></span> Оплата успешно</span>
-            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-emerald-50 ring-1 ring-inset ring-emerald-200/60"></span> Акт / ЭСФ — скоро успешная</span>
+            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-emerald-200 to-emerald-50"></span> Оплата успешно · Акт · ЭСФ</span>
+            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-amber-200 to-amber-50"></span> Логистика · Сборка</span>
             <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-white ring-1 ring-inset ring-slate-200"></span> В работе</span>
         </div>
 
@@ -215,11 +215,11 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
     opacity: 0;
     animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-/* Зелёная линия слева: won — сплошная насыщенная, Акт/ЭСФ — мягкая полупрозрачная. */
+/* Линия-акцент слева: зелёная — won/Акт/ЭСФ, жёлтая — Логистика/Сборка. */
 .row-won td:first-child {
     box-shadow: inset 3px 0 0 0 #10b981;
 }
-.row-pending td:first-child {
-    box-shadow: inset 3px 0 0 0 rgba(16, 185, 129, 0.35);
+.row-logistics td:first-child {
+    box-shadow: inset 3px 0 0 0 #f59e0b;
 }
 </style>
