@@ -103,7 +103,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                 <div class="mt-0.5 text-[11px] text-slate-400">{{ share(totals.bonus) }} от договоров</div>
             </div>
             <div class="rise rounded-2xl border border-transparent p-4 text-white shadow-md" style="animation-delay: 200ms; background-color: #1A3B5C">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-white/60">Фирма (остаток)</div>
+                <div class="text-[11px] font-medium uppercase tracking-wide text-white/60">Доход</div>
                 <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums">{{ money0(totals.company) }}</div>
                 <div class="mt-0.5 text-[11px] text-white/60">маржа {{ totals.margin }}%</div>
             </div>
@@ -134,7 +134,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Остаток</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-center">Маржа</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Бонус</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Фирма</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Доход</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
