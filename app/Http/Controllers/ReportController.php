@@ -119,6 +119,33 @@ class ReportController extends Controller
             'count' => $rows->count(),
         ];
 
+        // ---- Цех: заказы в работе — отдельной таблицей ПОСЛЕ сделок.
+        // Деньги заказа живут в исходной сделке (она выше в таблице сделок),
+        // поэтому в Итого цех не суммируется — только справочно бюджет.
+        $workshop = \App\Models\Project::query()
+            ->with(['responsible:id,name', 'stage:id,name,color', 'deal:id,number,company_name,company_id'])
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
+            ->when($search, fn ($q, $s) => $q->where(fn ($w) => $w->where('number', 'like', "%{$s}%")
+                ->orWhere('name', 'like', "%{$s}%")
+                ->orWhereHas('deal', fn ($d) => $d->where('company_name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%"))))
+            ->when($managerId, fn ($q, $m) => $q->where('responsible_user_id', $m))
+            ->when($from, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
+            ->when($to, fn ($q, $d) => $q->whereDate('created_at', '<=', $d))
+            ->orderBy('deadline')->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'number' => $p->number,
+                'company' => $p->deal?->company_name ?: $p->name,
+                'deal_number' => $p->deal?->number,
+                'budget' => (float) $p->budget,
+                'stage' => $p->stage?->name,
+                'stage_color' => $p->stage?->color,
+                'deadline' => optional($p->deadline)->toDateString(),
+                'manager' => $p->responsible?->name,
+                'overdue' => (bool) ($p->deadline && $p->deadline->startOfDay() < now()->startOfDay()),
+            ])->values();
+
         // Опции фильтров: активные менеджеры и этапы воронки текущей компании
         // (в режиме «Все компании» — обе воронки с пометкой фирмы).
         $companyId = \App\Support\CurrentCompany::id() ?: null;
@@ -131,6 +158,7 @@ class ReportController extends Controller
 
         return Inertia::render('Reports/Deals', [
             'rows' => $rows,
+            'workshop' => $workshop,
             'totals' => $totals,
             'taxRate' => $taxRate * 100,
             'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId],

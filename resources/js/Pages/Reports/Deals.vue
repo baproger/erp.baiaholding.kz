@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
-const props = defineProps({ rows: Array, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array });
+const props = defineProps({ rows: Array, workshop: Array, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array });
 
 const money = (v) => new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v ?? 0));
 const money0 = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -24,6 +24,7 @@ const hasFilters = () => search.value || from.value || to.value || manager.value
 const reset = () => { search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = ''; apply(); };
 
 const openDeal = (id) => router.get(route('deals.show', id));
+const openProject = (id) => router.get(route('projects.show', id));
 // Цвет маржи — та же шкала, что на Аналитике: ≥40 здоровая, 20–40 тонкая, ниже — плохая.
 const marginBadge = (m) => m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
 const paidPct = (r) => r.budget > 0 ? Math.min(100, Math.round(r.paid / r.budget * 100)) : 0;
@@ -201,6 +202,47 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                         </tr>
                     </tfoot>
                 </table>
+            </div>
+        </div>
+
+        <!-- Цех: заказы в работе (деньги — в исходной сделке выше, в Итого не дублируются) -->
+        <div v-if="workshop.length" class="rise mt-6" style="animation-delay: 300ms">
+            <h3 class="mb-2 flex items-center gap-2 px-1 text-sm font-semibold text-slate-700">Цех — заказы в работе
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{{ workshop.length }}</span>
+            </h3>
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full whitespace-nowrap text-xs">
+                        <thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+                            <tr>
+                                <th class="px-4 py-3">Заказ</th>
+                                <th class="px-4 py-3">Организация (сделка)</th>
+                                <th class="px-4 py-3 text-right">Сумма договора</th>
+                                <th class="px-4 py-3">Этап цеха</th>
+                                <th class="px-4 py-3">Срок</th>
+                                <th class="px-4 py-3">Ответственный</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="p in workshop" :key="p.id" @click="openProject(p.id)"
+                                class="cursor-pointer transition-colors hover:bg-slate-50">
+                                <td class="px-4 py-3 font-medium text-slate-500">{{ p.number }}</td>
+                                <td class="max-w-64 px-4 py-3">
+                                    <div class="truncate text-[13px] font-semibold text-slate-800" :title="p.company">{{ p.company || '—' }}</div>
+                                    <div class="mt-0.5 text-[11px] text-slate-400">{{ p.deal_number }}</div>
+                                </td>
+                                <td class="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{{ money(p.budget) }}</td>
+                                <td class="px-4 py-3">
+                                    <span v-if="p.stage" class="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" :style="{ backgroundColor: p.stage_color || '#94a3b8' }">{{ p.stage }}</span>
+                                </td>
+                                <td class="px-4 py-3" :class="p.overdue ? 'font-semibold text-rose-600' : 'text-slate-500'">
+                                    {{ fmtDate(p.deadline) }}<span v-if="p.overdue"> · просрочено</span>
+                                </td>
+                                <td class="max-w-32 truncate px-4 py-3 text-slate-600">{{ p.manager || '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </AppLayout>
