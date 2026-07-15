@@ -73,12 +73,16 @@ class InvoiceController extends Controller
 
         // ---- Раздел «Расходы»: материальные/прочие, нал/банк, статус ----
         $companyId = \App\Support\CurrentCompany::id();
-        $expBase = \App\Models\Expense::query()
-            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
-                ->where(fn ($d) => $d->where('expenseable_type', 'deal')
-                    ->whereIn('expenseable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
-                ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
-                    ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))))
+        // Скоуп расходов текущей фирмы: по сделке/заказу + расходы КОМПАНИИ
+        // (аренда/интернет/бензин… — без сделки, по company_id).
+        $expScope = fn ($q) => $q->when($companyId, fn ($qq, $c) => $qq->where(fn ($w) => $w
+            ->where(fn ($d) => $d->where('expenseable_type', 'deal')
+                ->whereIn('expenseable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+            ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
+                ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))
+            ->orWhere('company_id', $c)));
+
+        $expBase = \App\Models\Expense::query()->tap($expScope)
             // Период применяется и к сводке, и к таблице — «сколько нал/банк
             // за месяц» видно сразу, без ручного суммирования.
             ->when($request->string('exp_from')->toString(), fn ($q, $d) => $q->whereDate('date', '>=', $d))
@@ -99,7 +103,7 @@ class InvoiceController extends Controller
         ];
 
         $expenses = (clone $expBase)
-            ->with(['expenseable', 'material:id,name,unit', 'responsible:id,name', 'confirmedBy:id,name'])
+            ->with(['expenseable', 'category:id,name', 'material:id,name,unit', 'responsible:id,name', 'confirmedBy:id,name'])
             ->when($request->string('exp_status')->toString(), fn ($q, $s) => $q->where('status', $s))
             ->when($request->string('exp_method')->toString(), fn ($q, $m) => $q->where('payment_method', $m))
             ->when($request->string('exp_kind')->toString(), fn ($q, $k) => $k === 'material' ? $q->whereNotNull('material_id') : $q->whereNull('material_id'))
@@ -108,9 +112,33 @@ class InvoiceController extends Controller
         // Canonical company finance — identical to Dashboard & Analytics (via PayrollService).
         $payroll = app(PayrollService::class);
         $fin = $payroll->companyTotals();
-        $salaries = $payroll->perUser()
+        $payrollRows = $payroll->perUser();
+        $salaries = $payrollRows
             ->map(fn ($r) => ['user' => $r['user'], 'avatar' => $r['avatar'], 'bonus' => $r['bonus'], 'margin' => $r['margin'], 'income' => $r['income']])
             ->sortByDesc('bonus')->values();
+
+        // ---- Сводка компании (эскиз бухгалтерии): Доход − ВСЕ расходы = Чистая прибыль ----
+        // Доход = все фактические поступления по счетам компании. Сводка — за всё
+        // время (без exp_from/exp_to, они только для таблицы/плиток раздела).
+        $confirmedNoPeriod = fn () => \App\Models\Expense::query()->tap($expScope)->where('status', 'confirmed');
+        $byCategory = $confirmedNoPeriod()->whereNotNull('category_id')
+            ->groupBy('category_id')->selectRaw('category_id, sum(amount) s')->pluck('s', 'category_id');
+        $categories = \App\Models\ExpenseCategory::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $categoryRows = $categories
+            ->map(fn ($c) => ['name' => $c->name, 'sum' => (float) ($byCategory[$c->id] ?? 0)])
+            ->filter(fn ($r) => $r['sum'] > 0)->sortByDesc('sum')->values();
+        // Расходы по сделкам/цеху (закуп + прочие без категории).
+        $dealExpenses = (float) $confirmedNoPeriod()->whereNull('category_id')->sum('amount');
+        $payrollTotal = round((float) $payrollRows->sum('payout'), 2); // оклады + бонусы
+        $expensesTotal = round($categoryRows->sum('sum') + $dealExpenses + $payrollTotal + $fin['tax'], 2);
+
+        // Остатки касса/банк: поступления минус расходы по способу оплаты.
+        $payByMethod = \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->select('id'))
+            ->groupBy('payment_method')->selectRaw('payment_method m, sum(amount) s')->pluck('s', 'm');
+        $expCash = (float) $confirmedNoPeriod()->where('payment_method', 'cash')->sum('amount');
+        $expBank = (float) $confirmedNoPeriod()->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount');
+        $payCash = (float) ($payByMethod['cash'] ?? 0);
+        $payBank = (float) collect($payByMethod)->except('cash')->sum();
 
         return Inertia::render('Finance/Index', [
             'invoices' => $invoices,
@@ -119,6 +147,21 @@ class InvoiceController extends Controller
             'expenseTotals' => $expenseTotals,
             'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to'),
             'salaries' => $salaries,
+            'categories' => $categories,
+            'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
+            'summary' => [
+                'contracts' => (float) \App\Models\Deal::forCurrentCompany()->where('status', '!=', 'cancelled')->sum('budget'),
+                'receivables' => $invoiceTotals['debt'],
+                'cash' => round($payCash - $expCash, 2),
+                'bank' => round($payBank - $expBank, 2),
+                'income' => $invoicePaid,
+                'categories' => $categoryRows,
+                'dealExpenses' => $dealExpenses,
+                'payroll' => $payrollTotal,
+                'tax' => $fin['tax'],
+                'expensesTotal' => $expensesTotal,
+                'net' => round($invoicePaid - $expensesTotal, 2),
+            ],
             'totals' => [
                 'budget' => $fin['budget'],
                 'paid' => $fin['income'],

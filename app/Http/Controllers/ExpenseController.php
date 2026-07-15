@@ -50,6 +50,23 @@ class ExpenseController extends Controller
         $data['responsible_user_id'] = $request->user()->id;
         $data['type'] ??= 'direct';
 
+        // Расход КОМПАНИИ (без сделки): аренда/комуслуги/интернет/бензин и т.п.
+        // Вводит только бухгалтер/админ, категория обязательна, склад — нельзя.
+        if ($entity === null) {
+            abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Расход компании вводит бухгалтер или админ.');
+            if (empty($data['category_id'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'category_id' => 'Выберите категорию расхода (аренда, интернет, бензин…).',
+                ]);
+            }
+            if (! empty($data['material_id'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'material_id' => 'Списание со склада делается из карточки сделки/заказа.',
+                ]);
+            }
+            $data['company_id'] = \App\Support\CurrentCompany::id() ?: null;
+        }
+
         // Расход по материалам: списываем остаток со склада компании сделки.
         if (! empty($data['material_id'])) {
             $material = \App\Models\Material::findOrFail($data['material_id']);

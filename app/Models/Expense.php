@@ -15,7 +15,7 @@ class Expense extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'expenseable_type', 'expenseable_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
+        'expenseable_type', 'expenseable_id', 'company_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
         'responsible_user_id', 'description', 'file_path', 'type', 'status',
         'payment_method', 'confirmed_by', 'confirmed_at',
     ];
