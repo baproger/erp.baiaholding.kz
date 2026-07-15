@@ -17,8 +17,8 @@ class PayrollService
      *   маржа ≤ 10%  → бонуса нет
      *   11% – 15%    → 5% от остатка
      *   16% – 20%    → 7% от остатка
-     *   21% – 25%    → 10% от остатка
-     *   26% – 40%    → 13% от остатка
+     *   21% – 30%    → 10% от остатка
+     *   31% – 40%    → 13% от остатка
      *   от 41%       → 15% от остатка
      */
     public static function bonusRateForMargin(float $marginPct): float
@@ -27,7 +27,7 @@ class PayrollService
             $marginPct <= 10 => 0.0,
             $marginPct <= 15 => 0.05,
             $marginPct <= 20 => 0.07,
-            $marginPct <= 25 => 0.10,
+            $marginPct <= 30 => 0.10,
             $marginPct <= 40 => 0.13,
             default => 0.15,
         };
