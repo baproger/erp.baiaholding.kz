@@ -172,12 +172,10 @@ class ProjectController extends Controller
         if ($stage->company_id && (int) $stage->company_id !== $companyId) {
             return back()->with('error', 'Этап принадлежит цеху другой компании.');
         }
+        // Перенос на этап (включая «Отправку») — ТОЛЬКО смена этапа. Завершение
+        // заказа и возврат сделки на «Логистику» — ТОЛЬКО кнопкой «Готово»
+        // (projects.toAct), а не автоматом при перетаскивании.
         $project->project_stage_id = $stage->id;
-        if ($stage->is_completed) {
-            // Завершение заказа ЛЮБЫМ путём возвращает сделку на «Логистику» —
-            // иначе она навсегда зависает закрытой и не доходит до оплаты/ЗП.
-            return $this->completeAndReturnDeal($project);
-        }
         $project->save();
 
         return back()->with('success', 'Этап проекта обновлён.');
@@ -194,10 +192,8 @@ class ProjectController extends Controller
         if (! $next) {
             return back()->with('error', 'Это последний этап.');
         }
+        // «Далее» доводит только ДО последнего этапа; завершение — кнопкой «Готово».
         $project->project_stage_id = $next->id;
-        if ($next->is_completed) {
-            return $this->completeAndReturnDeal($project);
-        }
         $project->save();
 
         return back()->with('success', 'Цех: этап «'.$next->name.'».');
