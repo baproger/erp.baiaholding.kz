@@ -12,9 +12,14 @@ import { confirmDialog } from '@/composables/useConfirm';
 import { formatDate } from '@/utils/format';
 
 const props = defineProps({
-    materials: Array, receipts: Array, units: Array,
+    materials: Array, writeoffs: Object, receipts: Array, units: Array,
     canManage: Boolean, allMode: Boolean, companyName: String, filters: Object,
 });
+
+// Детали списания: клик по колонке «Списание» — на какие сделки/заказы ушло.
+const writeoffFor = ref(null); // материал, чьи списания открыты
+const writeoffRows = computed(() => writeoffFor.value ? (props.writeoffs?.[writeoffFor.value.id] ?? []) : []);
+const writeoffLink = (w) => w.type === 'deal' ? route('deals.show', w.target_id) : route('projects.show', w.target_id);
 
 const qty = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
 const money = (v) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(Number(v ?? 0)) + ' ₸';
@@ -159,8 +164,10 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                             <template v-if="Number(m.received_sum) > 0">{{ money(m.received_sum) }}</template>
                             <span v-else class="text-slate-300">—</span>
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-rose-500">
-                            <template v-if="Number(m.written_off_qty) > 0">− {{ qty(m.written_off_qty) }}</template>
+                        <td class="px-4 py-3 text-right tabular-nums">
+                            <button v-if="Number(m.written_off_qty) > 0" type="button" @click="writeoffFor = m"
+                                class="font-medium text-rose-500 underline decoration-rose-200 decoration-dashed underline-offset-4 transition hover:text-rose-700"
+                                title="Показать, на какие сделки списано">− {{ qty(m.written_off_qty) }}</button>
                             <span v-else class="text-slate-300">—</span>
                         </td>
                         <td class="px-4 py-3 text-right">
@@ -297,6 +304,29 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                     <SecondaryButton @click="showModal = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="form.processing" @click="submit">Оформить приход</PrimaryButton>
                 </div>
+            </div>
+        </Modal>
+
+        <!-- Детали списания: на какие сделки/заказы ушёл материал -->
+        <Modal :show="!!writeoffFor" @close="writeoffFor = null" max-width="lg">
+            <div class="p-6">
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">Списания — {{ writeoffFor?.name }}</h2>
+                <p class="mb-4 text-xs text-slate-400">Клик по строке — переход в сделку / заказ цеха</p>
+                <div class="max-h-80 divide-y divide-slate-50 overflow-y-auto">
+                    <button v-for="(w, i) in writeoffRows" :key="i" type="button" @click="router.get(writeoffLink(w))"
+                        class="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-left text-sm transition hover:bg-indigo-50/60">
+                        <div class="min-w-0">
+                            <div class="truncate font-medium text-slate-800">{{ w.label }}</div>
+                            <div class="text-[11px] text-slate-400">{{ w.number }} · {{ w.type === 'deal' ? 'сделка' : 'заказ цеха' }} · {{ w.date ? formatDate(w.date) : '—' }}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-semibold tabular-nums text-rose-600">− {{ qty(w.qty) }} {{ writeoffFor?.unit }}</div>
+                            <div class="text-[11px] tabular-nums text-slate-400">{{ money(w.amount) }}</div>
+                        </div>
+                    </button>
+                    <div v-if="!writeoffRows.length" class="py-6 text-center text-sm text-slate-400">Списаний нет</div>
+                </div>
+                <div class="mt-4 flex justify-end"><SecondaryButton @click="writeoffFor = null">Закрыть</SecondaryButton></div>
             </div>
         </Modal>
     </AppLayout>

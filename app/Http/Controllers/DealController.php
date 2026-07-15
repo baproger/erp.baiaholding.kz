@@ -326,9 +326,9 @@ class DealController extends Controller
             ->whereNotNull('deadline')
             ->whereDate('deadline', '<', $today)
             ->whereNotIn('status', ['closed', 'cancelled'])
-            // Сделка на Акте/ЭСФ/«Оплата успешно» — уже у бухгалтера/успешна:
-            // из просроченных убирается сразу (по stage_type, имя ненадёжно).
-            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhereIn('stage_type', ['act', 'esf']))
+            // ЭСФ и «Оплата успешно» — не просрочка; на «Акт утверждение»
+            // просроченная сделка ПОКАЗЫВАЕТСЯ (по stage_type, имя ненадёжно).
+            ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf'))
             ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
             ->orderBy('deadline')
             ->get()
@@ -338,7 +338,24 @@ class DealController extends Controller
                 return $d;
             });
 
-        return Inertia::render('Deals/Overdue', ['deals' => $deals]);
+        // Просроченные заказы цеха: у заказа свой дедлайн (унаследован от
+        // сделки) — горящий цех виден на той же странице.
+        $projects = \App\Models\Project::query()
+            ->with(['responsible:id,name,avatar', 'stage:id,name,color', 'deal:id,number,company_name,company_id'])
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->whereNotNull('deadline')
+            ->whereDate('deadline', '<', $today)
+            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
+            ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
+            ->orderBy('deadline')
+            ->get()
+            ->map(function ($p) use ($today) {
+                $p->overdue_days = (int) \Illuminate\Support\Carbon::parse($p->deadline)->startOfDay()->diffInDays($today);
+
+                return $p;
+            });
+
+        return Inertia::render('Deals/Overdue', ['deals' => $deals, 'projects' => $projects]);
     }
 
     /**

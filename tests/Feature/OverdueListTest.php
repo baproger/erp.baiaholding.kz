@@ -15,7 +15,7 @@ class OverdueListTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_deals_on_act_esf_won_stages_are_not_overdue(): void
+    public function test_esf_and_won_hidden_but_act_shown_in_overdue(): void
     {
         $this->seed(RolePermissionSeeder::class);
         $this->seed(StageSeeder::class);
@@ -31,8 +31,8 @@ class OverdueListTest extends TestCase
             'number' => $n, 'name' => 'ТОО', 'company_name' => 'ТОО', 'client_name' => 'товар',
             'budget' => 100, 'status' => 'active', 'deadline' => now()->subDays(5), 'deal_stage_id' => $stageId,
         ]);
-        $make('D-1', $first->id);  // реально просрочена — единственная в списке
-        $make('D-2', $act->id);    // Акт — не просрочка
+        $make('D-1', $first->id);  // просрочена — в списке
+        $make('D-2', $act->id);    // Акт утверждение — ТОЖЕ просрочка (в списке)
         $make('D-3', $esf->id);    // ЭСФ — не просрочка
         $make('D-4', $won->id);    // Оплата успешно — не просрочка
 
@@ -40,7 +40,7 @@ class OverdueListTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Deals/Overdue')
-                ->has('deals', 1)
-                ->where('deals.0.number', 'D-1'));
+                ->has('deals', 2)
+                ->has('projects', 0));
     }
 }

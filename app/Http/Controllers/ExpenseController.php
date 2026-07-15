@@ -110,9 +110,9 @@ class ExpenseController extends Controller
         if ($isAccountant) {
             $data['confirmed_by'] = $request->user()->id;
             $data['confirmed_at'] = now();
-        } else {
-            unset($data['payment_method']); // способ оплаты выбирает бухгалтер
         }
+        // Способ оплаты (нал/банк) автор выбирает при создании; у pending-расхода
+        // бухгалтер может поменять его при подтверждении.
 
         $expense = Expense::create($data);
 

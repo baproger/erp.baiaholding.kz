@@ -42,7 +42,7 @@ const showExpense = ref(false);
 const receiptInput = ref(null);
 // Тип расхода: «прочий» (нужен чек) или «по материалам» (списание со склада, чек не нужен).
 const expenseMode = ref('other'); // other | material
-const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', file: null });
+const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
 const qtyNum = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
@@ -127,7 +127,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         <!-- Invoices -->
         <div>
             <div class="mb-3 flex items-center justify-between">
-                <h4 class="text-sm font-semibold text-slate-900">Счета</h4>
+                <h4 class="text-sm font-semibold text-slate-900">Аванс</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showInvoice = !showInvoice">+ Счёт</button>
             </div>
             <div v-if="showInvoice" class="mb-3 rounded-xl border border-dashed border-slate-300 p-4">
@@ -230,6 +230,15 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <TextInput v-model="expenseForm.date" type="date" />
                 </div>
                 <TextInput v-model="expenseForm.description" placeholder="Описание" class="mt-2 w-full" />
+                <!-- Способ оплаты: нал / банк — и для прочих, и для материальных -->
+                <div class="mt-2 flex gap-2">
+                    <button type="button" @click="expenseForm.payment_method = 'cash'"
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">Наличные</button>
+                    <button type="button" @click="expenseForm.payment_method = 'bank'"
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">Банк (счёт)</button>
+                </div>
                 <div v-if="expenseMode === 'other'" class="mt-2">
                     <label class="mb-1 block text-xs font-medium text-slate-500">Чек (фото или PDF) — можно прикрепить сейчас, иначе бухгалтер добавит при подтверждении</label>
                     <input ref="receiptInput" type="file" accept="image/*,.pdf" @change="onReceipt"

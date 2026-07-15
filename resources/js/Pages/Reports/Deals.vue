@@ -27,8 +27,8 @@ const openDeal = (id) => router.get(route('deals.show', id));
 // Цвет маржи — та же шкала, что на Аналитике: ≥40 здоровая, 20–40 тонкая, ниже — плохая.
 const marginBadge = (m) => m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
 const paidPct = (r) => r.budget > 0 ? Math.min(100, Math.round(r.paid / r.budget * 100)) : 0;
-// Акт/ЭСФ и won просрочкой не считаются (сделка у бухгалтера / успешна).
-const isOverdue = (r) => r.deadline && !r.is_won && !r.is_pending_won && new Date(r.deadline) < new Date(new Date().toDateString());
+// ЭСФ и won просрочкой не считаются; Акт утверждение — считается.
+const isOverdue = (r) => r.deadline && !r.is_won && !r.is_esf && new Date(r.deadline) < new Date(new Date().toDateString());
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU') : '—';
 // Подсветка строк: won и Акт/ЭСФ — зелёный градиент (успешная / вот-вот);
 // Логистика/Сборка — жёлтый; остальные — обычные.

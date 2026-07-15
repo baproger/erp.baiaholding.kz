@@ -48,13 +48,26 @@ class WarehouseController extends Controller
             ->get()->keyBy('material_id');
 
         // Списание = материальные расходы со склада (qty), только confirmed.
-        $writtenOff = \App\Models\Expense::whereIn('material_id', $ids)
+        // Детали (какая сделка/заказ) — для клика по колонке «Списание».
+        $writeoffExpenses = \App\Models\Expense::whereIn('material_id', $ids)
             ->where('status', 'confirmed')
             ->when($from, fn ($q, $d) => $q->whereDate('date', '>=', $d))
             ->when($to, fn ($q, $d) => $q->whereDate('date', '<=', $d))
-            ->groupBy('material_id')
-            ->selectRaw('material_id, sum(coalesce(qty, 0)) as qty')
-            ->pluck('qty', 'material_id');
+            ->with('expenseable')
+            ->latest('date')->get();
+        $writtenOff = $writeoffExpenses->groupBy('material_id')->map(fn ($g) => (float) $g->sum('qty'));
+        $writeoffs = $writeoffExpenses->map(fn ($e) => [
+            'material_id' => $e->material_id,
+            'qty' => (float) ($e->qty ?? 0),
+            'amount' => (float) $e->amount,
+            'date' => optional($e->date)->toDateString(),
+            'type' => $e->expenseable_type, // deal | project
+            'target_id' => $e->expenseable_id,
+            'number' => $e->expenseable?->number,
+            'label' => $e->expenseable_type === 'deal'
+                ? ($e->expenseable?->company_name ?: $e->expenseable?->number ?: 'сделка')
+                : ($e->expenseable?->name ?: $e->expenseable?->number ?: 'заказ цеха'),
+        ])->groupBy('material_id');
 
         $materials->each(function ($m) use ($received, $writtenOff) {
             $m->received_qty = (float) ($received[$m->id]->qty ?? 0);
@@ -70,6 +83,7 @@ class WarehouseController extends Controller
 
         return Inertia::render('Warehouse/Index', [
             'materials' => $materials,
+            'writeoffs' => $writeoffs,
             'receipts' => $receipts,
             'units' => Deal::UNITS,
             'canManage' => $this->canManage($request),

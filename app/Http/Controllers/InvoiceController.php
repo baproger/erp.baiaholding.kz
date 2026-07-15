@@ -90,10 +90,10 @@ class InvoiceController extends Controller
             'all_count' => $confirmed()->count(),
             'material' => (float) $confirmed()->whereNotNull('material_id')->sum('amount'),
             'other' => (float) $confirmed()->whereNull('material_id')->sum('amount'),
-            // Нал/банк — разбивка ПРОЧИХ расходов: у материальных списаний
-            // способа оплаты нет, поэтому cash + bank = other, а не all.
-            'cash' => (float) $confirmed()->where('payment_method', 'cash')->sum('amount'),
-            'bank' => (float) $confirmed()->where('payment_method', 'bank')->sum('amount'),
+            // Нал/банк — разбивка ПРОЧИХ расходов (материальные исключены явно:
+            // с недавних пор у них тоже есть способ оплаты).
+            'cash' => (float) $confirmed()->whereNull('material_id')->where('payment_method', 'cash')->sum('amount'),
+            'bank' => (float) $confirmed()->whereNull('material_id')->where('payment_method', 'bank')->sum('amount'),
             'pending_sum' => (float) (clone $expBase)->where('status', 'pending')->sum('amount'),
             'pending_count' => (clone $expBase)->where('status', 'pending')->count(),
         ];

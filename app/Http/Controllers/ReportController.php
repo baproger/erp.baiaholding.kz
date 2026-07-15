@@ -99,6 +99,7 @@ class ReportController extends Controller
                 // Группы подсветки по stage_type (имя этапа ненадёжно):
                 // Акт/ЭСФ — зелёные как won; Логистика/Сборка — жёлтые.
                 'is_pending_won' => in_array($d->stage?->stage_type, ['act', 'esf'], true),
+                'is_esf' => $d->stage?->stage_type === 'esf',
                 'is_logistics' => in_array($d->stage?->stage_type, ['logistics', 'assembly'], true),
             ];
         })->values();
