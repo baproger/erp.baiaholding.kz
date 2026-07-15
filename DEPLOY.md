@@ -36,43 +36,38 @@ DB_PASSWORD=<пароль>
 SESSION_SECURE_COOKIE=true
 ```
 
-## ⚠️ PHP в шелле ≠ PHP сайта (важно!)
+## PHP-версия
 
-`/usr/bin/php` в Plesk-шелле — системный (8.3) и падает с
-«Your Composer dependencies require a PHP version ">= 8.4.1"» + warning
-про `pdo_oci.so` (безвредный, это битое расширение системного PHP).
-Сайт работает на PHP 8.4 (FPM) — в консоли нужно звать ЕГО бинарник по
-полному пути. Найти его:
-
-```bash
-ls /opt/plesk/php/            # Plesk-сборки: /opt/plesk/php/8.4/bin/php
-ls -d /opt/alt/php*/usr/bin/php   # CloudLinux alt-php: /opt/alt/php84/usr/bin/php
-```
-
-Ниже везде `PHP84` = полный путь (пример: `/opt/plesk/php/8.4/bin/php`).
+Зависимости закреплены под **PHP 8.3** (`config.platform.php` в composer.json),
+поэтому системный `php` в Plesk-шелле (alt-php 8.3.30) работает — отдельный
+путь к 8.4 больше НЕ нужен. Warning про `pdo_oci.so` — безвредный (битое
+расширение системного PHP, к сайту не относится). Если когда-нибудь версия
+сервера станет ниже 8.3 — обновить `platform.php` и пересобрать `composer.lock`.
 
 ## 3. Один раз: первичная инициализация (Plesk → PHP-консоль / SSH в корне проекта)
 
 ```bash
-PHP84=/opt/plesk/php/8.4/bin/php    # или /opt/alt/php84/usr/bin/php
-$PHP84 composer.phar install --no-dev --optimize-autoloader
-$PHP84 artisan key:generate         # если APP_KEY пустой
-$PHP84 artisan migrate --force
-$PHP84 artisan db:seed --force      # роли + первый админ admin@baia.kz/password — СМЕНИТЬ пароль!
-$PHP84 artisan storage:link
-$PHP84 artisan optimize             # config+route+view cache
+php composer.phar install --no-dev --optimize-autoloader
+php artisan key:generate         # если APP_KEY пустой
+php artisan migrate --force
+php artisan db:seed --force       # роли + первый админ admin@baia.kz/password — СМЕНИТЬ пароль!
+php artisan storage:link
+php artisan optimize              # config+route+view cache
 ```
 
 ## 4. Автоматически при каждом пуше: Plesk «Дополнительные действия развертывания»
 
-Включить галочку «Включить дополнительные действия развертывания» и вставить
-(путь к PHP — свой, см. выше):
+Включить галочку «Включить дополнительные действия развертывания» и вставить:
 
 ```bash
-/opt/plesk/php/8.4/bin/php composer.phar install --no-dev --optimize-autoloader
-/opt/plesk/php/8.4/bin/php artisan migrate --force
-/opt/plesk/php/8.4/bin/php artisan optimize
+php composer.phar install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan optimize
 ```
+
+⚠️ `composer.phar install` ОБЯЗАТЕЛЬНО в списке: `vendor/` не в git, git-pull
+его не приносит — пересобирает только composer по `composer.lock`. Без этого
+сервер останется на старом `vendor/` и упадёт на platform_check.
 
 ⚠️ **Composer и Node НЕ установлены в Plesk-шелле** (`command not found`).
 Решение:
