@@ -83,6 +83,19 @@ const hasFilters = computed(() => search.value || fResponsible.value || fStage.v
 const visibleStages = computed(() => fStage.value ? props.stages.filter((s) => String(s.id) === String(fStage.value)) : props.stages);
 const resetFilters = () => { search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = ''; fContractFrom.value = ''; fContractTo.value = ''; applyFilters(); };
 
+// Массовое удаление (вид «Список», только admin): чекбоксы + подтверждение.
+const selected = ref(new Set());
+const toggleSel = (id) => { const s = new Set(selected.value); s.has(id) ? s.delete(id) : s.add(id); selected.value = s; };
+const allSelected = computed(() => list.value.length > 0 && list.value.every((d) => selected.value.has(d.id)));
+const toggleAllSel = () => { selected.value = allSelected.value ? new Set() : new Set(list.value.map((d) => d.id)); };
+const bulkDelete = async () => {
+    const ids = [...selected.value];
+    if (!ids.length) return;
+    if (await confirmDialog({ title: 'Удалить сделки', message: `Будет удалено сделок: ${ids.length}. Это действие необратимо.`, confirmText: 'Удалить', danger: true })) {
+        router.delete(route('deals.bulkDestroy'), { data: { ids }, preserveScroll: true, onSuccess: () => (selected.value = new Set()) });
+    }
+};
+
 const showModal = ref(false);
 const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
 const openCreate = () => { form.reset(); form.company_id = props.currentCompanyId || props.companies[0]?.id || ''; binMatch.value = null; showBinModal.value = false; showModal.value = true; };
@@ -210,12 +223,33 @@ const applyBinMatch = () => {
 
         <!-- LIST -->
         <div v-else class="overflow-x-auto rounded-xl bg-white border border-slate-200 shadow-sm">
+            <!-- Панель массовых действий (admin): появляется при выборе -->
+            <div v-if="can.delete && selected.size" class="flex items-center justify-between gap-3 border-b border-rose-100 bg-rose-50/60 px-4 py-2.5">
+                <span class="text-sm font-medium text-rose-700">Выбрано: {{ selected.size }}</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="selected = new Set()" class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-white">Снять выбор</button>
+                    <button type="button" @click="bulkDelete"
+                        class="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-700">Удалить выбранные</button>
+                </div>
+            </div>
             <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Компания</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
+                    <tr>
+                        <th v-if="can.delete" class="w-10 px-4 py-3">
+                            <input type="checkbox" :checked="allSelected" @change="toggleAllSel"
+                                class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" title="Выбрать все на странице" />
+                        </th>
+                        <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Компания</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th>
+                    </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors hover:bg-slate-50" @click="router.get(route('deals.show', deal.id))">
+                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors"
+                        :class="selected.has(deal.id) ? 'bg-rose-50/50' : 'hover:bg-slate-50'"
+                        @click="router.get(route('deals.show', deal.id))">
+                        <td v-if="can.delete" class="px-4 py-3" @click.stop>
+                            <input type="checkbox" :checked="selected.has(deal.id)" @change="toggleSel(deal.id)"
+                                class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
+                        </td>
                         <td class="px-4 py-3 text-slate-400">{{ deal.number }}</td>
                         <td class="px-4 py-3 font-medium text-slate-900">{{ deal.company_name || deal.name }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ deal.client_name || deal.client?.name || '—' }}</td>

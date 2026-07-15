@@ -57,6 +57,8 @@ Route::middleware('auth')->group(function () {
 
     // Deals
     Route::get('deals/overdue', [DealController::class, 'overdue'])->name('deals.overdue');
+    // До resource-маршрута: иначе DELETE deals/bulk сматчится как deals/{deal}.
+    Route::delete('deals/bulk', [DealController::class, 'bulkDestroy'])->name('deals.bulkDestroy');
     Route::get('deals/bin-lookup', [DealController::class, 'binLookup'])
         ->middleware('throttle:30,1')
         ->name('deals.binLookup');

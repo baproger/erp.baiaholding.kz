@@ -70,7 +70,11 @@ class DealController extends Controller
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'can' => ['create' => $request->user()->can('create', Deal::class)],
+            'can' => [
+                'create' => $request->user()->can('create', Deal::class),
+                // Удаление (в т.ч. массовое) — только admin (DealPolicy::delete).
+                'delete' => $request->user()->hasRole('admin'),
+            ],
             'companies' => $request->user()->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code']),
             'currentCompanyId' => \App\Support\CurrentCompany::id(),
         ]);
@@ -267,6 +271,30 @@ class DealController extends Controller
         $deal->delete();
 
         return back()->with('success', 'Сделка удалена.');
+    }
+
+    /**
+     * Массовое удаление из списка. Права те же, что у одиночного удаления:
+     * DealPolicy::delete (только admin, в пределах своей компании) — проверяется
+     * ПО КАЖДОЙ сделке до удаления, чтобы не удалить «частично».
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $deals = Deal::whereIn('id', $data['ids'])->get();
+        abort_if($deals->isEmpty(), 404);
+        foreach ($deals as $deal) {
+            $this->authorize('delete', $deal);
+        }
+
+        // each->delete() (не массовый query) — сохраняет SoftDeletes и аудит-события.
+        $deals->each->delete();
+
+        return back()->with('success', 'Удалено сделок: '.$deals->count().'.');
     }
 
     public function advance(Deal $deal, StageTransitionService $transitions): \Illuminate\Http\RedirectResponse
