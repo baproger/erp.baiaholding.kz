@@ -28,78 +28,66 @@ const dayLabel = (n) => {
             </div>
         </template>
 
-        <div v-if="deals.length" class="overflow-hidden rounded-xl bg-white shadow-sm border border-slate-200">
-            <table class="min-w-full divide-y divide-slate-100 text-sm">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr>
-                        <th class="px-4 py-3">Просрочено</th>
-                        <th class="px-4 py-3">Компания</th>
-                        <th class="px-4 py-3">Клиент</th>
-                        <th class="px-4 py-3">Этап</th>
-                        <th class="px-4 py-3">Сумма</th>
-                        <th class="px-4 py-3">Срок</th>
-                        <th class="px-4 py-3">Ответственный</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr v-for="deal in deals" :key="deal.id" class="cursor-pointer transition-colors hover:bg-red-50/60" @click="open(deal.id)">
-                        <td class="px-4 py-3">
-                            <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
-                                {{ deal.overdue_days }} {{ dayLabel(deal.overdue_days) }}
-                            </span>
-                        </td>
-                        <td class="px-4 py-3 font-medium text-slate-900">
-                            {{ deal.company_name || deal.name }}
-                            <span class="block text-[11px] text-slate-400">{{ deal.number }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-slate-500">{{ deal.client_name || '—' }}</td>
-                        <td class="px-4 py-3"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
-                        <td class="px-4 py-3 font-semibold text-indigo-600">{{ money(deal.budget) }}</td>
-                        <td class="px-4 py-3 font-semibold text-red-600">{{ formatDate(deal.deadline) }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ deal.responsible?.name ?? '—' }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <!-- Две колонки: слева сделки, справа заказы цеха -->
+        <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            <!-- Сделки -->
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
+                    <h3 class="text-sm font-semibold text-slate-900">Сделки</h3>
+                    <span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="deals.length ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'">{{ deals.length }}</span>
+                </div>
+                <div class="divide-y divide-slate-50">
+                    <button v-for="deal in deals" :key="deal.id" type="button" @click="open(deal.id)"
+                        class="block w-full px-5 py-3 text-left transition-colors hover:bg-red-50/50">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <span class="flex-shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{{ deal.overdue_days }} {{ dayLabel(deal.overdue_days) }}</span>
+                                <span class="truncate text-sm font-semibold text-slate-800">{{ deal.company_name || deal.name }}</span>
+                            </div>
+                            <span class="flex-shrink-0 text-sm font-semibold tabular-nums text-indigo-600">{{ money(deal.budget) }}</span>
+                        </div>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                            <span>{{ deal.number }}</span>
+                            <StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" />
+                            <span class="font-semibold text-red-600">срок {{ formatDate(deal.deadline) }}</span>
+                            <span class="ml-auto">{{ deal.responsible?.name ?? '—' }}</span>
+                        </div>
+                    </button>
+                    <div v-if="!deals.length" class="px-5 py-12 text-center">
+                        <div class="text-3xl">✅</div>
+                        <p class="mt-2 text-sm text-slate-400">Просроченных сделок нет</p>
+                    </div>
+                </div>
+            </div>
 
-        <div v-else class="rounded-xl bg-white p-12 text-center shadow-sm border border-slate-200">
-            <div class="text-4xl">✅</div>
-            <p class="mt-3 text-sm text-slate-500">Просроченных сделок нет.</p>
-        </div>
-
-        <!-- Просроченные заказы цеха (свой дедлайн у заказа) -->
-        <div v-if="projects.length" class="mt-6">
-            <h3 class="mb-3 text-sm font-semibold text-slate-700">Просроченные заказы цеха <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{{ projects.length }}</span></h3>
-            <div class="overflow-x-auto rounded-xl bg-white shadow-sm border border-slate-200">
-                <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                        <tr>
-                            <th class="px-4 py-3">Просрочено</th>
-                            <th class="px-4 py-3">Заказ</th>
-                            <th class="px-4 py-3">Компания (сделка)</th>
-                            <th class="px-4 py-3">Этап цеха</th>
-                            <th class="px-4 py-3">Срок</th>
-                            <th class="px-4 py-3">Ответственный</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="p in projects" :key="p.id" class="cursor-pointer transition-colors hover:bg-red-50/60" @click="openProject(p.id)">
-                            <td class="px-4 py-3">
-                                <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
-                                    {{ p.overdue_days }} {{ dayLabel(p.overdue_days) }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-3 font-medium text-slate-900">{{ p.number }}</td>
-                            <td class="px-4 py-3 text-slate-600">
-                                {{ p.deal?.company_name || p.name }}
-                                <span class="block text-[11px] text-slate-400">{{ p.deal?.number }}</span>
-                            </td>
-                            <td class="px-4 py-3"><StatusBadge :status="p.stage?.name" :color="p.stage?.color" /></td>
-                            <td class="px-4 py-3 font-semibold text-red-600">{{ formatDate(p.deadline) }}</td>
-                            <td class="px-4 py-3 text-slate-500">{{ p.responsible?.name ?? '—' }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+            <!-- Цех -->
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5">
+                    <h3 class="text-sm font-semibold text-slate-900">Цех — заказы</h3>
+                    <span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="projects.length ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'">{{ projects.length }}</span>
+                </div>
+                <div class="divide-y divide-slate-50">
+                    <button v-for="p in projects" :key="p.id" type="button" @click="openProject(p.id)"
+                        class="block w-full px-5 py-3 text-left transition-colors hover:bg-red-50/50">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <span class="flex-shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{{ p.overdue_days }} {{ dayLabel(p.overdue_days) }}</span>
+                                <span class="truncate text-sm font-semibold text-slate-800">{{ p.deal?.company_name || p.name }}</span>
+                            </div>
+                            <span class="flex-shrink-0 text-xs font-medium text-slate-400">{{ p.number }}</span>
+                        </div>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                            <span>{{ p.deal?.number }}</span>
+                            <StatusBadge :status="p.stage?.name" :color="p.stage?.color" />
+                            <span class="font-semibold text-red-600">срок {{ formatDate(p.deadline) }}</span>
+                            <span class="ml-auto">{{ p.responsible?.name ?? '—' }}</span>
+                        </div>
+                    </button>
+                    <div v-if="!projects.length" class="px-5 py-12 text-center">
+                        <div class="text-3xl">✅</div>
+                        <p class="mt-2 text-sm text-slate-400">Просроченных заказов цеха нет</p>
+                    </div>
+                </div>
             </div>
         </div>
     </AppLayout>
