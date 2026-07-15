@@ -52,10 +52,10 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
 
         <!-- Фильтры: поиск, период, менеджер, этап (серверные) -->
         <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div class="relative">
+            <div class="relative w-full sm:w-60">
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
                 <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: №, компания, договор, адрес…"
-                    class="w-60 rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                    class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
             <label class="flex items-center gap-1 text-xs text-slate-400">с
                 <input v-model="from" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
@@ -63,11 +63,11 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             <label class="flex items-center gap-1 text-xs text-slate-400">по
                 <input v-model="to" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
             </label>
-            <select v-model="manager" @change="apply" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+            <select v-model="manager" @change="apply" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm sm:w-auto">
                 <option value="">Все менеджеры</option>
                 <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
             </select>
-            <select v-model="stageF" @change="apply" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+            <select v-model="stageF" @change="apply" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm sm:w-auto">
                 <option value="">Все этапы</option>
                 <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
             </select>

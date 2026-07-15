@@ -106,11 +106,11 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                 <input v-model="search" type="text" placeholder="Поиск материала…"
                     class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <select v-model="fUnit" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
+            <select v-model="fUnit" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400 sm:w-auto">
                 <option value="">Все ед. изм.</option>
                 <option v-for="u in unitOptions" :key="u" :value="u">{{ u }}</option>
             </select>
-            <select v-model="fStock" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400">
+            <select v-model="fStock" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-indigo-400 sm:w-auto">
                 <option value="">Все остатки</option>
                 <option value="in">В наличии</option>
                 <option value="zero">На нуле</option>

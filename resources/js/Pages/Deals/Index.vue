@@ -134,8 +134,8 @@ const applyBinMatch = () => {
                 <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, договор…"
                     class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <SearchSelect v-if="isLeadership" v-model="fResponsible" :options="users" placeholder="Все менеджеры" width="w-48" @change="applyFilters" />
-            <SearchSelect v-model="fStage" :options="stages" placeholder="Все этапы" width="w-52" @change="applyFilters" />
+            <SearchSelect v-if="isLeadership" v-model="fResponsible" :options="users" placeholder="Все менеджеры" width="w-full sm:w-48" @change="applyFilters" />
+            <SearchSelect v-model="fStage" :options="stages" placeholder="Все этапы" width="w-full sm:w-52" @change="applyFilters" />
             <label class="flex items-center gap-1 text-xs text-slate-400">срок с
                 <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
             </label>
@@ -209,8 +209,8 @@ const applyBinMatch = () => {
         </div>
 
         <!-- LIST -->
-        <div v-else class="overflow-hidden rounded-xl bg-white border border-slate-200 shadow-sm">
-            <table class="min-w-full divide-y divide-slate-100 text-sm">
+        <div v-else class="overflow-x-auto rounded-xl bg-white border border-slate-200 shadow-sm">
+            <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                     <tr><th class="px-4 py-3">Номер</th><th class="px-4 py-3">Компания</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th></tr>
                 </thead>
@@ -233,8 +233,8 @@ const applyBinMatch = () => {
         <Modal :show="showModal" @close="showModal = false" max-width="2xl">
             <div class="p-6">
                 <h2 class="mb-4 text-lg font-semibold">Новая сделка</h2>
-                <div class="grid grid-cols-2 gap-4">
-                    <div v-if="companies.length" class="col-span-2">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div v-if="companies.length" class="sm:col-span-2">
                         <InputLabel value="Компания (нумерация сделки)" />
                         <div class="mt-1 flex gap-2">
                             <button v-for="c in companies" :key="c.id" type="button" @click="form.company_id = c.id"
@@ -246,7 +246,7 @@ const applyBinMatch = () => {
                     </div>
                     <div><InputLabel value="Название компании *" /><TextInput v-model="form.company_name" class="mt-1 w-full" /><InputError :message="form.errors.company_name" class="mt-1" /></div>
                     <div><InputLabel value="Номер договора" /><TextInput v-model="form.bin" class="mt-1 w-full" @blur="checkBin" /><InputError :message="form.errors.bin" class="mt-1" /></div>
-                    <div class="col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="form.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="form.errors.address" class="mt-1" /></div>
+                    <div class="sm:col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="form.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="form.errors.address" class="mt-1" /></div>
                     <div><InputLabel value="Дата договора" /><TextInput v-model="form.contract_date" type="date" class="mt-1 w-full" /><InputError :message="form.errors.contract_date" class="mt-1" /></div>
                     <div>
                         <InputLabel value="Источник (портал)" />
@@ -277,8 +277,8 @@ const applyBinMatch = () => {
                     </div>
                     <div><InputLabel value="Сумма договора *" /><TextInput v-model="form.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="form.errors.budget" class="mt-1" /></div>
                     <div><InputLabel value="Срок" /><TextInput v-model="form.deadline" type="date" class="mt-1 w-full" /></div>
-                    <div class="col-span-2"><InputLabel value="Описание" /><textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm"></textarea></div>
-                    <div class="col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm" placeholder="Коротко и чётко по сделке"></textarea></div>
+                    <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm"></textarea></div>
+                    <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm" placeholder="Коротко и чётко по сделке"></textarea></div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showModal = false">Отмена</SecondaryButton>

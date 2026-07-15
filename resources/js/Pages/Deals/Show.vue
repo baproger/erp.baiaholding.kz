@@ -314,10 +314,10 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
         <Modal :show="showEdit" @close="showEdit = false" max-width="2xl">
             <div class="p-6">
                 <h2 class="mb-4 text-lg font-semibold text-slate-900">Изменить сделку</h2>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div><InputLabel value="Название компании *" /><TextInput v-model="editForm.company_name" class="mt-1 w-full" /><InputError :message="editForm.errors.company_name" class="mt-1" /></div>
                     <div><InputLabel value="Номер договора" /><TextInput v-model="editForm.bin" class="mt-1 w-full" /><InputError :message="editForm.errors.bin" class="mt-1" /></div>
-                    <div class="col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="editForm.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="editForm.errors.address" class="mt-1" /></div>
+                    <div class="sm:col-span-2"><InputLabel value="Адрес *" /><TextInput v-model="editForm.address" class="mt-1 w-full" placeholder="Город, улица, дом" /><InputError :message="editForm.errors.address" class="mt-1" /></div>
                     <div><InputLabel value="Дата договора" /><TextInput v-model="editForm.contract_date" type="date" class="mt-1 w-full" /><InputError :message="editForm.errors.contract_date" class="mt-1" /></div>
                     <div>
                         <InputLabel value="Источник (портал)" />
@@ -341,8 +341,8 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     </div>
                     <div><InputLabel value="Сумма договора *" /><TextInput v-model="editForm.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="editForm.errors.budget" class="mt-1" /></div>
                     <div><InputLabel value="Срок" /><TextInput v-model="editForm.deadline" type="date" class="mt-1 w-full" /></div>
-                    <div class="col-span-2"><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
-                    <div class="col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
+                    <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
+                    <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showEdit = false">Отмена</SecondaryButton>
