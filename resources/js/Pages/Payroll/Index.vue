@@ -20,6 +20,8 @@ const monthSel = ref(props.month);
 const setMonth = () => router.get(route('payroll.index'), { month: monthSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
 
 const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
+// «2026-07» → «июль 2026» для заголовков.
+const monthLabel = new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
 
 // Оклад: инлайн-правка (бухгалтер/админ).
@@ -61,7 +63,7 @@ const delAdj = async (a) => {
         <!-- Manager: only own earnings -->
         <div v-if="!leadership" class="max-w-2xl">
             <div class="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-                <div class="text-xs uppercase text-slate-400">К выплате за {{ month }}</div>
+                <div class="text-xs uppercase text-slate-400">К выплате · {{ monthLabel }}</div>
                 <div class="mt-1 text-3xl font-bold text-green-600">{{ money(me?.final ?? me?.payout ?? 0) }}</div>
                 <div class="mt-4 space-y-2 text-sm">
                     <div class="flex justify-between"><span class="text-slate-500">Оклад</span><span class="font-medium tabular-nums">{{ money(me?.salary ?? 0) }}</span></div>
@@ -74,7 +76,7 @@ const delAdj = async (a) => {
 
             <!-- Корректировки за месяц -->
             <div v-if="me?.adjustments?.length" class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Корректировки за {{ month }}</div>
+                <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Корректировки · {{ monthLabel }}</div>
                 <div class="divide-y divide-slate-50 text-sm">
                     <div v-for="a in me.adjustments" :key="a.id" class="flex items-center justify-between gap-2 py-2">
                         <div class="flex items-center gap-2">
@@ -125,15 +127,23 @@ const delAdj = async (a) => {
 
         <!-- Leadership: everyone -->
         <template v-else>
-            <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-8">
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-slate-400">Сумма договоров</div><div class="mt-1 text-xl font-semibold tabular-nums text-slate-900">{{ money(totals.budget) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div><div class="mt-1 text-xl font-semibold tabular-nums text-rose-600">− {{ money(totals.tax) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-slate-400">Расходы</div><div class="mt-1 text-xl font-semibold tabular-nums text-rose-600">− {{ money(totals.expense) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-slate-400">Бонусы (по марже)</div><div class="mt-1 text-xl font-semibold tabular-nums text-emerald-600">{{ money(totals.bonus) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-slate-400">Оклады</div><div class="mt-1 text-xl font-semibold tabular-nums text-slate-700">{{ money(totals.salary) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-slate-400">Удержания / премии</div><div class="mt-1 text-xl font-semibold tabular-nums text-rose-600">− {{ money(totals.deductions) }}<span v-if="totals.additions" class="text-sm text-emerald-600"> +{{ money(totals.additions) }}</span></div></div>
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm"><div class="text-[11px] uppercase tracking-wide text-emerald-600/70">К выплате за {{ month }}</div><div class="mt-1 text-xl font-semibold tabular-nums text-emerald-700">{{ money(totals.final) }}</div></div>
-                <div class="col-span-2 rounded-xl p-5 text-white shadow-md lg:col-span-1" style="background-color: #1A3B5C"><div class="text-[11px] uppercase tracking-wide text-white/60">Чистая прибыль компании</div><div class="mt-1 text-xl font-semibold tabular-nums">{{ money(totals.company) }}</div></div>
+            <!-- 2 ряда по 4 плитки: суммам хватает места, без переносов -->
+            <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Сумма договоров</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-900 xl:text-xl">{{ money(totals.budget) }}</div></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-rose-600 xl:text-xl">−{{ money(totals.tax) }}</div></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Расходы</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-rose-600 xl:text-xl">−{{ money(totals.expense) }}</div></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонусы (по марже)</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 xl:text-xl">{{ money(totals.bonus) }}</div></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Оклады</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-700 xl:text-xl">{{ money(totals.salary) }}</div></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Удержания / премии</div>
+                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums xl:text-xl" :class="totals.deductions > 0 ? 'text-rose-600' : 'text-slate-300'">
+                        <template v-if="totals.deductions > 0">−{{ money(totals.deductions) }}</template>
+                        <template v-else>—</template>
+                        <span v-if="totals.additions > 0" class="text-sm text-emerald-600"> +{{ money(totals.additions) }}</span>
+                    </div>
+                </div>
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-emerald-600/70">К выплате · {{ monthLabel }}</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-700 xl:text-xl">{{ money(totals.final) }}</div></div>
+                <div class="rounded-xl p-4 text-white shadow-md" style="background-color: #1A3B5C"><div class="truncate text-[11px] uppercase tracking-wide text-white/60">Чистая прибыль компании</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums xl:text-xl">{{ money(totals.company) }}</div></div>
             </div>
 
             <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -195,7 +205,7 @@ const delAdj = async (a) => {
                                     <!-- Корректировки сотрудника за месяц -->
                                     <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
                                         <div class="mb-1 flex items-center justify-between">
-                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Корректировки за {{ month }}</span>
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Корректировки · {{ monthLabel }}</span>
                                             <button v-if="canManage" class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="openAdj(r.uid)">+ добавить</button>
                                         </div>
                                         <div v-if="r.adjustments?.length" class="divide-y divide-slate-50 text-xs">
