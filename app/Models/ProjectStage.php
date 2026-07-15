@@ -21,14 +21,27 @@ class ProjectStage extends Model
     ];
 
     /**
-     * Цех у каждой компании СВОЙ (BAIA — мебельный, ASU — швейный): этапы с
-     * company_id видны только своей фирме; без company_id — общие (легаси/тесты).
+     * Цех у каждой компании СВОЙ (BAIA — мебельный, ASU — швейный). Если у
+     * фирмы есть СВОИ этапы — показываем только их; «общие» (company_id=null,
+     * легаси/тесты) — ТОЛЬКО как фолбэк, иначе одинаковые названия двоятся
+     * (Кесу+Кесу…) в степпере заказа.
      */
+    public static function companyQuery(?int $companyId): \Illuminate\Database\Eloquent\Builder
+    {
+        $q = static::where('is_active', true)->orderBy('order')->orderBy('id');
+
+        if ($companyId) {
+            static::where('is_active', true)->where('company_id', $companyId)->exists()
+                ? $q->where('company_id', $companyId)
+                : $q->whereNull('company_id');
+        }
+
+        return $q;
+    }
+
     public static function funnel(?int $companyId = null): \Illuminate\Support\Collection
     {
-        return static::where('is_active', true)
-            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
-            ->orderBy('order')->orderBy('id')->get();
+        return static::companyQuery($companyId)->get();
     }
 
     public function projects(): HasMany

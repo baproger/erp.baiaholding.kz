@@ -57,9 +57,9 @@ class ProjectController extends Controller
 
         // Канбан показывает воронку цеха ТЕКУЩЕЙ компании (BAIA — мебельный,
         // ASU — швейный); в режиме «Все компании» — этапы обоих цехов.
-        $stages = ProjectStage::with('translations')->where('is_active', true)
-            ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
-            ->orderBy('order')->get()
+        // companyQuery: свои этапы приоритетны, «общие» (null) — только фолбэк.
+        $stages = ProjectStage::companyQuery(\App\Support\CurrentCompany::id() ?: null)
+            ->with('translations')->get()
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]);
 
         $projects = $view === 'list'
@@ -137,10 +137,10 @@ class ProjectController extends Controller
         return Inertia::render('Projects/Show', [
             'project' => $project,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'stages' => ProjectStage::with('translations')->where('is_active', true)
-                // Этапы цеха компании этого заказа (по исходной сделке).
-                ->when($project->deal?->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
-                ->orderBy('order')->get()
+            // Этапы цеха компании этого заказа (по исходной сделке); свои
+            // приоритетны, «общие» — фолбэк (иначе степпер двоит Кесу+Кесу…).
+            'stages' => ProjectStage::companyQuery($project->deal?->company_id ? (int) $project->deal->company_id : null)
+                ->with('translations')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
             'finance' => $canSeeMoney ? $finance->summaryFor($source) : null,
             'financeEntityType' => $project->deal_id ? 'deal' : 'project',
