@@ -52,7 +52,7 @@ const save = () => form.put(route('settings.update'), { preserveScroll: true });
                 </div>
                 <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-500 ring-1 ring-slate-200">
                     <div class="font-semibold text-slate-600">Бонус сотрудника — по марже сделки (фиксировано):</div>
-                    до 10% — нет · 11–20% — 7% · 21–30% — 10% · от 31% — 15% от остатка
+                    до 10% — нет · 11–15% — 5% · 16–20% — 7% · 21–25% — 10% · 26–40% — 13% · от 41% — 15% от остатка
                 </div>
             </div>
             <label class="flex items-center gap-2 text-sm">

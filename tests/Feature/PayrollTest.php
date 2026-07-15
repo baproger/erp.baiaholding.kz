@@ -61,10 +61,12 @@ class PayrollTest extends TestCase
 
     public function test_bonus_tier_rates(): void
     {
-        // ≤10% → 0; 11–20% → 7%; 21–30% → 10%; от 31% → 15%.
+        // ≤10 → 0; ≤15 → 5%; ≤20 → 7%; ≤25 → 10%; ≤40 → 13%; от 41% → 15%.
         $this->assertSame(0.0, \App\Services\PayrollService::bonusRateForMargin(10));
-        $this->assertSame(0.07, \App\Services\PayrollService::bonusRateForMargin(15));
-        $this->assertSame(0.10, \App\Services\PayrollService::bonusRateForMargin(30));
+        $this->assertSame(0.05, \App\Services\PayrollService::bonusRateForMargin(15));
+        $this->assertSame(0.07, \App\Services\PayrollService::bonusRateForMargin(20));
+        $this->assertSame(0.10, \App\Services\PayrollService::bonusRateForMargin(25));
+        $this->assertSame(0.13, \App\Services\PayrollService::bonusRateForMargin(40));
         $this->assertSame(0.15, \App\Services\PayrollService::bonusRateForMargin(45));
         // Низкомаржинальная сделка: маржа 7% → бонуса нет.
         $this->assertSame(0.0, \App\Services\PayrollService::marginBonus(1000000, 70000));
