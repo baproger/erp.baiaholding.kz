@@ -270,7 +270,9 @@ class DealController extends Controller
         $this->assertNotFrozen($request, $deal);
         $deal->delete();
 
-        return back()->with('success', 'Сделка удалена.');
+        // Не back(): удаляют из карточки сделки, а «назад» — это страница
+        // только что удалённой сделки → 404 (No query results for model Deal).
+        return redirect()->route('deals.index')->with('success', 'Сделка удалена.');
     }
 
     /**
