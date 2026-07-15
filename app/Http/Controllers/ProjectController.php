@@ -56,11 +56,18 @@ class ProjectController extends Controller
             ->where(fn ($w) => $w->where('name', 'like', "%{$s}%")->orWhere('number', 'like', "%{$s}%")));
 
         // Канбан показывает воронку цеха ТЕКУЩЕЙ компании (BAIA — мебельный,
-        // ASU — швейный); в режиме «Все компании» — этапы обоих цехов.
+        // ASU — швейный); в режиме «Все компании» — этапы обоих цехов С
+        // ПОМЕТКОЙ фирмы (иначе одинаковые «Кесу» выглядят как дубли).
         // companyQuery: свои этапы приоритетны, «общие» (null) — только фолбэк.
-        $stages = ProjectStage::companyQuery(\App\Support\CurrentCompany::id() ?: null)
+        $companyId = \App\Support\CurrentCompany::id() ?: null;
+        $companyCodes = \App\Models\Company::pluck('code', 'id');
+        $stages = ProjectStage::companyQuery($companyId)
             ->with('translations')->get()
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]);
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyCodes[$s->company_id] ?? '') : ''),
+                'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed,
+            ]);
 
         $projects = $view === 'list'
             ? (clone $base)->latest()->paginate(20)->withQueryString()
