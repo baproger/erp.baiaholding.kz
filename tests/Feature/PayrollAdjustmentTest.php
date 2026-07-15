@@ -62,12 +62,14 @@ class PayrollAdjustmentTest extends TestCase
         $this->assertEquals(300000.0, (float) $mgr->fresh()->salary);
 
         PayrollAdjustment::create(['user_id' => $mgr->id, 'type' => 'fine', 'amount' => 50000, 'date' => now()->toDateString()]);
+        // Аванс — тоже удержание: выдан вперёд, минусуется из ЗП.
+        PayrollAdjustment::create(['user_id' => $mgr->id, 'type' => 'advance', 'amount' => 70000, 'date' => now()->toDateString()]);
 
         $this->actingAs($fin)->get(route('payroll.index'))
             ->assertOk()
             ->assertInertia(fn ($p) => $p->where('rows', fn ($rows) => collect($rows)
-                ->contains(fn ($r) => $r['uid'] === $mgr->id && (float) $r['deductions'] === 50000.0
-                    && (float) $r['final'] === 250000.0)));
+                ->contains(fn ($r) => $r['uid'] === $mgr->id && (float) $r['deductions'] === 120000.0
+                    && (float) $r['final'] === 180000.0)));
     }
 
     public function test_adjustment_outside_month_not_counted(): void

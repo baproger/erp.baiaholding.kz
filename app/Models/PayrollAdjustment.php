@@ -6,16 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Корректировка ЗП: absence (отгул) / sick (больничный) / fine (штраф) —
- * удержания; bonus (премия) — доплата. amount всегда положительная,
- * знак определяется типом.
+ * Корректировка ЗП: absence (отгул) / sick (больничный) / fine (штраф) /
+ * advance (аванс — выдан вперёд, минусуется из ЗП) — удержания;
+ * bonus (премия) — доплата. amount всегда положительная, знак — по типу.
  */
 class PayrollAdjustment extends Model
 {
-    public const TYPES = ['absence', 'sick', 'fine', 'bonus'];
+    public const TYPES = ['absence', 'sick', 'fine', 'advance', 'bonus'];
 
     /** Типы-удержания (минус к выплате). */
-    public const DEDUCTIONS = ['absence', 'sick', 'fine'];
+    public const DEDUCTIONS = ['absence', 'sick', 'fine', 'advance'];
 
     protected $fillable = ['user_id', 'type', 'days', 'amount', 'date', 'note', 'created_by'];
 
