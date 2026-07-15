@@ -60,6 +60,8 @@ php artisan schedule:work    # уведомления о просрочке
 ```
 Первый вход — под учёткой администратора из сидера (`DatabaseSeeder`); **пароль сменить сразу после входа**. Деплой на сервер (Plesk + Git) и настройка `.env` — см. `DEPLOY.md`.
 
+**Производительность (аудит 15.07.2026):** индексы под горячие запросы добавлены миграцией add_performance_indexes (deadline/created_at/contract_date у deals, date у expenses/receipts, payment_date, due_date). На проде после КАЖДОГО деплоя запускать `php artisan optimize` (config+route+view cache; сбрасывается `php artisan optimize:clear`) и держать включённым OPcache в PHP (Plesk → PHP Settings). Переводы UI кэшируются навсегда (Cache::rememberForever), уведомления/чат проиндексированы, фронт код-сплит по страницам (~100KB gzip основной бандл), чат-полинг 4с только на странице чата.
+
 ## 6. Changelog (git)
 - feat: цена закупки материалов + авторасчёт расхода (кол-во × цена)
 - feat: этапы по stage_type (не по имени) + админка воронок BAIA/ASU/Цех + гейт-задачи
