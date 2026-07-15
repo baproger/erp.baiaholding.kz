@@ -14,7 +14,7 @@ import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({ users: Object, filters: Object, departments: Array, roles: Array, companies: { type: Array, default: () => [] } });
 
-const roleLabels = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник' };
+const roleLabels = { admin: 'СЕО (админ)', director: 'Директор', financist: 'Финансист-Бухгалтер', manager: 'Менеджер', employee: 'Сотрудник (цех)', lawyer: 'Юрист', cook: 'Повар', designer: 'Дизайнер', technologist: 'Технолог' };
 const show = ref(false);
 const editing = ref(null);
 const search = ref(props.filters.search ?? '');
