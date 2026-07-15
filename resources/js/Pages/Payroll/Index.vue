@@ -28,6 +28,26 @@ const toggle = (uid) => { const s = new Set(open.value); s.has(uid) ? s.delete(u
                     <div class="flex justify-between"><span class="text-slate-500">Успешных сделок</span><span class="font-medium">{{ me?.closed ?? 0 }}</span></div>
                 </div>
             </div>
+
+            <!-- Система бонусов: простая шкала по марже сделки -->
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Система бонусов — по марже сделки</div>
+                <div class="mt-3 space-y-1.5 text-sm">
+                    <div v-for="t in [
+                            { m: 'до 10%', b: 'бонуса нет', muted: true },
+                            { m: '11% – 15%', b: '5% от остатка' },
+                            { m: '16% – 20%', b: '7% от остатка' },
+                            { m: '21% – 30%', b: '10% от остатка' },
+                            { m: '31% – 40%', b: '13% от остатка' },
+                            { m: 'от 41%', b: '15% от остатка' },
+                        ]" :key="t.m" class="flex items-center justify-between rounded-lg px-3 py-1.5"
+                        :class="t.muted ? 'bg-slate-50 text-slate-400' : 'bg-emerald-50/50'">
+                        <span :class="t.muted ? '' : 'text-slate-600'">маржа {{ t.m }}</span>
+                        <span class="font-semibold tabular-nums" :class="t.muted ? '' : 'text-emerald-700'">{{ t.b }}</span>
+                    </div>
+                </div>
+                <p class="mt-3 text-[11px] text-slate-400">Маржа = (сумма договора − расходы) / сумма договора. Остаток = сумма − налог − расходы.</p>
+            </div>
             <div v-if="me?.dealsList?.length" class="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-slate-100 text-xs">
                     <thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
