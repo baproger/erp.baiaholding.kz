@@ -60,8 +60,9 @@ const delAdj = async (a) => {
             </div>
         </template>
 
-        <!-- Manager: only own earnings -->
-        <div v-if="!leadership" class="max-w-2xl">
+        <!-- Manager: слева выплата/корректировки/сделки, справа — шкала бонусов -->
+        <div v-if="!leadership" class="grid max-w-5xl grid-cols-1 items-start gap-4 lg:grid-cols-3">
+            <div class="space-y-4 lg:col-span-2">
             <div class="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
                 <div class="text-xs uppercase text-slate-400">К выплате · {{ monthLabel }}</div>
                 <div class="mt-1 text-3xl font-bold text-green-600">{{ money(me?.final ?? me?.payout ?? 0) }}</div>
@@ -75,7 +76,7 @@ const delAdj = async (a) => {
             </div>
 
             <!-- Корректировки за месяц -->
-            <div v-if="me?.adjustments?.length" class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div v-if="me?.adjustments?.length" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Корректировки · {{ monthLabel }}</div>
                 <div class="divide-y divide-slate-50 text-sm">
                     <div v-for="a in me.adjustments" :key="a.id" class="flex items-center justify-between gap-2 py-2">
@@ -88,8 +89,26 @@ const delAdj = async (a) => {
                 </div>
             </div>
 
-            <!-- Система бонусов: простая шкала по марже сделки -->
-            <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div v-if="me?.dealsList?.length" class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                <table class="min-w-full divide-y divide-slate-100 text-xs">
+                    <thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+                        <tr><th class="px-3 py-2">Сделка</th><th class="px-3 py-2">Этап</th><th class="px-3 py-2 text-right">Сумма</th><th class="px-3 py-2 text-right">Оплачено</th><th class="px-3 py-2 text-right text-emerald-600">Бонус</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        <tr v-for="d in me.dealsList" :key="d.id" class="hover:bg-slate-50">
+                            <td class="px-3 py-2"><Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link> <span class="text-slate-400">{{ d.number }}</span></td>
+                            <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
+                            <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
+                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            </div>
+
+            <!-- Правая колонка: система бонусов (шкала по марже сделки) -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Система бонусов — по марже сделки</div>
                 <div class="mt-3 space-y-1.5 text-sm">
                     <div v-for="t in [
@@ -106,22 +125,6 @@ const delAdj = async (a) => {
                     </div>
                 </div>
                 <p class="mt-3 text-[11px] text-slate-400">Маржа = (сумма договора − расходы) / сумма договора. Остаток = сумма − налог − расходы.</p>
-            </div>
-            <div v-if="me?.dealsList?.length" class="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-                <table class="min-w-full divide-y divide-slate-100 text-xs">
-                    <thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-                        <tr><th class="px-3 py-2">Сделка</th><th class="px-3 py-2">Этап</th><th class="px-3 py-2 text-right">Сумма</th><th class="px-3 py-2 text-right">Оплачено</th><th class="px-3 py-2 text-right text-emerald-600">Бонус</th></tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-50">
-                        <tr v-for="d in me.dealsList" :key="d.id" class="hover:bg-slate-50">
-                            <td class="px-3 py-2"><Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link> <span class="text-slate-400">{{ d.number }}</span></td>
-                            <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
-                            <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
-                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
             </div>
         </div>
 
