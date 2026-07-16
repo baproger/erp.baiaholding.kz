@@ -62,11 +62,14 @@ class WarehouseController extends Controller
             'amount' => (float) $e->amount,
             'date' => optional($e->date)->toDateString(),
             'type' => $e->expenseable_type, // deal | project
-            'target_id' => $e->expenseable_id,
+            // Сделка/заказ удалены (морф вернул null) — ссылку не даём (иначе 404).
+            'target_id' => $e->expenseable ? $e->expenseable_id : null,
             'number' => $e->expenseable?->number,
-            'label' => $e->expenseable_type === 'deal'
-                ? ($e->expenseable?->company_name ?: $e->expenseable?->number ?: 'сделка')
-                : ($e->expenseable?->name ?: $e->expenseable?->number ?: 'заказ цеха'),
+            'label' => $e->expenseable
+                ? ($e->expenseable_type === 'deal'
+                    ? ($e->expenseable->company_name ?: $e->expenseable->number)
+                    : ($e->expenseable->name ?: $e->expenseable->number))
+                : ($e->expenseable_type === 'deal' ? 'сделка удалена' : 'заказ удалён'),
         ])->groupBy('material_id');
 
         $materials->each(function ($m) use ($received, $writtenOff) {

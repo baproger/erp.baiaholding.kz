@@ -313,11 +313,12 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                 <h2 class="mb-1 text-lg font-semibold text-slate-900">Списания — {{ writeoffFor?.name }}</h2>
                 <p class="mb-4 text-xs text-slate-400">Клик по строке — переход в сделку / заказ цеха</p>
                 <div class="max-h-80 divide-y divide-slate-50 overflow-y-auto">
-                    <button v-for="(w, i) in writeoffRows" :key="i" type="button" @click="router.get(writeoffLink(w))"
-                        class="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-left text-sm transition hover:bg-indigo-50/60">
+                    <button v-for="(w, i) in writeoffRows" :key="i" type="button" @click="w.target_id && router.get(writeoffLink(w))"
+                        class="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-left text-sm transition"
+                        :class="w.target_id ? 'hover:bg-indigo-50/60' : 'cursor-default opacity-60'">
                         <div class="min-w-0">
-                            <div class="truncate font-medium text-slate-800">{{ w.label }}</div>
-                            <div class="text-[11px] text-slate-400">{{ w.number }} · {{ w.type === 'deal' ? 'сделка' : 'заказ цеха' }} · {{ w.date ? formatDate(w.date) : '—' }}</div>
+                            <div class="truncate font-medium" :class="w.target_id ? 'text-slate-800' : 'text-slate-400 line-through'">{{ w.label }}</div>
+                            <div class="text-[11px] text-slate-400"><template v-if="w.number">{{ w.number }} · </template>{{ w.type === 'deal' ? 'сделка' : 'заказ цеха' }} · {{ w.date ? formatDate(w.date) : '—' }}</div>
                         </div>
                         <div class="text-right">
                             <div class="font-semibold tabular-nums text-rose-600">− {{ qty(w.qty) }} {{ writeoffFor?.unit }}</div>

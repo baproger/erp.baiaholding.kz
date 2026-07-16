@@ -34,6 +34,17 @@ class Deal extends Model
         'closed_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        // Удалили сделку — её заказ в цехе не должен висеть «в работе»:
+        // отменяем (иначе канбан цеха и просроченные показывают заказ-сироту).
+        static::deleted(function (Deal $deal) {
+            Project::where('deal_id', $deal->id)
+                ->whereNotIn('status', ['completed', 'cancelled'])
+                ->update(['status' => 'cancelled']);
+        });
+    }
+
     /**
      * Owning firm (BAIA / ASU) — not to be confused with company_name (the client's company).
      */

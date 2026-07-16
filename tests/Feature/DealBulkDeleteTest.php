@@ -62,4 +62,25 @@ class DealBulkDeleteTest extends TestCase
             ->assertForbidden();
         $this->assertNull($a->fresh()->deleted_at);
     }
+
+    public function test_deleting_deal_cancels_its_workshop_order_and_warehouse_survives(): void
+    {
+        $admin = $this->user('admin');
+        $deal = $this->deal('D-1');
+        $project = \App\Models\Project::create([
+            'number' => 'PRJ-T-1', 'name' => 'ТОО', 'deal_id' => $deal->id, 'status' => 'active',
+        ]);
+        // Материальное списание на сделку — после удаления сделки Склад не должен падать.
+        $material = \App\Models\Material::create(['name' => 'Труба', 'unit' => 'штук', 'quantity' => 10, 'price' => 100]);
+        \App\Models\Expense::create([
+            'expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'material_id' => $material->id,
+            'qty' => 2, 'amount' => 200, 'date' => now()->toDateString(), 'status' => 'confirmed', 'type' => 'direct',
+        ]);
+
+        $this->actingAs($admin)->delete(route('deals.destroy', $deal))->assertRedirect(route('deals.index'));
+
+        // Заказ цеха отменён каскадом, Склад открывается без 404/500.
+        $this->assertEquals('cancelled', $project->fresh()->status);
+        $this->actingAs($admin)->get(route('warehouse.index'))->assertOk();
+    }
 }

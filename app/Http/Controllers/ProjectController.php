@@ -43,7 +43,8 @@ class ProjectController extends Controller
         $view = $request->string('view', 'kanban')->toString();
 
         $base = Project::query()
-            ->where('status', '!=', 'completed')
+            // cancelled = заказ отменён (в т.ч. каскадом при удалении сделки).
+            ->whereNotIn('status', ['completed', 'cancelled'])
             // Цех тоже разделён по фирмам: заказ принадлежит компании исходной сделки.
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
             // Цеху на карточке нужны срок, описание, заметка и адрес (город) из сделки.
