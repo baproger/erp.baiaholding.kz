@@ -111,8 +111,9 @@ class ChatController extends Controller
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'user_id' => $m->user_id,
-                'user_name' => $m->user->name,
-                'user_avatar' => $m->user->avatar,
+                // Автор мог быть удалён из БД — чат не должен падать (prod-лог 15.07).
+                'user_name' => $m->user?->name ?? 'Удалённый пользователь',
+                'user_avatar' => $m->user?->avatar,
                 'message' => $m->message,
                 'attachments' => collect($m->attachments ?? [])->values()->map(fn ($a, $i) => [
                     'name' => $a['name'] ?? 'файл',
