@@ -9,6 +9,7 @@ import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { formatDate } from '@/utils/format';
+import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receipts: Array, canManage: Boolean });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -62,6 +63,27 @@ const submitCompanyExpense = () => cForm.post(route('expenses.store'), {
 // Расход компании списывается с поступлений: показываем остаток выбранного
 // способа (касса/счёт) и предупреждаем о превышении (не блокируем).
 const cOverBalance = () => Number(cForm.amount || 0) > Number(cForm.payment_method === 'cash' ? props.summary.cash : props.summary.bank);
+
+// Правка/удаление расхода (financist/admin). Материал/кол-во и способ оплаты
+// через update не меняются (правила сервера); сумма материального — авто.
+const editingExp = ref(null);
+const eForm = useForm({ amount: '', date: '', description: '', category_id: '' });
+const openEditExp = (e) => {
+    editingExp.value = e;
+    eForm.amount = Number(e.amount);
+    eForm.date = (e.date ?? '').slice(0, 10);
+    eForm.description = e.description ?? '';
+    eForm.category_id = e.category_id ?? '';
+    eForm.clearErrors();
+};
+const submitEditExp = () => eForm.put(route('expenses.update', editingExp.value.id), {
+    preserveScroll: true, onSuccess: () => (editingExp.value = null),
+});
+const delExpense = async (e) => {
+    if (await confirmDialog({ title: 'Удалить расход', message: `Расход ${money(e.amount)} будет удалён${e.material ? ', остаток вернётся на склад' : ''}.`, confirmText: 'Удалить', danger: true })) {
+        router.delete(route('expenses.destroy', e.id), { preserveScroll: true });
+    }
+};
 </script>
 
 <template>
@@ -241,6 +263,7 @@ const cOverBalance = () => Number(cForm.amount || 0) > Number(cForm.payment_meth
                         <th class="px-4 py-3">Статус</th>
                         <th class="px-4 py-3">Автор</th>
                         <th class="px-4 py-3">Дата</th>
+                        <th v-if="canManage" class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -263,8 +286,16 @@ const cOverBalance = () => Number(cForm.amount || 0) > Number(cForm.payment_meth
                         </td>
                         <td class="px-4 py-3 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
                         <td class="px-4 py-3 text-xs text-slate-400">{{ formatDate(e.date) }}</td>
+                        <td v-if="canManage" class="px-4 py-3 text-right whitespace-nowrap">
+                            <button class="rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </button>
+                            <button class="rounded p-1 text-slate-300 transition hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                            </button>
+                        </td>
                     </tr>
-                    <tr v-if="!expenses.data.length"><td colspan="8" class="px-6 py-10 text-center text-slate-400">Расходов нет</td></tr>
+                    <tr v-if="!expenses.data.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-10 text-center text-slate-400">Расходов нет</td></tr>
                 </tbody>
             </table>
             <div class="p-4"><Pagination :links="expenses.links" /></div>
@@ -325,6 +356,43 @@ const cOverBalance = () => Number(cForm.amount || 0) > Number(cForm.payment_meth
                 <div class="p-4"><Pagination :links="invoices.links" /></div>
             </div>
         </div>
+
+        <!-- Модалка: редактирование расхода -->
+        <Modal :show="!!editingExp" @close="editingExp = null" max-width="lg">
+            <div class="p-6">
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">Редактировать расход</h2>
+                <p class="mb-4 text-xs text-slate-400">Способ оплаты и материал/количество не меняются: способ ставится при подтверждении, материальный расход — удалить (остаток вернётся) и создать заново.</p>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Сумма, ₸</label>
+                        <input v-model="eForm.amount" type="number" min="0" step="0.01" :disabled="!!(editingExp?.material_id && Number(editingExp?.material?.price) > 0)"
+                            class="w-full rounded-md border-slate-300 text-sm shadow-sm disabled:bg-slate-100 disabled:text-slate-400" />
+                        <div v-if="editingExp?.material_id && Number(editingExp?.material?.price) > 0" class="mt-1 text-[11px] text-slate-400">Сумма материального расхода = количество × цена (авто)</div>
+                        <div v-if="eForm.errors.amount" class="mt-1 text-xs text-red-600">{{ eForm.errors.amount }}</div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Дата *</label>
+                        <input v-model="eForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        <div v-if="eForm.errors.date" class="mt-1 text-xs text-red-600">{{ eForm.errors.date }}</div>
+                    </div>
+                    <div v-if="editingExp && !editingExp.expenseable_id" class="sm:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Категория</label>
+                        <select v-model="eForm.category_id" class="w-full rounded-md border-slate-300 text-sm shadow-sm">
+                            <option value="">— без категории —</option>
+                            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Описание</label>
+                        <input v-model="eForm.description" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="editingExp = null">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="eForm.processing" @click="submitEditExp">Сохранить</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
 
         <!-- Модалка: поступление денег -->
         <Modal :show="showReceipt" @close="showReceipt = false" max-width="lg">
