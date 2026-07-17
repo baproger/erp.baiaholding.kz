@@ -218,6 +218,38 @@ class AnalyticsController extends Controller
         $invoiced = (float) (clone $invBase)->sum('amount');
         $invoicePaid = (float) Payment::whereIn('invoice_id', (clone $invBase)->select('id'))->sum('amount');
 
+        // ---- Деньги компании (как на Финансах): касса/банк, все расходы с разбивкой ----
+        $balances = app(\App\Services\FinanceService::class)->companyBalances($companyId ?: null);
+        $expFull = Expense::where('status', 'confirmed')
+            ->when($companyId, fn ($q, $c) => $q->where(function ($w) use ($c) {
+                $this->morphCompanyScope($w, 'expenseable_type', 'expenseable_id', $c);
+                $w->orWhere('company_id', $c); // расходы компании (аренда/бензин…)
+            }));
+        $byCat = (clone $expFull)->whereNotNull('category_id')
+            ->groupBy('category_id')->selectRaw('category_id, sum(amount) s')->pluck('s', 'category_id');
+        $catNames = \App\Models\ExpenseCategory::whereIn('id', $byCat->keys())->pluck('name', 'id');
+        $categoryRows = $byCat->map(fn ($s, $id) => ['name' => $catNames[$id] ?? '—', 'sum' => (float) $s])
+            ->sortByDesc('sum')->values();
+        $dealExpensesSum = (float) (clone $expFull)->whereNull('category_id')->sum('amount');
+        $incomeManual = (float) \App\Models\CashReceipt::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->sum('amount');
+        $payrollTotal = round((float) $salaryRows->sum('payout'), 2);
+        // Все расходы компании: категории + по сделкам/цеху + ЗП (оклады+бонусы) + налог.
+        $expensesFull = round($categoryRows->sum('sum') + $dealExpensesSum + $payrollTotal + $companyTotals['tax'], 2);
+        $companyMoney = [
+            'cash' => $balances['cash'],
+            'bank' => $balances['bank'],
+            'income' => round($invoicePaid + $incomeManual, 2),
+            'incomeInvoices' => $invoicePaid,
+            'incomeManual' => $incomeManual,
+            'categories' => $categoryRows,
+            'dealExpenses' => $dealExpensesSum,
+            'payroll' => $payrollTotal,
+            'tax' => $companyTotals['tax'],
+            'expensesTotal' => round($expensesFull, 2),
+            'net' => round($invoicePaid + $incomeManual - $expensesFull, 2),
+        ];
+
         // ---- «Требует внимания» (без фильтров — это сигналы по всей компании) ----
         $overdueDeals = Deal::forCurrentCompany()->whereNotNull('deadline')->whereDate('deadline', '<', $today)
             ->whereNotIn('status', ['closed', 'cancelled'])
@@ -288,6 +320,7 @@ class AnalyticsController extends Controller
                 'debt' => max(0, $invoiced - $invoicePaid),
                 'taxRate' => $taxRate * 100,
             ]),
+            'companyMoney' => $companyMoney,
             'attention' => [
                 'overdueDeals' => $overdueDeals,
                 'overdueTasks' => $overdueTasks,

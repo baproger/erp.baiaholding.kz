@@ -7,7 +7,7 @@ import Avatar from '@/Components/Avatar.vue';
 const props = defineProps({
     byEmployee: Array, monthsFilter: Number, funnel: Array, byStatus: Object, monthly: Array,
     abc: Array, abcSummary: Object, conversion: Object, totals: Object,
-    attention: Object, period: Object, topManagers: Array, filters: Object, managers: Array, stageOptions: Array,
+    attention: Object, period: Object, topManagers: Array, filters: Object, managers: Array, stageOptions: Array, companyMoney: Object,
 });
 
 const tab = ref('general');
@@ -113,6 +113,42 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                         </div>
                         <div class="text-right text-xl font-semibold tracking-tight tabular-nums" :class="r.accent">{{ r.minus ? '−' : '' }}{{ money(r.value) }}</div>
                     </Link>
+                </div>
+            </div>
+
+            <!-- Деньги компании: касса, банк, все расходы с разбивкой (как на Финансах) -->
+            <div class="grid grid-cols-2 items-start gap-4 xl:grid-cols-4">
+                <Link :href="route('finance.index')" class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+                    <span class="text-xs font-medium text-slate-500">Остаток в кассе</span>
+                    <div class="mt-1.5 whitespace-nowrap text-2xl font-semibold tracking-tight tabular-nums" :class="companyMoney.cash >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(companyMoney.cash) }}</div>
+                    <div class="mt-1 text-xs text-slate-400">наличные: поступило − потрачено</div>
+                </Link>
+                <Link :href="route('finance.index')" class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+                    <span class="text-xs font-medium text-slate-500">Остаток в банке</span>
+                    <div class="mt-1.5 whitespace-nowrap text-2xl font-semibold tracking-tight tabular-nums" :class="companyMoney.bank >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(companyMoney.bank) }}</div>
+                    <div class="mt-1 text-xs text-slate-400">безнал: поступило − потрачено</div>
+                </Link>
+                <div class="col-span-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="flex items-baseline justify-between">
+                        <span class="text-xs font-medium text-slate-500">Все расходы компании</span>
+                        <span class="text-xl font-semibold tabular-nums text-rose-600">−{{ money(companyMoney.expensesTotal) }}</span>
+                    </div>
+                    <div class="mt-2 space-y-1 text-sm">
+                        <div class="flex justify-between"><span class="text-slate-500">Зарплата (оклады + бонусы)</span><span class="tabular-nums text-slate-700">{{ money(companyMoney.payroll) }}</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Налог</span><span class="tabular-nums text-slate-700">{{ money(companyMoney.tax) }}</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">По сделкам и цеху</span><span class="tabular-nums text-slate-700">{{ money(companyMoney.dealExpenses) }}</span></div>
+                        <div v-for="c in companyMoney.categories" :key="c.name" class="flex justify-between">
+                            <span class="text-slate-500">{{ c.name }}</span><span class="tabular-nums text-slate-700">{{ money(c.sum) }}</span>
+                        </div>
+                        <div class="flex justify-between border-t border-slate-100 pt-1.5">
+                            <span class="font-medium text-slate-600">Доход (счета + поступления)</span>
+                            <span class="font-semibold tabular-nums text-emerald-600">{{ money(companyMoney.income) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-medium text-slate-600">Чистая прибыль (доход − все расходы)</span>
+                            <span class="font-semibold tabular-nums" :class="companyMoney.net >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(companyMoney.net) }}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
