@@ -10,7 +10,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { formatDate } from '@/utils/format';
 
-const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, canManage: Boolean });
+const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receipts: Array, canManage: Boolean });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
@@ -41,6 +41,13 @@ const tileActive = (kind, method, status) =>
 const expLink = (e) => e.expenseable_type === 'project'
     ? route('projects.show', e.expenseable_id)
     : route('deals.show', e.expenseable_id);
+
+// Поступление денег (финансист): сумма, нал/банк, откуда, дата, комментарий.
+const showReceipt = ref(false);
+const rForm = useForm({ amount: '', method: 'bank', source: '', date: new Date().toISOString().slice(0, 10), note: '' });
+const openReceipt = () => { rForm.reset(); rForm.date = new Date().toISOString().slice(0, 10); showReceipt.value = true; };
+const submitReceipt = () => rForm.post(route('finance.receipts.store'), { preserveScroll: true, onSuccess: () => (showReceipt.value = false) });
+const delReceipt = (r) => router.delete(route('finance.receipts.destroy', r.id), { preserveScroll: true });
 
 // Расход КОМПАНИИ (без сделки): аренда, комуслуги, интернет, бензин и т.п.
 // Вводит бухгалтер/админ; категория обязательна, статус сразу confirmed.
@@ -86,7 +93,7 @@ const submitCompanyExpense = () => cForm.post(route('expenses.store'), {
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Доход</div>
                 <div class="mt-1 text-2xl font-bold tabular-nums text-emerald-600">{{ money(summary.income) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">все поступления по счетам</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">по счетам {{ money(summary.incomeInvoices) }} · прочие поступления {{ money(summary.incomeManual) }}</div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex items-baseline justify-between">
@@ -106,6 +113,49 @@ const submitCompanyExpense = () => cForm.post(route('expenses.store'), {
                 <div class="text-[11px] uppercase tracking-wide text-white/60">Чистая прибыль</div>
                 <div class="mt-1 text-2xl font-bold tabular-nums" :class="summary.net >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(summary.net) }}</div>
                 <div class="mt-0.5 text-[11px] text-white/60">доход − все расходы</div>
+            </div>
+        </div>
+
+        <!-- ================= Поступления денег ================= -->
+        <div class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <h3 class="text-sm font-semibold text-slate-900">Поступления денег</h3>
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">всего <b class="tabular-nums">{{ money(summary.incomeManual) }}</b></span>
+                </div>
+                <button v-if="canManage" @click="openReceipt"
+                    class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">+ Поступление</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
+                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                        <tr>
+                            <th class="px-6 py-2.5">Дата</th>
+                            <th class="px-4 py-2.5 text-right">Сумма</th>
+                            <th class="px-4 py-2.5">Куда</th>
+                            <th class="px-4 py-2.5">Откуда поступили</th>
+                            <th class="px-4 py-2.5">Комментарий</th>
+                            <th class="px-4 py-2.5">Внёс</th>
+                            <th v-if="canManage" class="px-4 py-2.5"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        <tr v-for="r in receipts" :key="r.id" class="hover:bg-slate-50">
+                            <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}</td>
+                            <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
+                            <td class="px-4 py-3">
+                                <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="r.method === 'cash' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
+                            </td>
+                            <td class="max-w-56 truncate px-4 py-3 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
+                            <td class="max-w-56 truncate px-4 py-3 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
+                            <td class="px-4 py-3 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
+                            <td v-if="canManage" class="px-4 py-3 text-right">
+                                <button class="text-slate-300 transition hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
+                            </td>
+                        </tr>
+                        <tr v-if="!receipts.length"><td colspan="7" class="px-6 py-8 text-center text-sm text-slate-400">Поступлений пока нет — «+ Поступление»</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -272,6 +322,47 @@ const submitCompanyExpense = () => cForm.post(route('expenses.store'), {
                 <div class="p-4"><Pagination :links="invoices.links" /></div>
             </div>
         </div>
+
+        <!-- Модалка: поступление денег -->
+        <Modal :show="showReceipt" @close="showReceipt = false" max-width="lg">
+            <div class="p-6">
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">Поступление денег</h2>
+                <p class="mb-4 text-xs text-slate-400">Откуда пришли деньги и куда легли — в кассу (нал) или на счёт (банк). Остатки на плитках пересчитаются сразу.</p>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Сумма, ₸ *</label>
+                        <input v-model="rForm.amount" type="number" min="0.01" step="0.01" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        <div v-if="rForm.errors.amount" class="mt-1 text-xs text-red-600">{{ rForm.errors.amount }}</div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Дата *</label>
+                        <input v-model="rForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        <div v-if="rForm.errors.date" class="mt-1 text-xs text-red-600">{{ rForm.errors.date }}</div>
+                    </div>
+                    <div class="sm:col-span-2 flex gap-2">
+                        <button type="button" @click="rForm.method = 'cash'"
+                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                            :class="rForm.method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">В кассу (наличные)</button>
+                        <button type="button" @click="rForm.method = 'bank'"
+                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                            :class="rForm.method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500'">На счёт (банк)</button>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Откуда поступили *</label>
+                        <input v-model="rForm.source" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="Клиент / учредитель / кредит / возврат…" />
+                        <div v-if="rForm.errors.source" class="mt-1 text-xs text-red-600">{{ rForm.errors.source }}</div>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Комментарий</label>
+                        <input v-model="rForm.note" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="showReceipt = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="rForm.processing || !(Number(rForm.amount) > 0) || !rForm.source" @click="submitReceipt">Сохранить</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
 
         <!-- Модалка: расход компании (аренда, комуслуги, интернет, бензин…) -->
         <Modal :show="showCompanyExpense" @close="showCompanyExpense = false" max-width="lg">

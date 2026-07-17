@@ -132,13 +132,23 @@ class InvoiceController extends Controller
         $payrollTotal = round((float) $payrollRows->sum('payout'), 2); // оклады + бонусы
         $expensesTotal = round($categoryRows->sum('sum') + $dealExpenses + $payrollTotal + $fin['tax'], 2);
 
-        // Остатки касса/банк: поступления минус расходы по способу оплаты.
+        // Остатки касса/банк: (платежи по счетам + ручные поступления) минус
+        // расходы — всё по способу оплаты (нал/банк).
         $payByMethod = \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->select('id'))
             ->groupBy('payment_method')->selectRaw('payment_method m, sum(amount) s')->pluck('s', 'm');
         $expCash = (float) $confirmedNoPeriod()->where('payment_method', 'cash')->sum('amount');
         $expBank = (float) $confirmedNoPeriod()->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount');
         $payCash = (float) ($payByMethod['cash'] ?? 0);
         $payBank = (float) collect($payByMethod)->except('cash')->sum();
+
+        // Поступления денег (вводит финансист): нал/банк, откуда, дата, комментарий.
+        $receiptBase = \App\Models\CashReceipt::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
+        $receiptCash = (float) (clone $receiptBase)->where('method', 'cash')->sum('amount');
+        $receiptBank = (float) (clone $receiptBase)->where('method', 'bank')->sum('amount');
+        $receipts = (clone $receiptBase)->with('creator:id,name')
+            ->latest('date')->latest('id')->limit(30)->get();
+        $incomeTotal = round($invoicePaid + $receiptCash + $receiptBank, 2);
 
         return Inertia::render('Finance/Index', [
             'invoices' => $invoices,
@@ -149,18 +159,21 @@ class InvoiceController extends Controller
             'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
+            'receipts' => $receipts,
             'summary' => [
                 'contracts' => (float) \App\Models\Deal::forCurrentCompany()->where('status', '!=', 'cancelled')->sum('budget'),
                 'receivables' => $invoiceTotals['debt'],
-                'cash' => round($payCash - $expCash, 2),
-                'bank' => round($payBank - $expBank, 2),
-                'income' => $invoicePaid,
+                'cash' => round($payCash + $receiptCash - $expCash, 2),
+                'bank' => round($payBank + $receiptBank - $expBank, 2),
+                'income' => $incomeTotal,
+                'incomeInvoices' => $invoicePaid,
+                'incomeManual' => round($receiptCash + $receiptBank, 2),
                 'categories' => $categoryRows,
                 'dealExpenses' => $dealExpenses,
                 'payroll' => $payrollTotal,
                 'tax' => $fin['tax'],
                 'expensesTotal' => $expensesTotal,
-                'net' => round($invoicePaid - $expensesTotal, 2),
+                'net' => round($incomeTotal - $expensesTotal, 2),
             ],
             'totals' => [
                 'budget' => $fin['budget'],
