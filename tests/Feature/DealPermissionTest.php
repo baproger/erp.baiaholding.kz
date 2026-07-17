@@ -47,6 +47,22 @@ class DealPermissionTest extends TestCase
         $this->assertEquals('ТОО Отредактировано', $fresh->name);
     }
 
+    public function test_long_contract_number_saves(): void
+    {
+        // Регрессия prod 17.07: bin был varchar(20) → «990440002867/260024/00»
+        // (22+ символов) падал с 1406 Data too long при создании/правке.
+        $user = User::factory()->create();
+        $deal = $this->deal($user->id);
+        $longBin = '990440002867/260024/00-ДОП1';
+
+        $this->actingAs($user)->put(route('deals.update', $deal), [
+            'client_name' => 'товар', 'company_name' => 'ТОО', 'address' => 'Алматы',
+            'budget' => 1000, 'bin' => $longBin,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertEquals($longBin, $deal->fresh()->bin);
+    }
+
     public function test_non_responsible_without_permission_cannot_edit(): void
     {
         $owner = User::factory()->create();
