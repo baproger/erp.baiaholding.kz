@@ -10,6 +10,45 @@ use Illuminate\Support\Facades\DB;
 class FinanceService
 {
     /**
+     * Остатки денег фирмы (касса/банк) = платежи по счетам + поступления
+     * (cash_receipts) − подтверждённые расходы, всё по способу оплаты.
+     * Та же математика, что в сводке на странице Финансы; показывается
+     * бухгалтеру в форме расхода («доступно N»).
+     */
+    public function companyBalances(?int $companyId): array
+    {
+        $invIds = Invoice::query()
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
+                ->where(fn ($d) => $d->where('invoiceable_type', 'deal')
+                    ->whereIn('invoiceable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+                ->orWhere(fn ($p) => $p->where('invoiceable_type', 'project')
+                    ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))))
+            ->select('id');
+
+        $payByMethod = Payment::whereIn('invoice_id', $invIds)
+            ->groupBy('payment_method')->selectRaw('payment_method m, sum(amount) s')->pluck('s', 'm');
+
+        $rec = \App\Models\CashReceipt::query()->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
+        $recCash = (float) (clone $rec)->where('method', 'cash')->sum('amount');
+        $recBank = (float) (clone $rec)->where('method', 'bank')->sum('amount');
+
+        $exp = \App\Models\Expense::query()->where('status', 'confirmed')
+            ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
+                ->where(fn ($d) => $d->where('expenseable_type', 'deal')
+                    ->whereIn('expenseable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+                ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
+                    ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))
+                ->orWhere('company_id', $c)));
+        $expCash = (float) (clone $exp)->where('payment_method', 'cash')->sum('amount');
+        $expBank = (float) (clone $exp)->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount');
+
+        return [
+            'cash' => round((float) ($payByMethod['cash'] ?? 0) + $recCash - $expCash, 2),
+            'bank' => round((float) collect($payByMethod)->except('cash')->sum() + $recBank - $expBank, 2),
+        ];
+    }
+
+    /**
      * Recalculate an invoice's status from its payments. Atomic and lock-safe.
      */
     public function recalcInvoiceStatus(Invoice $invoice): Invoice

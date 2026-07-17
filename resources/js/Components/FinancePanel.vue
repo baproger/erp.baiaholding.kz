@@ -15,6 +15,7 @@ const props = defineProps({
     expenses: { type: Array, default: () => [] },
     finance: { type: Object, default: () => ({ income: 0, invoiced: 0, expense: 0, profit: 0, margin: 0 }) },
     materials: { type: Array, default: () => [] }, // склад компании сделки (для расходов по материалам)
+    balances: { type: Object, default: null }, // остатки касса/банк (видит бухгалтер/админ)
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
@@ -50,6 +51,11 @@ const qtyNum = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
 // Для старых позиций без цены сумму вводят вручную.
 const materialPrice = computed(() => Number(selectedMaterial.value?.price ?? 0));
 const autoAmount = computed(() => materialPrice.value > 0 ? Math.round(Number(expenseForm.qty || 0) * materialPrice.value * 100) / 100 : null);
+// «Доступно N»: расход списывается с поступлений (касса/банк) — показываем
+// остаток выбранного способа и предупреждаем о превышении (не блокируем).
+const effAmount = computed(() => Number((expenseMode.value === 'material' ? (autoAmount.value ?? expenseForm.amount) : expenseForm.amount) || 0));
+const methodBalance = computed(() => props.balances ? Number(expenseForm.payment_method === 'cash' ? props.balances.cash : props.balances.bank) : null);
+const overBalance = computed(() => methodBalance.value !== null && effAmount.value > methodBalance.value);
 const canSubmitExpense = computed(() => expenseMode.value === 'material'
     ? !!expenseForm.material_id && Number(expenseForm.qty) > 0 && (materialPrice.value > 0 || Number(expenseForm.amount) > 0)
     : Number(expenseForm.amount) > 0);
@@ -238,6 +244,11 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <button type="button" @click="expenseForm.payment_method = 'bank'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">Банк (счёт)</button>
+                </div>
+                <!-- Остатки из поступлений (видит бухгалтер): расход списывается отсюда -->
+                <div v-if="balances" class="mt-1.5 text-[11px]" :class="overBalance ? 'font-semibold text-rose-600' : 'text-slate-400'">
+                    Доступно: касса {{ money(balances.cash) }} · счёт {{ money(balances.bank) }}
+                    <template v-if="overBalance"> — расход превышает остаток {{ expenseForm.payment_method === 'cash' ? 'кассы' : 'счёта' }}!</template>
                 </div>
                 <div v-if="expenseMode === 'other'" class="mt-2">
                     <label class="mb-1 block text-xs font-medium text-slate-500">Чек (фото или PDF) — можно прикрепить сейчас, иначе бухгалтер добавит при подтверждении</label>

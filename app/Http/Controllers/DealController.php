@@ -156,6 +156,11 @@ class DealController extends Controller
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
             'stageTask' => $stageTask,
+            // Остатки касса/банк — бухгалтеру в форме расхода («доступно N»);
+            // менеджеру деньги компании не показываем.
+            'balances' => request()->user()->hasAnyRole(['admin', 'financist'])
+                ? $finance->companyBalances($deal->company_id ? (int) $deal->company_id : null)
+                : null,
             // Склад компании сделки — для расходов по материалам (показ остатка).
             'materials' => \App\Models\Material::query()
                 ->when($deal->company_id, fn ($q, $c) => $q->where('company_id', $c))

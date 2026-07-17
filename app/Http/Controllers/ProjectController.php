@@ -147,6 +147,10 @@ class ProjectController extends Controller
         return Inertia::render('Projects/Show', [
             'project' => $project,
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // Остатки касса/банк — бухгалтеру в форме расхода («доступно N»).
+            'balances' => $request->user()->hasAnyRole(['admin', 'financist'])
+                ? $finance->companyBalances($project->deal?->company_id ? (int) $project->deal->company_id : null)
+                : null,
             // Этапы цеха компании этого заказа (по исходной сделке); свои
             // приоритетны, «общие» — фолбэк (иначе степпер двоит Кесу+Кесу…).
             'stages' => ProjectStage::companyQuery($project->deal?->company_id ? (int) $project->deal->company_id : null)

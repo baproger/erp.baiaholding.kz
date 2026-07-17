@@ -82,7 +82,7 @@ const sendToAct = () => router.post(route('projects.toAct', props.project.id), {
                     </div>
 
                     <TaskPanel v-else-if="tab==='tasks'" :tasks="project.tasks" taskable-type="project" :taskable-id="project.id" :users="users" />
-                    <FinancePanel v-else-if="tab==='finance' && canSeeMoney" :entity-type="financeEntityType" :entity-id="financeEntityId" :client-id="project.client_id" :invoices="financeInvoices" :expenses="financeExpenses" :finance="finance" />
+                    <FinancePanel v-else-if="tab==='finance' && canSeeMoney" :entity-type="financeEntityType" :entity-id="financeEntityId" :client-id="project.client_id" :invoices="financeInvoices" :expenses="financeExpenses" :finance="finance" :balances="$page.props.balances" />
                     <DocumentPanel v-else-if="tab==='docs'" :documents="project.documents" entity-type="project" :entity-id="project.id" />
                     <CommentPanel v-else-if="tab==='comments'" :comments="project.comments" entity-type="project" :entity-id="project.id" />
                     <HistoryPanel v-else :history="history" />
