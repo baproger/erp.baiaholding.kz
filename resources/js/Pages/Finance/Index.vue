@@ -59,6 +59,9 @@ const submitCompanyExpense = () => cForm.post(route('expenses.store'), {
     preserveScroll: true, forceFormData: true,
     onSuccess: () => (showCompanyExpense.value = false),
 });
+// Расход компании списывается с поступлений: показываем остаток выбранного
+// способа (касса/счёт) и предупреждаем о превышении (не блокируем).
+const cOverBalance = () => Number(cForm.amount || 0) > Number(cForm.payment_method === 'cash' ? props.summary.cash : props.summary.bank);
 </script>
 
 <template>
@@ -387,13 +390,20 @@ const submitCompanyExpense = () => cForm.post(route('expenses.store'), {
                         <label class="mb-1 block text-xs font-medium text-slate-500">Дата *</label>
                         <input v-model="cForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
                     </div>
-                    <div class="sm:col-span-2 flex gap-2">
-                        <button type="button" @click="cForm.payment_method = 'cash'"
-                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                            :class="cForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Наличные</button>
-                        <button type="button" @click="cForm.payment_method = 'bank'"
-                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                            :class="cForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
+                    <div class="sm:col-span-2">
+                        <div class="flex gap-2">
+                            <button type="button" @click="cForm.payment_method = 'cash'"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                                :class="cForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Наличные</button>
+                            <button type="button" @click="cForm.payment_method = 'bank'"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                                :class="cForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
+                        </div>
+                        <!-- Списывается с поступлений: остатки кассы/счёта -->
+                        <div class="mt-1.5 text-[11px]" :class="cOverBalance() ? 'font-semibold text-rose-600' : 'text-slate-400'">
+                            Доступно: касса {{ money(summary.cash) }} · счёт {{ money(summary.bank) }}
+                            <template v-if="cOverBalance()"> — расход превышает остаток {{ cForm.payment_method === 'cash' ? 'кассы' : 'счёта' }}!</template>
+                        </div>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Описание</label>
