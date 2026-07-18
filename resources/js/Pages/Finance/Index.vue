@@ -8,7 +8,7 @@ import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receipts: Array, debts: Object, canManage: Boolean });
@@ -201,7 +201,7 @@ const delExpense = async (e) => {
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="r in receipts" :key="r.id" class="hover:bg-slate-50">
-                            <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}</td>
+                            <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
                             <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
                             <td class="px-4 py-3">
                                 <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="r.method === 'cash' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
@@ -246,7 +246,7 @@ const delExpense = async (e) => {
                             <div class="min-w-0">
                                 <div class="truncate font-medium text-slate-800">{{ d.counterparty }}</div>
                                 <div class="text-[11px] text-slate-400">
-                                    <template v-if="d.date">{{ formatDate(d.date) }} · </template>{{ d.note || '—' }}<template v-if="d.creator?.name"> · {{ d.creator.name }}</template>
+                                    <template v-if="d.date">{{ formatDate(d.date) }} · </template>{{ d.note || '—' }}<template v-if="d.creator?.name"> · {{ d.creator.name }}</template> · внесено {{ formatDateTime(d.created_at) }}
                                 </div>
                             </div>
                             <div class="flex flex-shrink-0 items-center gap-2">
@@ -370,7 +370,7 @@ const delExpense = async (e) => {
                             <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Черновик</span>
                         </td>
                         <td class="px-4 py-3 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
-                        <td class="px-4 py-3 text-xs text-slate-400">{{ formatDate(e.date) }}</td>
+                        <td class="px-4 py-3 text-xs text-slate-400">{{ formatDate(e.date) }}<span class="block text-[10px] text-slate-300">внесено {{ formatDateTime(e.created_at) }}</span></td>
                         <td v-if="canManage" class="px-4 py-3 text-right whitespace-nowrap">
                             <button class="rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>

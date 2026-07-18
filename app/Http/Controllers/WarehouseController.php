@@ -61,6 +61,7 @@ class WarehouseController extends Controller
             'qty' => (float) ($e->qty ?? 0),
             'amount' => (float) $e->amount,
             'date' => optional($e->date)->toDateString(),
+            'created_at' => optional($e->created_at)->toIso8601String(),
             'type' => $e->expenseable_type, // deal | project
             // Сделка/заказ удалены (морф вернул null) — ссылку не даём (иначе 404).
             'target_id' => $e->expenseable ? $e->expenseable_id : null,

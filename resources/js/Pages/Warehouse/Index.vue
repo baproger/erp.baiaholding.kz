@@ -9,7 +9,7 @@ import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import { confirmDialog } from '@/composables/useConfirm';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatDateTime } from '@/utils/format';
 
 const props = defineProps({
     materials: Array, writeoffs: Object, receipts: Array, units: Array,
@@ -203,7 +203,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         <span class="font-medium text-slate-800">{{ r.material?.name }}</span>
                         <span v-if="Number(r.price) > 0" class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">{{ money(r.price) }}/{{ r.material?.unit }}</span>
                         <span v-if="r.note" class="text-xs text-slate-400">{{ r.note }}</span>
-                        <span class="ml-auto text-xs text-slate-400">{{ r.user?.name ?? '—' }} · {{ formatDate(r.date) }}</span>
+                        <span class="ml-auto text-xs text-slate-400">{{ r.user?.name ?? '—' }} · {{ formatDate(r.date) }} · внесено {{ formatDateTime(r.created_at) }}</span>
                         <template v-if="canManage">
                             <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать приход" @click="openEditReceipt(r)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
@@ -318,7 +318,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         :class="w.target_id ? 'hover:bg-indigo-50/60' : 'cursor-default opacity-60'">
                         <div class="min-w-0">
                             <div class="truncate font-medium" :class="w.target_id ? 'text-slate-800' : 'text-slate-400 line-through'">{{ w.label }}</div>
-                            <div class="text-[11px] text-slate-400"><template v-if="w.number">{{ w.number }} · </template>{{ w.type === 'deal' ? 'сделка' : 'заказ цеха' }} · {{ w.date ? formatDate(w.date) : '—' }}</div>
+                            <div class="text-[11px] text-slate-400"><template v-if="w.number">{{ w.number }} · </template>{{ w.type === 'deal' ? 'сделка' : 'заказ цеха' }} · {{ w.date ? formatDate(w.date) : '—' }} · внесено {{ formatDateTime(w.created_at) }}</div>
                         </div>
                         <div class="text-right">
                             <div class="font-semibold tabular-nums text-rose-600">− {{ qty(w.qty) }} {{ writeoffFor?.unit }}</div>

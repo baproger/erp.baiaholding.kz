@@ -55,6 +55,7 @@ class PayrollController extends Controller
             $r['adjustments'] = $adj->map(fn ($a) => [
                 'id' => $a->id, 'type' => $a->type, 'days' => $a->days !== null ? (float) $a->days : null,
                 'amount' => (float) $a->amount, 'date' => optional($a->date)->toDateString(),
+                'created_at' => optional($a->created_at)->toIso8601String(),
                 'note' => $a->note, 'creator' => $a->creator?->name,
             ])->values();
             $r['deductions'] = $deductions;

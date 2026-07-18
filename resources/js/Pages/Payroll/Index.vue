@@ -6,7 +6,7 @@ import Avatar from '@/Components/Avatar.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import { money } from '@/utils/format';
+import { money, formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, taxRate: Number, totals: Object });
@@ -82,7 +82,7 @@ const delAdj = async (a) => {
                     <div v-for="a in me.adjustments" :key="a.id" class="flex items-center justify-between gap-2 py-2">
                         <div class="flex items-center gap-2">
                             <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="typeClass(a.type)">{{ typeLabels[a.type] }}</span>
-                            <span class="text-xs text-slate-400">{{ a.date }}<template v-if="a.days"> · {{ a.days }} дн.</template><template v-if="a.note"> · {{ a.note }}</template></span>
+                            <span class="text-xs text-slate-400">{{ formatDate(a.date) }}<template v-if="a.days"> · {{ a.days }} дн.</template><template v-if="a.note"> · {{ a.note }}</template> · внесено {{ formatDateTime(a.created_at) }}</span>
                         </div>
                         <span class="font-semibold tabular-nums" :class="a.type === 'bonus' ? 'text-emerald-600' : 'text-rose-600'">{{ a.type === 'bonus' ? '+' : '−' }} {{ money(a.amount) }}</span>
                     </div>
@@ -215,7 +215,7 @@ const delAdj = async (a) => {
                                             <div v-for="a in r.adjustments" :key="a.id" class="flex items-center justify-between gap-2 py-1.5">
                                                 <div class="flex items-center gap-2">
                                                     <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="typeClass(a.type)">{{ typeLabels[a.type] }}</span>
-                                                    <span class="text-slate-400">{{ a.date }}<template v-if="a.days"> · {{ a.days }} дн.</template><template v-if="a.note"> · {{ a.note }}</template><template v-if="a.creator"> · {{ a.creator }}</template></span>
+                                                    <span class="text-slate-400">{{ formatDate(a.date) }}<template v-if="a.days"> · {{ a.days }} дн.</template><template v-if="a.note"> · {{ a.note }}</template><template v-if="a.creator"> · {{ a.creator }}</template> · внесено {{ formatDateTime(a.created_at) }}</span>
                                                 </div>
                                                 <div class="flex items-center gap-2">
                                                     <span class="font-semibold tabular-nums" :class="a.type === 'bonus' ? 'text-emerald-600' : 'text-rose-600'">{{ a.type === 'bonus' ? '+' : '−' }} {{ money(a.amount) }}</span>
