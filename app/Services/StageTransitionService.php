@@ -13,7 +13,7 @@ class StageTransitionService
     /**
      * Move a deal to the target stage, enforcing the current stage's checklist,
      * and the special-stage flow: «Акт утверждение» (только из цеха) → «ЭСФ» →
-     * «Оплата успешно» (только при полной оплате). Спец-этапы ищутся по названию,
+     * «Оплата успешно» (полная оплата НЕ обязательна — допускается частичная). Спец-этапы ищутся по названию,
      * а не по позиции — этапы можно перемещать в настройках.
      *
      * @throws ValidationException when a gate is unmet.
@@ -88,16 +88,9 @@ class StageTransitionService
                     'stage' => 'Сначала «'.($preWon?->name ?? 'Акт утверждение').'», затем «Оплата успешно».',
                 ]);
             }
-            // «Оплата успешно» requires the deal to be fully paid (paid income == deal sum).
-            if ($wonStage && $target->id === $wonStage->id) {
-                $paid = (float) \App\Models\Payment::whereHas('invoice', fn ($q) => $q->where('invoiceable_type', 'deal')->where('invoiceable_id', $deal->id))->sum('amount');
-                $remainder = round((float) $deal->budget - $paid, 2);
-                if ($remainder > 0.009) {
-                    throw ValidationException::withMessages([
-                        'stage' => 'Нельзя перевести на «Оплата успешно»: остаток оплаты '.number_format($remainder, 0, '.', ' ').' ₸ (сумма договора '.number_format((float) $deal->budget, 0, '.', ' ').', оплачено '.number_format($paid, 0, '.', ' ').'). Внесите полную оплату.',
-                    ]);
-                }
-            }
+            // Полная оплата для «Оплата успешно» НЕ требуется (правило от 18.07.2026):
+            // сделку можно закрыть успешной и с частичной оплатой — остаток
+            // виден в дебиторке на Финансах.
 
             $deal->deal_stage_id = $target->id;
 

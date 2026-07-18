@@ -36,6 +36,31 @@ class ExpenseController extends Controller
         return $type === 'project' ? Project::find($id) : Deal::find($id);
     }
 
+    /**
+     * Контроль маржи: подтверждённые расходы сделки превысили 60% от суммы
+     * договора → уведомить финансистов (порог пересекается один раз).
+     */
+    private function checkExpenseThreshold(?Model $entity, float $addedAmount): void
+    {
+        $deal = $entity instanceof Project ? $entity->deal : $entity;
+        if (! $deal instanceof Deal || (float) $deal->budget <= 0) {
+            return;
+        }
+
+        $spent = (float) Expense::where('status', 'confirmed')
+            ->where(fn ($q) => $q
+                ->where(fn ($d) => $d->where('expenseable_type', 'deal')->where('expenseable_id', $deal->id))
+                ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
+                    ->whereIn('expenseable_id', Project::where('deal_id', $deal->id)->select('id'))))
+            ->sum('amount');
+
+        $limit = (float) $deal->budget * 0.6;
+        if ($spent > $limit && ($spent - $addedAmount) <= $limit) {
+            User::where('is_active', true)->role('financist')->get()
+                ->each(fn (User $u) => $u->notify(new \App\Notifications\ExpenseThresholdExceeded($deal, $spent)));
+        }
+    }
+
     public function store(ExpenseRequest $request): RedirectResponse
     {
         $this->authorize('create', Expense::class);
@@ -117,6 +142,8 @@ class ExpenseController extends Controller
                 $locked->decrement('quantity', $data['qty']);
             });
 
+            $this->checkExpenseThreshold($entity, (float) $data['amount']);
+
             return back()->with('success', 'Расход по материалам добавлен — остаток на складе списан.');
         }
 
@@ -132,6 +159,10 @@ class ExpenseController extends Controller
         // бухгалтер может поменять его при подтверждении.
 
         $expense = Expense::create($data);
+
+        if ($isAccountant) {
+            $this->checkExpenseThreshold($entity, (float) $expense->amount);
+        }
 
         if (! $isAccountant) {
             $this->notifyAccountants($expense, $entity);
@@ -212,6 +243,7 @@ class ExpenseController extends Controller
 
         // Автору — уведомление о подтверждении.
         $expense->responsible?->notify(new \App\Notifications\ExpenseConfirmed($expense));
+        $this->checkExpenseThreshold($expense->expenseable, (float) $expense->amount);
 
         // Остальным бухгалтерам — «расход уже подтверждён (Имя)», чтобы не
         // подтверждали повторно. Кроме того, кто подтвердил, и автора.

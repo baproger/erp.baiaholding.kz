@@ -52,13 +52,13 @@ const lockHint = (stage) => {
     if (managerFrozen.value) return 'После «Акт утверждение» сделку двигает только бухгалтер или админ';
     if (!canAccounting.value && postActIds.value.includes(stage.id) && stage.id !== actStage.value?.id) return 'Этот этап переводит только бухгалтер или админ';
     if (stage.id === esfStage.value?.id) return 'Сначала «Акт утверждение» (галочка акта, срок 3 дня)';
-    return 'Сначала «ЭСФ» и полная оплата';
+    return 'Сначала «ЭСФ»';
 };
 const overdue = computed(() => isPastDue(props.deal.deadline, props.deal.status === 'closed'));
 // Чисто визуальное: индекс текущего этапа для галочек пройденных шагов и % воронки.
 const currentStageIndex = computed(() => props.stages.findIndex((s) => s.id === props.deal.deal_stage_id));
 const funnelProgress = computed(() => (props.stages.length > 1 ? (Math.max(0, currentStageIndex.value) / (props.stages.length - 1)) * 100 : 0));
-// Remaining amount to be paid = deal sum − paid income. Must be 0 to reach «Оплата успешно».
+// Remaining amount to be paid = deal sum − paid income (справочно; полная оплата для «Оплата успешно» не требуется).
 const remainder = computed(() => Math.max(0, Number(props.deal.budget || 0) - Number(props.finance?.income || 0)));
 
 const wonStageId = computed(() => props.stages.find((s) => s.is_won)?.id);
