@@ -49,6 +49,33 @@ class FinanceService
     }
 
     /**
+     * «Доход» как в итогах Сводного отчёта: по каждой сделке компании (кроме
+     * отменённых) остаток − бонус менеджера, суммой. Та же формула, что в
+     * ReportController — цифры на Финансах и в отчёте совпадают.
+     */
+    public function dealsIncome(?int $companyId): float
+    {
+        $taxRate = ((float) \App\Models\Setting::get('tax_percent', 3)) / 100;
+        $deals = \App\Models\Deal::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->where('status', '!=', 'cancelled')
+            ->get(['id', 'budget']);
+
+        $expByDeal = \App\Models\Expense::where('status', 'confirmed')
+            ->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', $deals->pluck('id'))
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id d, sum(amount) s')->pluck('s', 'd');
+
+        return round($deals->sum(function ($d) use ($expByDeal, $taxRate) {
+            $budget = (float) $d->budget;
+            $tax = round($budget * $taxRate, 2);
+            $remainder = round($budget - $tax - (float) ($expByDeal[$d->id] ?? 0), 2);
+
+            return $remainder - \App\Services\PayrollService::marginBonus($budget, $remainder, $tax);
+        }), 2);
+    }
+
+    /**
      * Recalculate an invoice's status from its payments. Atomic and lock-safe.
      */
     public function recalcInvoiceStatus(Invoice $invoice): Invoice

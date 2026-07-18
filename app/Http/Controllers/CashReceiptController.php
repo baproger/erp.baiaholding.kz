@@ -43,6 +43,7 @@ class CashReceiptController extends Controller
         abort_if($companyId && $receipt->company_id && (int) $receipt->company_id !== $companyId, 403);
 
         $receipt->delete();
+        \App\Support\FinanceAudit::notifyDeleted('Поступление на '.number_format((float) $receipt->amount, 0, '.', ' ').' ₸ ('.($receipt->method === 'cash' ? 'касса' : 'банк').', '.$receipt->source.')');
 
         return back()->with('success', 'Поступление удалено.');
     }

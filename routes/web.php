@@ -93,6 +93,10 @@ Route::middleware('auth')->group(function () {
     // Поступления денег (нал/банк) — вводит финансист/админ.
     Route::post('finance/receipts', [\App\Http\Controllers\CashReceiptController::class, 'store'])->name('finance.receipts.store');
     Route::delete('finance/receipts/{receipt}', [\App\Http\Controllers\CashReceiptController::class, 'destroy'])->name('finance.receipts.destroy');
+    // Задолженности: дебиторка (кто должен нам) / кредиторка (кому должны мы).
+    Route::post('finance/debts', [\App\Http\Controllers\DebtController::class, 'store'])->name('finance.debts.store');
+    Route::put('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'update'])->name('finance.debts.update');
+    Route::delete('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'destroy'])->name('finance.debts.destroy');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::post('payroll/adjustments', [PayrollController::class, 'storeAdjustment'])->name('payroll.adjustments.store');
     Route::delete('payroll/adjustments/{adjustment}', [PayrollController::class, 'destroyAdjustment'])->name('payroll.adjustments.destroy');

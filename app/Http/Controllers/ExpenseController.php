@@ -296,6 +296,8 @@ class ExpenseController extends Controller
             $expense->delete();
         });
 
+        \App\Support\FinanceAudit::notifyDeleted('Расход на '.number_format((float) $expense->amount, 0, '.', ' ').' ₸'.($expense->description ? ' («'.\Illuminate\Support\Str::limit($expense->description, 60).'»)' : ''));
+
         return back()->with('success', $expense->material_id ? 'Расход удалён — остаток возвращён на склад.' : 'Расход удалён.');
     }
 }

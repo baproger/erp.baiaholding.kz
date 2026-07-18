@@ -141,6 +141,16 @@ class InvoiceController extends Controller
         $payCash = (float) ($payByMethod['cash'] ?? 0);
         $payBank = (float) collect($payByMethod)->except('cash')->sum();
 
+        // Задолженности: дебиторка вручную (плюс автоматическая по счетам) и кредиторка.
+        $debtBase = \App\Models\Debt::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->with('creator:id,name')->latest('date')->latest('id');
+        $receivableDebts = (clone $debtBase)->where('type', 'receivable')->get();
+        $payableDebts = (clone $debtBase)->where('type', 'payable')->get();
+
+        // «Доход» — итог Сводного отчёта (остаток − бонус по каждой сделке).
+        $dealsIncome = app(\App\Services\FinanceService::class)->dealsIncome($companyId ?: null);
+
         // Поступления денег (вводит финансист): нал/банк, откуда, дата, комментарий.
         $receiptBase = \App\Models\CashReceipt::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
@@ -160,9 +170,14 @@ class InvoiceController extends Controller
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
             'receipts' => $receipts,
+            'debts' => ['receivables' => $receivableDebts, 'payables' => $payableDebts],
             'summary' => [
                 'contracts' => (float) \App\Models\Deal::forCurrentCompany()->where('status', '!=', 'cancelled')->sum('budget'),
                 'receivables' => $invoiceTotals['debt'],
+                'receivablesManual' => (float) $receivableDebts->sum('amount'),
+                'receivablesTotal' => round($invoiceTotals['debt'] + $receivableDebts->sum('amount'), 2),
+                'payables' => (float) $payableDebts->sum('amount'),
+                'dealsIncome' => $dealsIncome,
                 'cash' => round($payCash + $receiptCash - $expCash, 2),
                 'bank' => round($payBank + $receiptBank - $expBank, 2),
                 'income' => $incomeTotal,
@@ -225,6 +240,7 @@ class InvoiceController extends Controller
         $this->authorize('delete', $invoice);
         $this->assertOwnership(request()->user(), $invoice->invoiceable);
         $invoice->delete();
+        \App\Support\FinanceAudit::notifyDeleted('Счёт '.$invoice->number.' на '.number_format((float) $invoice->amount, 0, '.', ' ').' ₸');
 
         return back()->with('success', 'Счёт удалён.');
     }
