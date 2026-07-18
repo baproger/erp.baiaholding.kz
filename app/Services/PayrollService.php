@@ -138,7 +138,9 @@ class PayrollService
             $expense = (float) ($expenseByDeal[$d->id] ?? 0);
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - $expense, 2);
-            $bonus = self::marginBonus($budget, $remainder, $tax);
+            // Пропорционально оплаченному — как в perUser, строки сходятся с итогом.
+            $payRatio = $budget > 0 ? min(1, $paid / $budget) : 0;
+            $bonus = round(self::marginBonus($budget, $remainder, $tax) * $payRatio, 2);
             $marginPct = self::marginPct($budget, $remainder, $tax);
 
             return [
@@ -191,14 +193,19 @@ class PayrollService
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - $expense, 2);
 
+            // Бонус к ВЫПЛАТЕ — пропорционально фактически оплаченной доле
+            // сделки (won без полной оплаты не даёт полный бонус авансом).
+            $paid = (float) ($paidByDeal[$d->id] ?? 0);
+            $payRatio = $budget > 0 ? min(1, $paid / $budget) : 0;
+
             return [
                 'uid' => (int) $d->responsible_user_id,
-                'income' => (float) ($paidByDeal[$d->id] ?? 0),
+                'income' => $paid,
                 'expense' => $expense,
                 'budget' => $budget,
                 'tax' => $tax,
                 'remainder' => $remainder,
-                'bonus' => self::marginBonus($budget, $remainder, $tax),
+                'bonus' => round(self::marginBonus($budget, $remainder, $tax) * $payRatio, 2),
             ];
         })->groupBy('uid');
 

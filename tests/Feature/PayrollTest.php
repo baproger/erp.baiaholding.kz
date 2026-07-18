@@ -48,15 +48,16 @@ class PayrollTest extends TestCase
         $admin = $this->user('admin');
         $mgr = $this->user('manager');
         // budget 1M − tax 3% (30k) − expenses 100k = remainder 870k.
-        // Маржа 87% → ставка 15% → бонус 130 500, компании 739 500.
+        // Маржа 87% → ставка 15% → полный бонус 130 500; оплачено 500k из 1M
+        // → пропорция 0.5 → к выплате 65 250, компании 870 000 − 65 250.
         $this->wonDealWithFinance($mgr, 500000, 100000);
 
         $this->actingAs($admin)->get(route('payroll.index'))
             ->assertInertia(fn (Assert $p) => $p->component('Payroll/Index')
                 ->where('leadership', true)
-                ->where('rows.0.net', 739500)
-                ->where('rows.0.bonus', 130500)
-                ->where('rows.0.company', 739500));
+                ->where('rows.0.net', 804750)
+                ->where('rows.0.bonus', 65250)
+                ->where('rows.0.company', 804750));
     }
 
     public function test_bonus_tier_rates(): void
@@ -89,7 +90,7 @@ class PayrollTest extends TestCase
         $this->wonDealWithFinance($other, 900000, 100000);
 
         $this->actingAs($mgr)->get(route('payroll.index'))
-            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 130500));
+            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 1)->where('rows.0.bonus', 65250)); // 130 500 × 0.5 (оплачена половина)
     }
 
     public function test_unsuccessful_deal_not_counted(): void
