@@ -102,14 +102,15 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
     <Head :title="deal.number" />
     <AppLayout>
         <template #header>
-            <div class="flex items-center gap-3">
-                <Link :href="route('deals.index')" class="inline-flex items-center gap-1 text-sm font-medium text-slate-400 transition-colors duration-150 hover:text-slate-600">
+            <div class="flex min-w-0 items-center gap-3">
+                <Link :href="route('deals.index')" class="inline-flex flex-shrink-0 items-center gap-1 text-sm font-medium text-slate-400 transition-colors duration-150 hover:text-slate-600">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                     {{ $t('page.deals', 'Сделки') }}
                 </Link>
-                <span class="text-xl font-semibold tracking-tight text-slate-900">{{ deal.company_name || deal.name }}</span>
-                <span class="text-sm font-medium text-slate-400">{{ deal.number }}</span>
-                <span v-if="overdue" class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+                <!-- Длинные названия (НАО, ГУ…) обрезаются с многоточием, полное — в title -->
+                <span class="min-w-0 truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}</span>
+                <span class="flex-shrink-0 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{{ deal.number }}</span>
+                <span v-if="overdue" class="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
                     <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
                     {{ $t('deal.overdue_badge', 'Просрочено') }}
                 </span>

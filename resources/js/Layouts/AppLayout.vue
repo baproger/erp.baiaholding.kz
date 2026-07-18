@@ -184,11 +184,12 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
         <!-- Main -->
         <div :class="collapsed ? 'lg:ml-16' : 'lg:ml-60'" class="flex-1 transition-all duration-300">
             <header class="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white/80 px-4 shadow-sm backdrop-blur-md sm:px-6">
-                <div class="flex items-center gap-3">
-                    <button class="rounded-md p-2 text-slate-500 hover:bg-slate-100 lg:hidden" @click="mobileOpen = true">☰</button>
-                    <h1 class="text-base font-semibold text-slate-800 sm:text-lg"><slot name="header">{{ t('header.title', 'Панель управления') }}</slot></h1>
+                <div class="flex min-w-0 flex-1 items-center gap-3">
+                    <button class="flex-shrink-0 rounded-md p-2 text-slate-500 hover:bg-slate-100 lg:hidden" @click="mobileOpen = true">☰</button>
+                    <h1 class="min-w-0 flex-1 text-base font-semibold text-slate-800 sm:text-lg"><slot name="header">{{ t('header.title', 'Панель управления') }}</slot></h1>
                 </div>
-                <div class="flex items-center gap-2 sm:gap-3">
+                <!-- правый блок не сжимается: часы/фирма/язык всегда целиком -->
+                <div class="flex flex-shrink-0 items-center gap-2 sm:gap-3">
                     <!-- Company switcher (BAIA / ASU) -->
                     <div v-if="companies.length > 1" class="flex items-center rounded-lg bg-slate-100 p-0.5 text-xs">
                         <button v-for="c in companies" :key="c.id" @click="switchCompany(c.id)"

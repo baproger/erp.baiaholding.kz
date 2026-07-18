@@ -25,10 +25,10 @@ const sendToAct = () => router.post(route('projects.toAct', props.project.id), {
     <Head :title="project.number" />
     <AppLayout>
         <template #header>
-            <div class="flex items-center gap-3">
-                <Link :href="route('projects.index')" class="text-slate-400 hover:text-slate-600">← {{ $t('page.workshop', 'Цех') }}</Link>
-                <span>{{ project.deal?.company_name || project.name }}</span>
-                <span class="text-sm text-slate-400">{{ project.number }}</span>
+            <div class="flex min-w-0 items-center gap-3">
+                <Link :href="route('projects.index')" class="flex-shrink-0 text-slate-400 hover:text-slate-600">← {{ $t('page.workshop', 'Цех') }}</Link>
+                <span class="min-w-0 truncate" :title="project.deal?.company_name || project.name">{{ project.deal?.company_name || project.name }}</span>
+                <span class="flex-shrink-0 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{{ project.number }}</span>
             </div>
         </template>
 
