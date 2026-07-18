@@ -123,10 +123,13 @@ class InvoiceController extends Controller
         $confirmedNoPeriod = fn () => \App\Models\Expense::query()->tap($expScope)->where('status', 'confirmed');
         $byCategory = $confirmedNoPeriod()->whereNotNull('category_id')
             ->groupBy('category_id')->selectRaw('category_id, sum(amount) s')->pluck('s', 'category_id');
+        // Для селекта формы — только активные; разбивка же строится по ФАКТУ
+        // расходов (иначе деактивация категории «теряла» бы её суммы из итога).
         $categories = \App\Models\ExpenseCategory::where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        $categoryRows = $categories
-            ->map(fn ($c) => ['name' => $c->name, 'sum' => (float) ($byCategory[$c->id] ?? 0)])
-            ->filter(fn ($r) => $r['sum'] > 0)->sortByDesc('sum')->values();
+        $catNames = \App\Models\ExpenseCategory::whereIn('id', $byCategory->keys())->pluck('name', 'id');
+        $categoryRows = $byCategory
+            ->map(fn ($sum, $id) => ['name' => $catNames[$id] ?? '—', 'sum' => (float) $sum])
+            ->sortByDesc('sum')->values();
         // Расходы по сделкам/цеху (закуп + прочие без категории).
         $dealExpenses = (float) $confirmedNoPeriod()->whereNull('category_id')->sum('amount');
         $payrollTotal = round((float) $payrollRows->sum('payout'), 2); // оклады + бонусы

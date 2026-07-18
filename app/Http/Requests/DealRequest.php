@@ -45,8 +45,8 @@ class DealRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             // deal_stage_id и status намеренно НЕ принимаются здесь: смена этапа/статуса идёт
-            // только через updateStage → StageTransitionService (гейты оплаты/задач/порядка).
-            // Иначе обычный update позволял бы выставить won-этап без оплаты и накрутить бонус.
+            // только через updateStage → StageTransitionService (гейты задач/порядка этапов).
+            // Иначе update обходил бы порядок этапов (Акт → ЭСФ → Оплата) и права бухгалтера.
         ];
     }
 }

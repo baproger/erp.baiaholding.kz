@@ -96,7 +96,7 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                         { rows: [
                             { label: 'Общая сумма договоров', value: totals.contracts, accent: 'text-slate-900', sub: 'все сделки (кроме отменённых) · won: ' + money(totals.budget), href: route('finance.index') },
                             { label: 'Расходы', value: totals.expense, accent: 'text-rose-600', minus: true, sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
-                            { label: 'Чистая прибыль', value: totals.net, accent: 'text-emerald-600', sub: 'после налога, расходов и ЗП', href: route('finance.index') },
+                            { label: 'Чистая прибыль', value: totals.net, accent: 'text-emerald-600', sub: 'по won-сделкам · полная — в «Деньгах компании» ниже', href: route('finance.index') },
                         ] },
                         { rows: [
                             { label: 'Оплачено', value: totals.income, accent: 'text-emerald-600', sub: 'фактически поступило', href: route('finance.index') },
