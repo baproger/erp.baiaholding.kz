@@ -82,8 +82,10 @@ class InvoiceController extends Controller
                 ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))
             ->orWhere('company_id', $c)));
 
-        $expBase = \App\Models\Expense::query()->tap($expScope)
-            // Период применяется и к сводке, и к таблице — «сколько нал/банк
+        // Без периода — для таблиц «сегодня / прошлые» ниже.
+        $expScopeBase = \App\Models\Expense::query()->tap($expScope);
+        $expBase = (clone $expScopeBase)
+            // Период применяется к сводке-плиткам — «сколько нал/банк
             // за месяц» видно сразу, без ручного суммирования.
             ->when($request->string('exp_from')->toString(), fn ($q, $d) => $q->whereDate('date', '>=', $d))
             ->when($request->string('exp_to')->toString(), fn ($q, $d) => $q->whereDate('date', '<=', $d));
@@ -102,12 +104,29 @@ class InvoiceController extends Controller
             'pending_count' => (clone $expBase)->where('status', 'pending')->count(),
         ];
 
-        $expenses = (clone $expBase)
+        // Плитки-фильтры (вид/оплата/статус) действуют на обе таблицы расходов.
+        $expToday = now()->toDateString();
+        $expFiltered = fn () => (clone $expScopeBase)
             ->with(['expenseable', 'category:id,name', 'material:id,name,unit', 'responsible:id,name', 'confirmedBy:id,name'])
             ->when($request->string('exp_status')->toString(), fn ($q, $s) => $q->where('status', $s))
             ->when($request->string('exp_method')->toString(), fn ($q, $m) => $q->where('payment_method', $m))
-            ->when($request->string('exp_kind')->toString(), fn ($q, $k) => $k === 'material' ? $q->whereNotNull('material_id') : $q->whereNull('material_id'))
-            ->latest()->paginate(15, ['*'], 'exp_page')->withQueryString();
+            ->when($request->string('exp_kind')->toString(), fn ($q, $k) => $k === 'material' ? $q->whereNotNull('material_id') : $q->whereNull('material_id'));
+
+        // В таблице — только сегодняшние; прошлые — аккордеон с поиском
+        // (описание/категория) и периодом.
+        $expensesToday = $expFiltered()->whereDate('date', $expToday)->latest()->get();
+        $xpSearch = $request->string('xp_search')->toString();
+        $expensesPast = $expFiltered()
+            ->whereDate('date', '<', $expToday)
+            ->when($xpSearch, fn ($q, $s) => $q->where(fn ($w) => $w->where('description', 'like', "%{$s}%")
+                ->orWhereHas('category', fn ($c) => $c->where('name', 'like', "%{$s}%"))))
+            ->when($request->string('xp_from')->toString(), fn ($q, $d) => $q->whereDate('date', '>=', $d))
+            ->when($request->string('xp_to')->toString(), fn ($q, $d) => $q->whereDate('date', '<=', $d))
+            ->latest()->limit(100)->get();
+        $expensesPastStats = [
+            'count' => (clone $expScopeBase)->whereDate('date', '<', $expToday)->count(),
+            'sum' => (float) (clone $expScopeBase)->whereDate('date', '<', $expToday)->sum('amount'),
+        ];
 
         // Canonical company finance — identical to Dashboard & Analytics (via PayrollService).
         $payroll = app(PayrollService::class);
@@ -180,9 +199,11 @@ class InvoiceController extends Controller
         return Inertia::render('Finance/Index', [
             'invoices' => $invoices,
             'invoiceTotals' => $invoiceTotals,
-            'expenses' => $expenses,
+            'expensesToday' => $expensesToday,
+            'expensesPast' => $expensesPast,
+            'expensesPastStats' => $expensesPastStats,
             'expenseTotals' => $expenseTotals,
-            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to', 'rc_search', 'rc_from', 'rc_to'),
+            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to', 'xp_search', 'xp_from', 'xp_to', 'rc_search', 'rc_from', 'rc_to'),
             'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),

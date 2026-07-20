@@ -11,7 +11,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean });
+const props = defineProps({ invoices: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
@@ -63,6 +63,20 @@ const applyRcFilters = () => router.get(route('finance.index'), {
 }, { preserveState: true, preserveScroll: true, replace: true });
 const resetRcFilters = () => { rcSearch.value = ''; rcFrom.value = ''; rcTo.value = ''; applyRcFilters(); };
 const todaySum = computed(() => (props.receiptsToday ?? []).reduce((sum, r) => sum + Number(r.amount || 0), 0));
+
+// Прошлые расходы: аккордеон снизу, фильтр серверный (поиск + период).
+const expPastOpen = ref(!!(props.filters?.xp_search || props.filters?.xp_from || props.filters?.xp_to));
+const xpSearch = ref(props.filters?.xp_search ?? '');
+const xpFrom = ref(props.filters?.xp_from ?? '');
+const xpTo = ref(props.filters?.xp_to ?? '');
+const applyXpFilters = () => router.get(route('finance.index'), {
+    ...props.filters,
+    xp_search: xpSearch.value || undefined,
+    xp_from: xpFrom.value || undefined,
+    xp_to: xpTo.value || undefined,
+}, { preserveState: true, preserveScroll: true, replace: true });
+const resetXpFilters = () => { xpSearch.value = ''; xpFrom.value = ''; xpTo.value = ''; applyXpFilters(); };
+const expTodaySum = computed(() => (props.expensesToday ?? []).reduce((sum, e) => sum + Number(e.amount || 0), 0));
 
 // Расход КОМПАНИИ (без сделки): аренда, комуслуги, интернет, бензин и т.п.
 // Вводит бухгалтер/админ; категория обязательна, статус сразу confirmed.
@@ -332,6 +346,7 @@ const delExpense = async (e) => {
             <div class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
                 <div class="flex items-center gap-3">
                     <h3 class="text-sm font-semibold text-slate-900">Расходы</h3>
+                    <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">сегодня <b class="tabular-nums">{{ money(expTodaySum) }}</b></span>
                     <button v-if="canManage" @click="openCompanyExpense"
                         class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700">+ Расход компании</button>
                 </div>
@@ -410,7 +425,7 @@ const delExpense = async (e) => {
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <tr v-for="e in expenses.data" :key="e.id" class="transition-colors hover:bg-slate-50">
+                    <tr v-for="e in expensesToday" :key="e.id" class="transition-colors hover:bg-slate-50">
                         <td class="px-6 py-3 font-semibold tabular-nums text-slate-900">{{ money(e.amount) }}</td>
                         <td class="max-w-[220px] truncate px-4 py-3 text-slate-500">{{ e.description || '—' }}</td>
                         <td class="px-4 py-3">
@@ -438,10 +453,67 @@ const delExpense = async (e) => {
                             </button>
                         </td>
                     </tr>
-                    <tr v-if="!expenses.data.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-10 text-center text-slate-400">Расходов нет</td></tr>
+                    <tr v-if="!expensesToday.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-10 text-center text-slate-400">Сегодня расходов не было</td></tr>
                 </tbody>
             </table>
-            <div class="p-4"><Pagination :links="expenses.links" /></div>
+
+            <!-- Прошлые расходы: аккордеон с поиском и периодом -->
+            <div class="border-t border-slate-100">
+                <button type="button" @click="expPastOpen = !expPastOpen" class="flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left">
+                    <div class="flex min-w-0 items-center gap-2">
+                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="expPastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                        <span class="text-sm font-semibold text-slate-900">Прошлые расходы</span>
+                    </div>
+                    <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-600">{{ expensesPastStats?.count ?? 0 }} · {{ money(expensesPastStats?.sum) }}</span>
+                </button>
+                <div v-show="expPastOpen" class="border-t border-slate-100">
+                    <div class="flex flex-wrap items-center gap-2 px-6 py-3">
+                        <input v-model="xpSearch" @keyup.enter="applyXpFilters" type="text" placeholder="Поиск: описание / категория"
+                            class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-rose-500 focus:ring-rose-500" />
+                        <input v-model="xpFrom" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период с" />
+                        <span class="text-xs text-slate-400">—</span>
+                        <input v-model="xpTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период по" />
+                        <button @click="applyXpFilters" class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-900">Найти</button>
+                        <button v-if="filters?.xp_search || filters?.xp_from || filters?.xp_to" @click="resetXpFilters"
+                            class="rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100">Сбросить</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-100 text-sm">
+                            <tbody class="divide-y divide-slate-100">
+<tr v-for="e in expensesPast" :key="e.id" class="transition-colors hover:bg-slate-50">
+                        <td class="px-6 py-3 font-semibold tabular-nums text-slate-900">{{ money(e.amount) }}</td>
+                        <td class="max-w-[220px] truncate px-4 py-3 text-slate-500">{{ e.description || '—' }}</td>
+                        <td class="px-4 py-3">
+                            <Link v-if="e.expenseable_id" :href="expLink(e)" class="font-medium text-indigo-600 hover:underline">{{ e.expenseable?.number ?? '—' }}</Link>
+                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ e.category?.name ?? 'Компания' }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">склад</span>
+                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">прочий</span>
+                        </td>
+                        <td class="px-4 py-3 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
+                        <td class="px-4 py-3">
+                            <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
+                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Ждёт бухгалтера</span>
+                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Черновик</span>
+                        </td>
+                        <td class="px-4 py-3 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
+                        <td class="px-4 py-3 text-xs text-slate-400">{{ formatDate(e.date) }}<span class="block text-[10px] text-slate-300">внесено {{ formatDateTime(e.created_at) }}</span></td>
+                        <td v-if="canManage" class="px-4 py-3 text-right whitespace-nowrap">
+                            <button class="rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </button>
+                            <button class="rounded p-1 text-slate-300 transition hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                            </button>
+                        </td>
+                    </tr>
+                                                    <tr v-if="!expensesPast.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-6 text-center text-slate-400">Прошлых расходов не найдено</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
