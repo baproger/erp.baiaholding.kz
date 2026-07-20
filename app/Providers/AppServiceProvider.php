@@ -19,6 +19,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Прод за HTTPS: генерим только https-ссылки (mixed content / редиректы).
+        if ($this->app->isProduction()) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
+
         Vite::prefetch(concurrency: 3);
 
         // Admins bypass all policy/permission checks.

@@ -325,11 +325,14 @@ const removeChat = async (c) => {
 
 watch(() => form.message, resizeInput);
 
+// Фоновая вкладка сервер не дёргает; вернулись — догружаем сразу.
+const onVisible = () => { if (!document.hidden) loadMessages(); };
 onMounted(() => {
     if (activeChat.value) { markSeen(activeChat.value); loadMessages(true); }
-    timer = setInterval(() => loadMessages(), 4000);
+    timer = setInterval(() => { if (!document.hidden) loadMessages(); }, 4000);
+    document.addEventListener('visibilitychange', onVisible);
 });
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); });
 </script>
 
 <template>

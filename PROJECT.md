@@ -58,6 +58,8 @@
 - Дедлайны: красный=просрочено, оранжевый=≤2ч. **Просроченной НЕ считается сделка на этапах ЭСФ/Оплата успешно** (по stage_type esf/is_won); на «Акт утверждение» просроченная сделка ПОКАЗЫВАЕТСЯ просроченной. Правило едино: /deals/overdue, счётчик «требует внимания», просроченные по сотрудникам, метка в Сводном отчёте. На /deals/overdue отдельной таблицей — **просроченные заказы цеха** (свой deadline у Project, скоуп по компании/ответственному).
 - Финансы в цехе = финансы сделки.
 
+- **Скорость/безопасность (21.07.2026):** чат не поллит сервер из фоновых вкладок (visibilitychange, возврат — мгновенная догрузка); SecureHeaders middleware (nosniff, X-Frame-Options SAMEORIGIN, Referrer-Policy, Permissions-Policy, HSTS по HTTPS); в production все ссылки принудительно https (URL::forceScheme). Прод .env: APP_DEBUG=false, SESSION_SECURE_COOKIE=true; после pull — php artisan optimize (есть в DEPLOY.md); OPcache включать в Plesk.
+
 ## 5. Запуск
 ```
 php artisan serve            # http://localhost:8000

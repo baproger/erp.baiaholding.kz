@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // SetLocale runs after StartSession (session available) but before
         // controllers, so localized stage names use the correct locale.
         $middleware->web(append: [
+            \App\Http\Middleware\SecureHeaders::class,
             \App\Http\Middleware\SetLocale::class,
             \App\Http\Middleware\SetCurrentCompany::class,
             \App\Http\Middleware\HandleInertiaRequests::class,

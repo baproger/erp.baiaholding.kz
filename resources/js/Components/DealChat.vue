@@ -29,8 +29,10 @@ const send = () => {
 };
 const fmt = (t) => new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-onMounted(() => { load(); timer = setInterval(load, 4000); });
-onUnmounted(() => clearInterval(timer));
+// Фоновая вкладка сервер не дёргает; вернулись — догружаем сразу.
+const onVisible = () => { if (!document.hidden) load(); };
+onMounted(() => { load(); timer = setInterval(() => { if (!document.hidden) load(); }, 4000); document.addEventListener('visibilitychange', onVisible); });
+onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); });
 </script>
 
 <template>
