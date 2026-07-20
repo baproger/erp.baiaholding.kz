@@ -53,6 +53,23 @@ class DealNumberResetTest extends TestCase
         $this->assertSame('BAIA-001', $svc->generate());
     }
 
+    public function test_renumber_migration_restarts_from_001(): void
+    {
+        // Живые сделки с «дырявыми» номерами + удалённая: после перенумерации
+        // живые получают 001/002 по порядку создания, следующая — 003.
+        $d1 = $this->makeDeal('BAIA-039');
+        $d2 = $this->makeDeal('BAIA-040');
+        $this->makeDeal('BAIA-041')->delete();
+        $chat = \App\Models\Chat::create(['deal_id' => $d2->id, 'type' => 'group', 'name' => 'Чат BAIA-040', 'is_active' => true]);
+
+        (require database_path('migrations/2026_07_21_100000_renumber_deals_from_001.php'))->up();
+
+        $this->assertSame('BAIA-001', $d1->fresh()->number);
+        $this->assertSame('BAIA-002', $d2->fresh()->number);
+        $this->assertSame('Чат BAIA-002', $chat->fresh()->name);
+        $this->assertSame('BAIA-003', app(DealNumberService::class)->generate());
+    }
+
     public function test_legacy_trashed_number_is_skipped_not_crashed(): void
     {
         // Удалённая сделка, чей номер НЕ переименован (легаси до миграции):
