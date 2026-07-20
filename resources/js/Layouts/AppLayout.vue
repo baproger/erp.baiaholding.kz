@@ -48,10 +48,10 @@ const allNav = [
     { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
     { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },
     { key: 'nav.chat', name: 'Чат', route: 'chat.index', icon: '✉' },
-    { key: 'nav.profile', name: 'Профиль', route: 'profile.edit', icon: '🪪' },
     { key: 'nav.audit', name: 'Аудит', route: 'audit.index', icon: '❑', roles: ['admin'] },
     { key: 'nav.departments', name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny', leadershipOnly: true },
     { key: 'nav.users', name: 'Сотрудники', route: 'users.index', icon: '☻', perm: 'user.viewAny' },
+    { key: 'nav.profile', name: 'Профиль', route: 'profile.edit', icon: '🪪' },
     { key: 'nav.settings', name: 'Настройки', route: 'settings.index', icon: '⚙', perm: 'setting.update' },
     { key: 'nav.translations', name: 'Переводы', route: 'translations.index', icon: '🌐', perm: 'setting.update' },
 ];
