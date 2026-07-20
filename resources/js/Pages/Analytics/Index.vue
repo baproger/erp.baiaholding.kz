@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
@@ -49,6 +49,80 @@ const maxFunnel = computed(() => Math.max(1, ...props.funnel.map((f) => f.count)
 const maxMonthly = computed(() => Math.max(1, ...props.monthly.flatMap((m) => [m.income, m.expense])));
 const setMonths = (m) => apply({ months: m });
 const statusLabels = { draft: 'Черновик', active: 'Активные', closed: 'Закрыты', cancelled: 'Отменены' };
+const statusColors = { draft: '#cbd5e1', active: '#6366f1', closed: '#10b981', cancelled: '#fb7185' };
+
+// Короткий формат для оси диаграммы: 1.2М / 350К.
+const fmtShort = (v) => {
+    const n = Math.abs(v ?? 0);
+    if (n >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'М';
+    if (n >= 1e3) return Math.round(v / 1e3) + 'К';
+    return String(Math.round(v ?? 0));
+};
+
+// «Реальное время»: часы + автообновление данных раз в 60с (фоновая вкладка
+// не дёргает сервер), LIVE-чип показывает время последнего обновления.
+const clock = ref('');
+const lastUpdated = ref(new Date());
+let clockTimer = null, refreshTimer = null;
+const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+onMounted(() => {
+    tick();
+    clockTimer = setInterval(tick, 1000);
+    refreshTimer = setInterval(() => {
+        if (document.hidden) return;
+        router.reload({ preserveScroll: true, onSuccess: () => (lastUpdated.value = new Date()) });
+    }, 60000);
+    requestAnimationFrame(() => (drawn.value = true));
+});
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
+const updatedAt = computed(() => lastUpdated.value.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+// SVG-диаграмма «Доходы и расходы»: шкала с «красивым» максимумом (1/2/2.5/5),
+// сетка, столбики доход/расход и линия итога (доход − расход).
+const drawn = ref(false);
+const hovered = ref(null);
+const chart = computed(() => {
+    const W = 720, H = 240, padL = 48, padR = 10, padT = 14, padB = 26;
+    const innerW = W - padL - padR, innerH = H - padT - padB;
+    const ms = props.monthly ?? [];
+    const max = Math.max(1, ...ms.flatMap((m) => [m.income, m.expense]));
+    const pow = Math.pow(10, Math.floor(Math.log10(max)));
+    const niceMax = [1, 2, 2.5, 5, 10].map((k) => k * pow).find((v) => v >= max) ?? max;
+    const y = (v) => padT + innerH - (Math.max(0, v) / niceMax) * innerH;
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({ v: niceMax * t, y: y(niceMax * t) }));
+    const n = Math.max(1, ms.length);
+    const slot = innerW / n;
+    const bw = Math.min(20, slot * 0.26);
+    const bars = ms.map((m, i) => {
+        const cx = padL + slot * i + slot / 2;
+        return {
+            ...m, cx, slotX: padL + slot * i, slot,
+            label: m.month.slice(5) + '.' + m.month.slice(2, 4),
+            inc: { x: cx - bw - 2, y: y(m.income), h: innerH + padT - y(m.income) },
+            exp: { x: cx + 2, y: y(m.expense), h: innerH + padT - y(m.expense) },
+            net: (m.income ?? 0) - (m.expense ?? 0), netY: y((m.income ?? 0) - (m.expense ?? 0)),
+        };
+    });
+    return { W, H, padL, padT, innerH, ticks, bars, bw, line: bars.map((b) => `${b.cx},${b.netY}`).join(' ') };
+});
+const chartTotals = computed(() => ({
+    income: (props.monthly ?? []).reduce((s, m) => s + (m.income ?? 0), 0),
+    expense: (props.monthly ?? []).reduce((s, m) => s + (m.expense ?? 0), 0),
+}));
+
+// Донат «Сделки по статусам».
+const donut = computed(() => {
+    const entries = Object.entries(props.byStatus ?? {}).filter(([, c]) => c > 0);
+    const total = entries.reduce((sum, [, c]) => sum + c, 0);
+    const C = 2 * Math.PI * 40;
+    let acc = 0;
+    const segs = entries.map(([status, cnt]) => {
+        const seg = { status, cnt, color: statusColors[status] ?? '#94a3b8', dash: `${(cnt / (total || 1)) * C} ${C}`, offset: -acc * C };
+        acc += cnt / (total || 1);
+        return seg;
+    });
+    return { total, segs };
+});
 </script>
 
 <template>
@@ -56,9 +130,17 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
     <AppLayout>
         <template #header>{{ $t('page.analytics', 'Аналитика') }}</template>
 
-        <div class="mb-5 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-            <button :class="tab==='general' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='general'">Обзор</button>
-            <button :class="tab==='employees' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='employees'">По сотрудникам</button>
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                <button :class="tab==='general' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='general'">Обзор</button>
+                <button :class="tab==='employees' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='employees'">По сотрудникам</button>
+            </div>
+            <!-- Реальное время: часы + автообновление данных раз в минуту -->
+            <div class="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span></span>
+                LIVE <span class="tabular-nums">{{ clock }}</span>
+                <span class="hidden text-emerald-500/70 sm:inline">· данные на {{ updatedAt }}</span>
+            </div>
         </div>
 
         <!-- ============ BENTO: ОБЗОР ============ -->
@@ -170,12 +252,17 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                     </div>
                 </Link>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <span class="text-xs font-medium text-slate-500">Конверсия</span>
-                    <div class="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900">{{ conversion.rate }}%</div>
-                    <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div class="h-2 rounded-full bg-slate-900" :style="{ width: conversion.rate + '%' }"></div>
+                    <span class="text-xs font-medium text-slate-500">Конверсия в «Оплата успешно»</span>
+                    <div class="mt-1 flex items-center justify-center">
+                        <svg viewBox="0 0 120 68" class="w-40">
+                            <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#f1f5f9" stroke-width="11" stroke-linecap="round"/>
+                            <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" :stroke="conversion.rate >= 50 ? '#10b981' : conversion.rate >= 25 ? '#f59e0b' : '#fb7185'"
+                                stroke-width="11" stroke-linecap="round" stroke-dasharray="157"
+                                :stroke-dashoffset="drawn ? 157 - conversion.rate / 100 * 157 : 157" style="transition: stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)"/>
+                            <text x="60" y="52" text-anchor="middle" class="fill-slate-900" style="font-size: 19px; font-weight: 700">{{ conversion.rate }}%</text>
+                        </svg>
                     </div>
-                    <div class="mt-2 text-xs text-slate-400">{{ conversion.won }} из {{ conversion.total }} сделок</div>
+                    <div class="text-center text-xs text-slate-400">{{ conversion.won }} успешных из {{ conversion.total }} сделок</div>
                 </div>
             </div>
 
@@ -211,29 +298,71 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                                 class="rounded-md px-2.5 py-1 font-medium transition-colors">{{ m }} мес</button>
                         </div>
                     </div>
-                    <div class="flex items-end justify-between gap-2" style="height: 180px">
-                        <div v-for="m in monthly" :key="m.month" class="group flex flex-1 flex-col items-center justify-end gap-1">
-                            <div class="flex w-full items-end justify-center gap-1" style="height: 144px">
-                                <div class="w-2.5 rounded-md bg-emerald-500 transition-opacity group-hover:opacity-80 sm:w-3" :style="{ height: Math.max(2, m.income / maxMonthly * 144) + 'px' }" :title="'Доход: ' + money(m.income)"></div>
-                                <div class="w-2.5 rounded-md bg-slate-300 transition-opacity group-hover:opacity-80 sm:w-3" :style="{ height: Math.max(2, m.expense / maxMonthly * 144) + 'px' }" :title="'Расход: ' + money(m.expense)"></div>
-                            </div>
-                            <span class="text-[10px] font-medium text-slate-400">{{ m.month.slice(5) }}</span>
-                        </div>
+                    <!-- Наведение на месяц — детали; иначе итоги периода -->
+                    <div class="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        <template v-if="hovered !== null && chart.bars[hovered]">
+                            <span class="font-semibold text-slate-700">{{ chart.bars[hovered].label }}</span>
+                            <span class="text-emerald-600">доход <b class="tabular-nums">{{ money(chart.bars[hovered].income) }}</b></span>
+                            <span class="text-rose-500">расход <b class="tabular-nums">{{ money(chart.bars[hovered].expense) }}</b></span>
+                            <span :class="chart.bars[hovered].net >= 0 ? 'text-indigo-600' : 'text-rose-600'">итог <b class="tabular-nums">{{ money(chart.bars[hovered].net) }}</b></span>
+                        </template>
+                        <template v-else>
+                            <span class="text-slate-400">за период:</span>
+                            <span class="text-emerald-600">доход <b class="tabular-nums">{{ money(chartTotals.income) }}</b></span>
+                            <span class="text-rose-500">расход <b class="tabular-nums">{{ money(chartTotals.expense) }}</b></span>
+                            <span :class="chartTotals.income - chartTotals.expense >= 0 ? 'text-indigo-600' : 'text-rose-600'">итог <b class="tabular-nums">{{ money(chartTotals.income - chartTotals.expense) }}</b></span>
+                        </template>
                     </div>
-                    <div class="mt-3 flex gap-4 text-xs text-slate-500">
+                    <svg :viewBox="`0 0 ${chart.W} ${chart.H}`" class="w-full select-none" @mouseleave="hovered = null">
+                        <defs>
+                            <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#6ee7b7"/></linearGradient>
+                            <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fb7185"/><stop offset="100%" stop-color="#fecdd3"/></linearGradient>
+                        </defs>
+                        <!-- Шкала и сетка -->
+                        <g v-for="t in chart.ticks" :key="t.v">
+                            <line :x1="chart.padL" :x2="chart.W - 10" :y1="t.y" :y2="t.y" stroke="#e2e8f0" stroke-width="1" :stroke-dasharray="t.v ? '3 4' : ''"/>
+                            <text :x="chart.padL - 6" :y="t.y + 3" text-anchor="end" class="fill-slate-400" style="font-size: 10px">{{ fmtShort(t.v) }}</text>
+                        </g>
+                        <!-- Столбики -->
+                        <g v-for="(b, i) in chart.bars" :key="b.month" :opacity="hovered === null || hovered === i ? 1 : 0.35" style="transition: opacity .2s">
+                            <rect :x="b.inc.x" :width="chart.bw" rx="3" fill="url(#gInc)"
+                                :y="drawn ? b.inc.y : chart.padT + chart.innerH" :height="drawn ? Math.max(2, b.inc.h) : 2"
+                                style="transition: y .7s cubic-bezier(.2,.8,.2,1), height .7s cubic-bezier(.2,.8,.2,1)"/>
+                            <rect :x="b.exp.x" :width="chart.bw" rx="3" fill="url(#gExp)"
+                                :y="drawn ? b.exp.y : chart.padT + chart.innerH" :height="drawn ? Math.max(2, b.exp.h) : 2"
+                                style="transition: y .7s cubic-bezier(.2,.8,.2,1), height .7s cubic-bezier(.2,.8,.2,1)"/>
+                            <text :x="b.cx" :y="chart.H - 8" text-anchor="middle" class="fill-slate-400" style="font-size: 10px">{{ b.label }}</text>
+                            <rect :x="b.slotX" :y="chart.padT" :width="b.slot" :height="chart.innerH" fill="transparent" @mouseenter="hovered = i"/>
+                        </g>
+                        <!-- Линия итога (доход − расход) -->
+                        <polyline :points="chart.line" fill="none" stroke="#6366f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" :opacity="drawn ? 1 : 0" style="transition: opacity .9s .3s"/>
+                        <circle v-for="(b, i) in chart.bars" :key="'d'+b.month" :cx="b.cx" :cy="b.netY" :r="hovered === i ? 4.5 : 3" fill="#6366f1" stroke="#fff" stroke-width="1.5" style="transition: r .15s"/>
+                    </svg>
+                    <div class="mt-2 flex gap-4 text-xs text-slate-500">
                         <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-emerald-500"></span> Доход</span>
-                        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-slate-300"></span> Расход</span>
+                        <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-rose-400"></span> Расход</span>
+                        <span class="flex items-center gap-1.5"><span class="h-0.5 w-3 rounded bg-indigo-500"></span> Итог (доход − расход)</span>
                     </div>
                 </div>
 
                 <!-- Deals by status -->
                 <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                     <h3 class="mb-3 text-sm font-semibold text-slate-900">Сделки по статусам</h3>
-                    <div class="space-y-1">
-                        <div v-for="(cnt, status) in byStatus" :key="status" class="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50">
-                            <span class="text-slate-600">{{ statusLabels[status] ?? status }}</span><span class="font-semibold tabular-nums text-slate-900">{{ cnt }}</span>
+                    <div class="flex items-center gap-4">
+                        <svg viewBox="0 0 100 100" class="h-28 w-28 flex-shrink-0 -rotate-90">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f5f9" stroke-width="13"/>
+                            <circle v-for="seg in donut.segs" :key="seg.status" cx="50" cy="50" r="40" fill="none"
+                                :stroke="seg.color" stroke-width="13" :stroke-dasharray="seg.dash" :stroke-dashoffset="seg.offset"
+                                stroke-linecap="butt" style="transition: stroke-dasharray .8s ease"/>
+                            <text x="50" y="50" text-anchor="middle" transform="rotate(90 50 50)" dy="5" class="fill-slate-900" style="font-size: 20px; font-weight: 700">{{ donut.total }}</text>
+                        </svg>
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <div v-for="seg in donut.segs" :key="seg.status" class="flex items-center justify-between rounded-lg px-2 py-1 text-sm hover:bg-slate-50">
+                                <span class="flex items-center gap-2 text-slate-600"><span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: seg.color }"></span>{{ statusLabels[seg.status] ?? seg.status }}</span>
+                                <span class="font-semibold tabular-nums text-slate-900">{{ seg.cnt }}</span>
+                            </div>
+                            <div v-if="!donut.total" class="py-4 text-center text-sm text-slate-400">Нет данных</div>
                         </div>
-                        <div v-if="!Object.keys(byStatus).length" class="py-4 text-center text-sm text-slate-400">Нет данных</div>
                     </div>
                 </div>
 
@@ -246,7 +375,7 @@ const statusLabels = { draft: 'Черновик', active: 'Активные', cl
                     <div class="space-y-3">
                         <Link v-for="f in funnel" :key="f.name" :href="route('deals.index')" class="block rounded-lg px-1 py-0.5 transition hover:bg-slate-50">
                             <div class="mb-1 flex justify-between text-xs"><span class="text-slate-600">{{ f.name }}</span><span class="tabular-nums text-slate-400">{{ f.count }} · {{ money(f.total) }}</span></div>
-                            <div class="h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full" :style="{ width: (f.count / maxFunnel * 100) + '%', backgroundColor: f.color }"></div></div>
+                            <div class="h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-2.5 rounded-full" :style="{ width: (drawn ? Math.max(2, f.count / maxFunnel * 100) : 0) + '%', backgroundColor: f.color, transition: 'width .8s cubic-bezier(.2,.8,.2,1)' }"></div></div>
                         </Link>
                         <div v-if="!funnel.length" class="py-4 text-center text-sm text-slate-400">Нет этапов</div>
                     </div>
