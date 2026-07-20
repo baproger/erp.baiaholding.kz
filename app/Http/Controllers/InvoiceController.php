@@ -188,7 +188,7 @@ class InvoiceController extends Controller
         $payableDebts = (clone $debtBase)->where('type', 'payable')->get();
 
         // «Доход» — итог Сводного отчёта (остаток − бонус по каждой сделке).
-        $dealsIncome = app(\App\Services\FinanceService::class)->dealsIncome($companyId ?: null);
+        $dealsIncome = app(\App\Services\FinanceService::class)->dealsIncome($companyId ?: null, $mStart, $mEnd);
 
         // Поступления денег (вводит финансист): нал/банк, откуда, дата, комментарий.
         $receiptBase = \App\Models\CashReceipt::query()

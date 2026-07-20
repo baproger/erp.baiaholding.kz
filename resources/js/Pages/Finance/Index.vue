@@ -199,7 +199,7 @@ const delExpense = async (e) => {
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Доход <span class="normal-case text-slate-300">— итог Сводного отчёта</span></div>
                 <div class="mt-1 text-2xl font-bold tabular-nums text-emerald-600">{{ money(summary.dealsIncome) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">по сделкам: остаток − бонус (как в отчёте){{ monthActive ? ' · за всё время' : '' }}</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">по сделкам: остаток − бонус (как в отчёте){{ monthActive ? ' · сделки за ' + monthLabel + ' (по дате договора)' : '' }}</div>
                 <div class="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
                     Оборот {{ monthActive ? 'за ' + monthLabel : '(движение денег)' }}: <b class="tabular-nums text-slate-600">{{ money(summary.income) }}</b>
                     · счета {{ money(summary.incomeInvoices) }} · поступления {{ money(summary.incomeManual) }}

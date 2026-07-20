@@ -53,12 +53,17 @@ class FinanceService
      * отменённых) остаток − бонус менеджера, суммой. Та же формула, что в
      * ReportController — цифры на Финансах и в отчёте совпадают.
      */
-    public function dealsIncome(?int $companyId): float
+    public function dealsIncome(?int $companyId, ?string $from = null, ?string $to = null): float
     {
         $taxRate = ((float) \App\Models\Setting::get('tax_percent', 3)) / 100;
         $deals = \App\Models\Deal::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
             ->where('status', '!=', 'cancelled')
+            // Период (фильтр «Месяц» на Финансах): сделки по дате договора,
+            // без даты договора — по дате создания.
+            ->when($from && $to, fn ($q) => $q->where(fn ($w) => $w
+                ->whereBetween('contract_date', [$from, $to])
+                ->orWhere(fn ($n) => $n->whereNull('contract_date')->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to))))
             ->get(['id', 'budget']);
 
         $expByDeal = \App\Models\Expense::where('status', 'confirmed')
