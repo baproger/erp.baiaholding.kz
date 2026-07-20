@@ -46,7 +46,8 @@ class RolePermissionSeeder extends Seeder
             'expense.viewAny', 'expense.view', 'expense.create', 'expense.update', 'expense.delete',
             // deal.update: бухгалтер двигает сделку по этапам Акт → ЭСФ → Оплата
             // (StageTransitionService не пускает туда менеджеров).
-            'deal.viewAny', 'deal.view', 'deal.update',
+            // deal.create: бухгалтер тоже заводит сделки (просьба от 21.07.2026).
+            'deal.viewAny', 'deal.view', 'deal.create', 'deal.update',
             'project.viewAny', 'project.view',
             'client.viewAny', 'client.view',
             'department.viewAny',
