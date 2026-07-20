@@ -78,6 +78,17 @@ const applyXpFilters = () => router.get(route('finance.index'), {
 const resetXpFilters = () => { xpSearch.value = ''; xpFrom.value = ''; xpTo.value = ''; applyXpFilters(); };
 const expTodaySum = computed(() => (props.expensesToday ?? []).reduce((sum, e) => sum + Number(e.amount || 0), 0));
 
+// Фильтр сводки «Доход − Расходы» по месяцу: пусто = за всё время.
+const finMonth = ref(props.filters?.fin_month ?? '');
+const applyFinMonth = () => router.get(route('finance.index'), {
+    ...props.filters, fin_month: finMonth.value || undefined,
+}, { preserveState: true, preserveScroll: true, replace: true });
+const resetFinMonth = () => { finMonth.value = ''; applyFinMonth(); };
+const monthActive = computed(() => !!props.filters?.fin_month);
+const monthLabel = computed(() => monthActive.value
+    ? new Date(props.filters.fin_month + '-01T00:00:00').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    : '');
+
 // Расход КОМПАНИИ (без сделки): аренда, комуслуги, интернет, бензин и т.п.
 // Вводит бухгалтер/админ; категория обязательна, статус сразу confirmed.
 const showCompanyExpense = ref(false);
@@ -173,24 +184,36 @@ const delExpense = async (e) => {
         </div>
 
         <!-- Доход − ВСЕ расходы = Чистая прибыль (минимализм, как в тетради) -->
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span v-if="monthActive" class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">Сводка за {{ monthLabel }}</span>
+            <span v-else class="text-xs font-medium text-slate-400">Сводка за всё время</span>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">Месяц:</span>
+                <input v-model="finMonth" @change="applyFinMonth" type="month"
+                    class="rounded-lg border-slate-300 py-1.5 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                <button v-if="monthActive" @click="resetFinMonth"
+                    class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100">за всё время</button>
+            </div>
+        </div>
         <div class="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Доход <span class="normal-case text-slate-300">— итог Сводного отчёта</span></div>
                 <div class="mt-1 text-2xl font-bold tabular-nums text-emerald-600">{{ money(summary.dealsIncome) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">по сделкам: остаток − бонус (как в отчёте)</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">по сделкам: остаток − бонус (как в отчёте){{ monthActive ? ' · за всё время' : '' }}</div>
                 <div class="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
-                    Оборот (движение денег): <b class="tabular-nums text-slate-600">{{ money(summary.income) }}</b>
+                    Оборот {{ monthActive ? 'за ' + monthLabel : '(движение денег)' }}: <b class="tabular-nums text-slate-600">{{ money(summary.income) }}</b>
                     · счета {{ money(summary.incomeInvoices) }} · поступления {{ money(summary.incomeManual) }}
                 </div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex items-baseline justify-between">
-                    <span class="text-[11px] uppercase tracking-wide text-slate-400">Расходы — всего</span>
+                    <span class="text-[11px] uppercase tracking-wide text-slate-400">Расходы — {{ monthActive ? monthLabel : 'всего' }}</span>
                     <span class="text-xl font-bold tabular-nums text-rose-600">−{{ money(summary.expensesTotal) }}</span>
                 </div>
                 <div class="mt-2 space-y-1 text-sm">
-                    <div class="flex justify-between"><span class="text-slate-500">Зарплата (оклады + бонусы)</span><span class="tabular-nums text-slate-700">{{ money(summary.payroll) }}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Налог</span><span class="tabular-nums text-slate-700">{{ money(summary.tax) }}</span></div>
+                    <div v-if="!monthActive" class="flex justify-between"><span class="text-slate-500">Зарплата (оклады + бонусы)</span><span class="tabular-nums text-slate-700">{{ money(summary.payroll) }}</span></div>
+                    <div v-if="!monthActive" class="flex justify-between"><span class="text-slate-500">Налог</span><span class="tabular-nums text-slate-700">{{ money(summary.tax) }}</span></div>
+                    <div v-if="monthActive" class="text-[11px] text-slate-400">ЗП и налог считаются по сделкам — видны в режиме «за всё время»</div>
                     <div class="flex justify-between"><span class="text-slate-500">По сделкам и цеху</span><span class="tabular-nums text-slate-700">{{ money(summary.dealExpenses) }}</span></div>
                     <div v-for="c in summary.categories" :key="c.name" class="flex justify-between">
                         <span class="text-slate-500">{{ c.name }}</span><span class="tabular-nums text-slate-700">{{ money(c.sum) }}</span>
@@ -198,9 +221,9 @@ const delExpense = async (e) => {
                 </div>
             </div>
             <div class="rounded-xl p-5 shadow-md" style="background-color: #1A3B5C">
-                <div class="text-[11px] uppercase tracking-wide text-white/60">Чистая прибыль</div>
+                <div class="text-[11px] uppercase tracking-wide text-white/60">{{ monthActive ? 'Итог за ' + monthLabel : 'Чистая прибыль' }}</div>
                 <div class="mt-1 text-2xl font-bold tabular-nums" :class="summary.net >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(summary.net) }}</div>
-                <div class="mt-0.5 text-[11px] text-white/60">оборот − все расходы</div>
+                <div class="mt-0.5 text-[11px] text-white/60">{{ monthActive ? 'оборот − расходы за месяц (без ЗП и налога)' : 'оборот − все расходы' }}</div>
             </div>
         </div>
 
@@ -210,7 +233,7 @@ const delExpense = async (e) => {
                 <div class="flex items-center gap-3">
                     <h3 class="text-sm font-semibold text-slate-900">Поступления денег</h3>
                     <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">сегодня <b class="tabular-nums">{{ money(todaySum) }}</b></span>
-                    <span class="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 sm:inline-flex">всего <b class="ml-1 tabular-nums">{{ money(summary.incomeManual) }}</b></span>
+                    <span class="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 sm:inline-flex">{{ monthActive ? monthLabel : 'всего' }} <b class="ml-1 tabular-nums">{{ money(summary.incomeManual) }}</b></span>
                 </div>
                 <button v-if="canManage" @click="openReceipt"
                     class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">+ Поступление</button>

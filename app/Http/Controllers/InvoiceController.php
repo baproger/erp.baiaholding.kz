@@ -71,6 +71,16 @@ class InvoiceController extends Controller
             'debt' => max(0, $invoiced - $invoicePaid),
         ];
 
+        // Фильтр сводки «Доход − Расходы = Чистая прибыль» по месяцу (YYYY-MM):
+        // админ/финансист смотрит финансы за прошлый (любой) месяц. Остатки
+        // касса/банк и задолженности — всегда «на сейчас» (накопительные).
+        $finMonth = preg_match('/^\d{4}-\d{2}$/', $request->string('fin_month')->toString())
+            ? $request->string('fin_month')->toString() : '';
+        $mStart = $finMonth ? $finMonth.'-01' : null;
+        $mEnd = $finMonth ? \Illuminate\Support\Carbon::parse($finMonth.'-01')->endOfMonth()->toDateString() : null;
+        $monthly = fn ($q, $col = 'date') => $finMonth
+            ? $q->whereDate($col, '>=', $mStart)->whereDate($col, '<=', $mEnd) : $q;
+
         // ---- Раздел «Расходы»: материальные/прочие, нал/банк, статус ----
         $companyId = \App\Support\CurrentCompany::id();
         // Скоуп расходов текущей фирмы: по сделке/заказу + расходы КОМПАНИИ
@@ -140,7 +150,7 @@ class InvoiceController extends Controller
         // Доход = все фактические поступления по счетам компании. Сводка — за всё
         // время (без exp_from/exp_to, они только для таблицы/плиток раздела).
         $confirmedNoPeriod = fn () => \App\Models\Expense::query()->tap($expScope)->where('status', 'confirmed');
-        $byCategory = $confirmedNoPeriod()->whereNotNull('category_id')
+        $byCategory = $monthly($confirmedNoPeriod())->whereNotNull('category_id')
             ->groupBy('category_id')->selectRaw('category_id, sum(amount) s')->pluck('s', 'category_id');
         // Для селекта формы — только активные; разбивка же строится по ФАКТУ
         // расходов (иначе деактивация категории «теряла» бы её суммы из итога).
@@ -150,9 +160,16 @@ class InvoiceController extends Controller
             ->map(fn ($sum, $id) => ['name' => $catNames[$id] ?? '—', 'sum' => (float) $sum])
             ->sortByDesc('sum')->values();
         // Расходы по сделкам/цеху (закуп + прочие без категории).
-        $dealExpenses = (float) $confirmedNoPeriod()->whereNull('category_id')->sum('amount');
+        $dealExpenses = (float) $monthly($confirmedNoPeriod())->whereNull('category_id')->sum('amount');
         $payrollTotal = round((float) $payrollRows->sum('payout'), 2); // оклады + бонусы
-        $expensesTotal = round($categoryRows->sum('sum') + $dealExpenses + $payrollTotal + $fin['tax'], 2);
+        // ЗП и налог считаются по сделкам (без даты) — в месячном режиме их
+        // не размазать по месяцам, показываем только «за всё время».
+        $taxRow = (float) $fin['tax'];
+        if ($finMonth) {
+            $payrollTotal = 0.0;
+            $taxRow = 0.0;
+        }
+        $expensesTotal = round($categoryRows->sum('sum') + $dealExpenses + $payrollTotal + $taxRow, 2);
 
         // Остатки касса/банк: (платежи по счетам + ручные поступления) минус
         // расходы — всё по способу оплаты (нал/банк).
@@ -194,7 +211,14 @@ class InvoiceController extends Controller
             'count' => (clone $receiptBase)->whereDate('date', '<', $today)->count(),
             'sum' => (float) (clone $receiptBase)->whereDate('date', '<', $today)->sum('amount'),
         ];
-        $incomeTotal = round($invoicePaid + $receiptCash + $receiptBank, 2);
+        $invoicePaidP = $finMonth
+            ? (float) \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->select('id'))
+                ->whereDate('payment_date', '>=', $mStart)->whereDate('payment_date', '<=', $mEnd)->sum('amount')
+            : $invoicePaid;
+        $receiptManualP = $finMonth
+            ? (float) $monthly((clone $receiptBase))->sum('amount')
+            : round($receiptCash + $receiptBank, 2);
+        $incomeTotal = round($invoicePaidP + $receiptManualP, 2);
 
         return Inertia::render('Finance/Index', [
             'invoices' => $invoices,
@@ -203,7 +227,7 @@ class InvoiceController extends Controller
             'expensesPast' => $expensesPast,
             'expensesPastStats' => $expensesPastStats,
             'expenseTotals' => $expenseTotals,
-            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to', 'xp_search', 'xp_from', 'xp_to', 'rc_search', 'rc_from', 'rc_to'),
+            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to', 'xp_search', 'xp_from', 'xp_to', 'rc_search', 'rc_from', 'rc_to', 'fin_month'),
             'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
@@ -221,12 +245,12 @@ class InvoiceController extends Controller
                 'cash' => round($payCash + $receiptCash - $expCash, 2),
                 'bank' => round($payBank + $receiptBank - $expBank, 2),
                 'income' => $incomeTotal,
-                'incomeInvoices' => $invoicePaid,
-                'incomeManual' => round($receiptCash + $receiptBank, 2),
+                'incomeInvoices' => $invoicePaidP,
+                'incomeManual' => $receiptManualP,
                 'categories' => $categoryRows,
                 'dealExpenses' => $dealExpenses,
                 'payroll' => $payrollTotal,
-                'tax' => $fin['tax'],
+                'tax' => $taxRow,
                 'expensesTotal' => $expensesTotal,
                 'net' => round($incomeTotal - $expensesTotal, 2),
             ],

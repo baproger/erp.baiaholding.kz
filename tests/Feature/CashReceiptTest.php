@@ -50,6 +50,29 @@ class CashReceiptTest extends TestCase
                 ->has('receiptsPast', 0));
     }
 
+    public function test_fin_month_filter_scopes_income_and_expenses(): void
+    {
+        $fin = $this->user('financist');
+        $past = now()->subMonthNoOverflow();
+
+        CashReceipt::create(['amount' => 1000, 'method' => 'cash', 'source' => 'сегодня', 'date' => now()->toDateString()]);
+        CashReceipt::create(['amount' => 500, 'method' => 'bank', 'source' => 'прошлый месяц', 'date' => $past->toDateString()]);
+        \App\Models\Expense::create(['amount' => 200, 'date' => $past->toDateString(), 'status' => 'confirmed', 'payment_method' => 'cash']);
+
+        // Сводка за прошлый месяц: только его поступления и расходы; ЗП/налог скрыты (0).
+        $this->actingAs($fin)->get(route('finance.index', ['fin_month' => $past->format('Y-m')]))
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p
+                ->where('summary.income', 500)
+                ->where('summary.incomeManual', 500)
+                ->where('summary.expensesTotal', 200)
+                ->where('summary.net', 300)
+                ->where('summary.payroll', 0)
+                ->where('summary.tax', 0)
+                // Остатки касса/банк — всегда накопительные, месяц их не режет.
+                ->where('summary.cash', 800));
+    }
+
     public function test_manager_cannot_add_or_delete_receipt(): void
     {
         $mgr = $this->user('manager');
