@@ -40,11 +40,18 @@ class ReportController extends Controller
                 ->orWhere('address', 'like', "%{$s}%")))
             ->when($managerId, fn ($q, $m) => $q->where('responsible_user_id', $m))
             ->when($stageId, fn ($q, $s) => $q->where('deal_stage_id', $s))
-            ->when($from, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
-            ->when($to, fn ($q, $d) => $q->whereDate('created_at', '<=', $d))
+            // Период — по дате ДОГОВОРА (без неё — по дате создания): та же
+            // логика, что у фильтра «Месяц» на Финансах, цифры совпадают.
+            ->when($from || $to, fn ($q) => $q->where(fn ($w) => $w
+                ->where(fn ($c) => $c->whereNotNull('contract_date')
+                    ->when($from, fn ($q2, $d) => $q2->whereDate('contract_date', '>=', $d))
+                    ->when($to, fn ($q2, $d) => $q2->whereDate('contract_date', '<=', $d)))
+                ->orWhere(fn ($c) => $c->whereNull('contract_date')
+                    ->when($from, fn ($q2, $d) => $q2->whereDate('created_at', '>=', $d))
+                    ->when($to, fn ($q2, $d) => $q2->whereDate('created_at', '<=', $d)))))
             ->latest()
             ->get(['id', 'number', 'bin', 'company_name', 'address', 'client_name', 'lot_number', 'unit',
-                'budget', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at']);
+                'budget', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at', 'contract_date']);
 
         // Оплачено по сделке — платежи по её счетам (одним запросом на всех).
         $paidByDeal = Payment::join('invoices', 'payments.invoice_id', '=', 'invoices.id')
