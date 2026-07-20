@@ -46,7 +46,8 @@ class CashReceiptTest extends TestCase
             ->assertInertia(fn ($p) => $p
                 ->where('summary.cash', 500000)
                 ->where('summary.incomeManual', 500000)
-                ->has('receipts', 1));
+                ->has('receiptsToday', 1)
+                ->has('receiptsPast', 0));
     }
 
     public function test_manager_cannot_add_or_delete_receipt(): void

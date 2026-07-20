@@ -146,10 +146,13 @@ class DealController extends Controller
         $stageTask = null;
         if ($gateStage) {
             $openTask = $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')->orderBy('due_date')->first();
+            $gateRole = $gateStage->gate_task_role ?: 'financist';
             $stageTask = [
                 'label' => $gateStage->gate_task_title.' — выполнено',
                 'done' => $openTask === null,
                 'due' => optional($openTask?->due_date)->toDateTimeString(),
+                'role' => $gateRole,
+                'roleLabel' => self::GATE_ROLE_LABELS[$gateRole] ?? $gateRole,
             ];
         }
 
@@ -202,16 +205,25 @@ class DealController extends Controller
     }
 
     /**
-     * Галочка-гейт текущего этапа: закрывает гейт-задачу («Выставить акт…»
-     * и т.п.), после чего сделку можно двигать дальше. Только financist / admin.
+     * Галочка-гейт текущего этапа: закрывает гейт-задачу («Выставить акт…»,
+     * «Подтвердить дизайн…» и т.п.), после чего сделку можно двигать дальше.
+     * Ставит её роль гейта этапа (дизайнер — «Дизайн и расчет», снабженец —
+     * «Закуп ЛДСП,МДФ», бухгалтер — АКТ/ЭСФ/Оплата) или админ.
      */
     public function completeStageTask(Request $request, Deal $deal): RedirectResponse
     {
-        $this->authorize('update', $deal);
-        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Галочку ставит только бухгалтер или админ.');
+        // Не 'update': дизайнер/снабженец не редактируют сделку, но гейт ставят.
+        $this->authorize('view', $deal);
 
         $gateStage = self::gateStage($deal);
         abort_unless($gateStage !== null, 404);
+
+        $gateRole = $gateStage->gate_task_role ?: 'financist';
+        abort_unless(
+            $request->user()->hasRole('admin') || $request->user()->hasRole($gateRole),
+            403,
+            'Галочку ставит только '.(self::GATE_ROLE_LABELS[$gateRole] ?? $gateRole).' или админ.'
+        );
 
         $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')
             ->get()->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
@@ -244,6 +256,9 @@ class DealController extends Controller
     }
 
     /** Текущий этап сделки, если на нём настроен гейт (или null). */
+    /** Подписи ролей гейт-задач (для сообщений и карточки сделки). */
+    private const GATE_ROLE_LABELS = ['financist' => 'бухгалтер', 'designer' => 'дизайнер', 'supplier' => 'снабженец', 'manager' => 'менеджер', 'director' => 'директор', 'admin' => 'админ'];
+
     private static function gateStage(Deal $deal): ?DealStage
     {
         $stage = $deal->stage ?? DealStage::find($deal->deal_stage_id);

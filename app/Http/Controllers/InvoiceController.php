@@ -159,8 +159,22 @@ class InvoiceController extends Controller
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
         $receiptCash = (float) (clone $receiptBase)->where('method', 'cash')->sum('amount');
         $receiptBank = (float) (clone $receiptBase)->where('method', 'bank')->sum('amount');
-        $receipts = (clone $receiptBase)->with('creator:id,name')
-            ->latest('date')->latest('id')->limit(30)->get();
+        // На странице — только сегодняшние поступления; прошлые — аккордеоном
+        // снизу, с поиском (источник/комментарий) и периодом.
+        $today = now()->toDateString();
+        $receiptsToday = (clone $receiptBase)->with('creator:id,name')
+            ->whereDate('date', $today)->latest('id')->get();
+        $rcSearch = $request->string('rc_search')->toString();
+        $receiptsPast = (clone $receiptBase)->with('creator:id,name')
+            ->whereDate('date', '<', $today)
+            ->when($rcSearch, fn ($q, $s) => $q->where(fn ($w) => $w->where('source', 'like', "%{$s}%")->orWhere('note', 'like', "%{$s}%")))
+            ->when($request->string('rc_from')->toString(), fn ($q, $d) => $q->whereDate('date', '>=', $d))
+            ->when($request->string('rc_to')->toString(), fn ($q, $d) => $q->whereDate('date', '<=', $d))
+            ->latest('date')->latest('id')->limit(100)->get();
+        $receiptsPastStats = [
+            'count' => (clone $receiptBase)->whereDate('date', '<', $today)->count(),
+            'sum' => (float) (clone $receiptBase)->whereDate('date', '<', $today)->sum('amount'),
+        ];
         $incomeTotal = round($invoicePaid + $receiptCash + $receiptBank, 2);
 
         return Inertia::render('Finance/Index', [
@@ -168,11 +182,13 @@ class InvoiceController extends Controller
             'invoiceTotals' => $invoiceTotals,
             'expenses' => $expenses,
             'expenseTotals' => $expenseTotals,
-            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to'),
+            'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to', 'rc_search', 'rc_from', 'rc_to'),
             'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
-            'receipts' => $receipts,
+            'receiptsToday' => $receiptsToday,
+            'receiptsPast' => $receiptsPast,
+            'receiptsPastStats' => $receiptsPastStats,
             'debts' => ['receivables' => $receivableDebts, 'payables' => $payableDebts],
             'summary' => [
                 'contracts' => (float) \App\Models\Deal::forCurrentCompany()->where('status', '!=', 'cancelled')->sum('budget'),

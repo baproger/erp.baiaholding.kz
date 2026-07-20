@@ -42,6 +42,14 @@ class Deal extends Model
             Project::where('deal_id', $deal->id)
                 ->whereNotIn('status', ['completed', 'cancelled'])
                 ->update(['status' => 'cancelled']);
+
+            // Освобождаем номер: у deals.number unique-индекс учитывает и
+            // удалённые строки — без переименования новая сделка не смогла бы
+            // получить этот номер, а нумерация никогда не началась бы заново.
+            if ($deal->number && ! str_contains($deal->number, '#del')) {
+                Deal::withTrashed()->whereKey($deal->id)
+                    ->update(['number' => $deal->number.'#del'.$deal->id]);
+            }
         });
     }
 

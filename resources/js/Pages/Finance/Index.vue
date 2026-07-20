@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
@@ -11,7 +11,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receipts: Array, debts: Object, canManage: Boolean });
+const props = defineProps({ invoices: Object, invoiceTotals: Object, expenses: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
@@ -49,6 +49,20 @@ const rForm = useForm({ amount: '', method: 'bank', source: '', date: new Date()
 const openReceipt = () => { rForm.reset(); rForm.date = new Date().toISOString().slice(0, 10); showReceipt.value = true; };
 const submitReceipt = () => rForm.post(route('finance.receipts.store'), { preserveScroll: true, onSuccess: () => (showReceipt.value = false) });
 const delReceipt = (r) => router.delete(route('finance.receipts.destroy', r.id), { preserveScroll: true });
+
+// Прошлые поступления: аккордеон снизу, фильтр серверный (поиск + период).
+const pastOpen = ref(!!(props.filters?.rc_search || props.filters?.rc_from || props.filters?.rc_to));
+const rcSearch = ref(props.filters?.rc_search ?? '');
+const rcFrom = ref(props.filters?.rc_from ?? '');
+const rcTo = ref(props.filters?.rc_to ?? '');
+const applyRcFilters = () => router.get(route('finance.index'), {
+    ...props.filters,
+    rc_search: rcSearch.value || undefined,
+    rc_from: rcFrom.value || undefined,
+    rc_to: rcTo.value || undefined,
+}, { preserveState: true, preserveScroll: true, replace: true });
+const resetRcFilters = () => { rcSearch.value = ''; rcFrom.value = ''; rcTo.value = ''; applyRcFilters(); };
+const todaySum = computed(() => (props.receiptsToday ?? []).reduce((sum, r) => sum + Number(r.amount || 0), 0));
 
 // Расход КОМПАНИИ (без сделки): аренда, комуслуги, интернет, бензин и т.п.
 // Вводит бухгалтер/админ; категория обязательна, статус сразу confirmed.
@@ -181,7 +195,8 @@ const delExpense = async (e) => {
             <div class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
                 <div class="flex items-center gap-3">
                     <h3 class="text-sm font-semibold text-slate-900">Поступления денег</h3>
-                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">всего <b class="tabular-nums">{{ money(summary.incomeManual) }}</b></span>
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">сегодня <b class="tabular-nums">{{ money(todaySum) }}</b></span>
+                    <span class="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 sm:inline-flex">всего <b class="ml-1 tabular-nums">{{ money(summary.incomeManual) }}</b></span>
                 </div>
                 <button v-if="canManage" @click="openReceipt"
                     class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">+ Поступление</button>
@@ -200,7 +215,7 @@ const delExpense = async (e) => {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="r in receipts" :key="r.id" class="hover:bg-slate-50">
+                        <tr v-for="r in receiptsToday" :key="r.id" class="hover:bg-slate-50">
                             <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
                             <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
                             <td class="px-4 py-3">
@@ -213,9 +228,52 @@ const delExpense = async (e) => {
                                 <button class="text-slate-300 transition hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
                             </td>
                         </tr>
-                        <tr v-if="!receipts.length"><td colspan="7" class="px-6 py-8 text-center text-sm text-slate-400">Поступлений пока нет — «+ Поступление»</td></tr>
+                        <tr v-if="!receiptsToday.length"><td colspan="7" class="px-6 py-8 text-center text-sm text-slate-400">Сегодня поступлений не было — «+ Поступление»</td></tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Прошлые поступления: аккордеон с поиском и периодом -->
+            <div class="border-t border-slate-100">
+                <button type="button" @click="pastOpen = !pastOpen" class="flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left">
+                    <div class="flex min-w-0 items-center gap-2">
+                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="pastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                        <span class="text-sm font-semibold text-slate-900">Прошлые поступления</span>
+                    </div>
+                    <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-600">{{ receiptsPastStats?.count ?? 0 }} · {{ money(receiptsPastStats?.sum) }}</span>
+                </button>
+                <div v-show="pastOpen" class="border-t border-slate-100">
+                    <div class="flex flex-wrap items-center gap-2 px-6 py-3">
+                        <input v-model="rcSearch" @keyup.enter="applyRcFilters" type="text" placeholder="Поиск: откуда / комментарий"
+                            class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-emerald-500 focus:ring-emerald-500" />
+                        <input v-model="rcFrom" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период с" />
+                        <span class="text-xs text-slate-400">—</span>
+                        <input v-model="rcTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период по" />
+                        <button @click="applyRcFilters" class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-900">Найти</button>
+                        <button v-if="filters?.rc_search || filters?.rc_from || filters?.rc_to" @click="resetRcFilters"
+                            class="rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100">Сбросить</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
+                            <tbody class="divide-y divide-slate-50">
+                                <tr v-for="r in receiptsPast" :key="r.id" class="hover:bg-slate-50">
+                                    <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
+                                    <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="r.method === 'cash' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
+                                    </td>
+                                    <td class="max-w-56 truncate px-4 py-3 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
+                                    <td class="max-w-56 truncate px-4 py-3 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
+                                    <td class="px-4 py-3 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
+                                    <td v-if="canManage" class="px-4 py-3 text-right">
+                                        <button class="text-slate-300 transition hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
+                                    </td>
+                                </tr>
+                                <tr v-if="!receiptsPast.length"><td colspan="7" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых поступлений не найдено</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 

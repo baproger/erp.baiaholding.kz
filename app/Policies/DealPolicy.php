@@ -25,6 +25,8 @@ class DealPolicy
             return false;
         }
 
-        return $user->hasAnyRole(['admin', 'director', 'financist']) || $d->responsible_user_id === $user->id;
+        // Дизайнер и снабженец видят сделки компании — они подтверждают
+        // гейт-этапы; править/удалять не могут (нет deal.update, см. update()).
+        return $user->hasAnyRole(['admin', 'director', 'financist', 'designer', 'supplier']) || $d->responsible_user_id === $user->id;
     }
 }

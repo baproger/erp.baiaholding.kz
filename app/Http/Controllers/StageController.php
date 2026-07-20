@@ -66,7 +66,7 @@ class StageController extends Controller
             'companies' => Company::orderBy('id')->get(['id', 'name']),
             'selectedCompanyId' => $companyId,
             'stageTypes' => DealStage::STAGE_TYPES,
-            'gateRoles' => ['financist' => 'Бухгалтер', 'manager' => 'Менеджер', 'director' => 'Директор', 'admin' => 'Админ'],
+            'gateRoles' => ['financist' => 'Бухгалтер', 'designer' => 'Дизайнер', 'supplier' => 'Снабженец', 'manager' => 'Менеджер', 'director' => 'Директор', 'admin' => 'Админ'],
             // Обязательные типы: без payment_won не работает подсчёт денег/won.
             'missingTypes' => collect(['payment_won' => 'Оплата успешно (won)', 'shop_gate' => 'Закуп / отправка в цех', 'logistics' => 'Логистика (возврат из цеха)'])
                 ->reject(fn ($label, $type) => $dealStages->contains('stage_type', $type))
@@ -245,7 +245,7 @@ class StageController extends Controller
             'order' => ['nullable', 'integer'],
             'stage_type' => ['nullable', Rule::in(array_keys(DealStage::STAGE_TYPES))],
             'gate_task_title' => ['nullable', 'string', 'max:255'],
-            'gate_task_role' => ['nullable', Rule::in(['financist', 'manager', 'director', 'admin'])],
+            'gate_task_role' => ['nullable', Rule::in(['financist', 'designer', 'supplier', 'manager', 'director', 'admin'])],
             'gate_task_days' => ['nullable', 'integer', 'min:1', 'max:365'],
             'is_completed' => ['nullable', 'boolean'],
         ]);

@@ -66,12 +66,18 @@ class RolePermissionSeeder extends Seeder
         // Должности компании (юрист/повар/дизайнер/технолог) — права уровня
         // «сотрудник»: цех, задачи, своя ЗП. СЕО = роль admin (подпись в UI),
         // «Финансист-Бухгалтер» = financist.
-        foreach (['lawyer', 'cook', 'designer', 'technologist'] as $job) {
-            Role::findOrCreate($job, 'web')->syncPermissions([
+        foreach (['lawyer', 'cook', 'designer', 'supplier'] as $job) {
+            $perms = [
                 'project.viewAny', 'project.view',
                 'task.viewAny', 'task.view', 'task.update',
                 'payroll.view',
-            ]);
+            ];
+            // Дизайнер и снабженец подтверждают гейт-этапы («Дизайн и расчет»,
+            // «Закуп ЛДСП,МДФ») — им нужен просмотр сделок.
+            if (in_array($job, ['designer', 'supplier'], true)) {
+                $perms = array_merge($perms, ['deal.viewAny', 'deal.view']);
+            }
+            Role::findOrCreate($job, 'web')->syncPermissions($perms);
         }
     }
 

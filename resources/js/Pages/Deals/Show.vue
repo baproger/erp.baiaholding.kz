@@ -38,6 +38,11 @@ const preWonStage = computed(() => esfStage.value ?? actStage.value);
 // Этапы АКТ/ЭСФ/Оплата двигает ТОЛЬКО бухгалтер (financist) или админ;
 // менеджер и директор видят сделку, но эти этапы не переводят.
 const canAccounting = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
+// Гейт-галочку ставит роль гейта этапа (дизайнер/снабженец/бухгалтер) или админ.
+const canConfirmGate = computed(() => {
+    const roles = usePage().props.auth.user?.roles ?? [];
+    return roles.includes('admin') || (props.stageTask?.role && roles.includes(props.stageTask.role));
+});
 const postActIds = computed(() => [actStage.value?.id, esfStage.value?.id, wonStage.value?.id].filter(Boolean));
 const managerFrozen = computed(() => !canAccounting.value && postActIds.value.includes(props.deal.deal_stage_id));
 const stageLocked = (stage) => {
@@ -149,12 +154,12 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         {{ stageTask.label }}
                     </span>
                     <span v-if="stageTask.due" class="text-xs font-medium text-amber-700">срок до {{ formatDate(stageTask.due) }}</span>
-                    <button v-if="canAccounting" @click="confirmStageTask"
+                    <button v-if="canConfirmGate" @click="confirmStageTask"
                         class="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">
                         <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                         Поставить галочку
                     </button>
-                    <span v-else class="ml-auto text-xs font-medium text-amber-700">ждём бухгалтера</span>
+                    <span v-else class="ml-auto text-xs font-medium text-amber-700">подтверждает {{ stageTask.roleLabel || 'бухгалтер' }}</span>
                 </template>
             </div>
 
