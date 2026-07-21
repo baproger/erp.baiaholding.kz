@@ -43,4 +43,25 @@ class UserManagementTest extends TestCase
         $emp->assignRole('employee');
         $this->actingAs($emp)->get(route('users.index'))->assertForbidden();
     }
+
+    public function test_financist_can_add_employee_but_not_admin(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $fin = \App\Models\User::factory()->create();
+        $fin->assignRole('financist');
+
+        $payload = fn (string $role, string $email) => [
+            'name' => 'Новый сотрудник', 'email' => $email,
+            'password' => 'secret123', 'password_confirmation' => 'secret123', 'role' => $role,
+        ];
+
+        // Менеджера — можно.
+        $this->actingAs($fin)->post(route('users.store'), $payload('manager', 'new1@baia.kz'))
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertTrue(\App\Models\User::where('email', 'new1@baia.kz')->first()->hasRole('manager'));
+
+        // Админа — нельзя (только действующий админ).
+        $this->actingAs($fin)->post(route('users.store'), $payload('admin', 'new2@baia.kz'))
+            ->assertForbidden();
+    }
 }
