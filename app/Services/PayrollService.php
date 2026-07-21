@@ -166,7 +166,7 @@ class PayrollService
      * Per-manager totals. The bonus is computed PER DEAL (each deal falls into its
      * own margin tier) and then summed — not one rate over the aggregate.
      */
-    public function perUser(): Collection
+    public function perUser(bool $includeAllActive = false): Collection
     {
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
@@ -210,7 +210,11 @@ class PayrollService
         })->groupBy('uid');
 
         // В ведомость попадают и сотрудники без сделок, но с окладом (цех, офис).
-        $salaryUids = User::where('is_active', true)->where('salary', '>', 0)->pluck('id');
+        // Страница ЗП показывает ВСЕХ активных сотрудников — финансист вводит
+        // оклад/аванс/корректировку любому, даже без сделок и оклада.
+        $salaryUids = $includeAllActive
+            ? User::where('is_active', true)->pluck('id')
+            : User::where('is_active', true)->where('salary', '>', 0)->pluck('id');
         $uids = $perDeal->keys()->merge($totalByUser->keys())->merge($salaryUids)->unique()->filter()->values();
 
         $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'salary'])->keyBy('id');

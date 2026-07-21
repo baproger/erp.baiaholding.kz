@@ -121,6 +121,18 @@ class PayrollTest extends TestCase
         $this->assertEquals(0.0, (float) $totals['income']);
     }
 
+    public function test_all_active_employees_listed_for_adjustments(): void
+    {
+        // Сотрудник без сделок и без оклада всё равно в ведомости — финансист
+        // может дать ему оклад или аванс.
+        $admin = $this->user('admin');
+        $fresh = $this->user('cook');
+
+        $this->actingAs($admin)->get(route('payroll.index'))
+            ->assertInertia(fn (Assert $p) => $p
+                ->where('rows', fn ($rows) => collect($rows)->contains(fn ($r) => $r['uid'] === $fresh->id)));
+    }
+
     // Цех employees may see their OWN salary only (no company-wide figures, no other people's rows).
     public function test_cex_employee_sees_only_own_salary(): void
     {
@@ -128,8 +140,11 @@ class PayrollTest extends TestCase
         $mgr = $this->user('manager');
         $this->wonDealWithFinance($mgr, 500000, 100000); // belongs to a manager, not the employee
 
+        // Сотрудник видит только СВОЮ строку (нулевую — сделок/оклада нет),
+        // чужие данные не видны.
         $this->actingAs($emp)->get(route('payroll.index'))
             ->assertOk()
-            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)->has('rows', 0));
+            ->assertInertia(fn (Assert $p) => $p->where('leadership', false)
+                ->has('rows', 1)->where('rows.0.uid', $emp->id)->where('rows.0.bonus', 0));
     }
 }

@@ -75,4 +75,30 @@ class CompanyExpenseTest extends TestCase
                 ->has('summary.income')->has('summary.expensesTotal')->has('summary.net')
                 ->has('summary.cash')->has('summary.bank')->has('categories'));
     }
+
+    public function test_financist_manages_expense_categories(): void
+    {
+        $fin = User::factory()->create();
+        $fin->assignRole('financist');
+
+        $this->actingAs($fin)->post(route('expenseCategories.store'), ['name' => 'Тестовая категория АБВ'])->assertRedirect();
+        $cat = \App\Models\ExpenseCategory::where('name', 'Тестовая категория АБВ')->firstOrFail();
+
+        $this->actingAs($fin)->put(route('expenseCategories.update', $cat->id), ['name' => 'Тестовая категория ГДЕ'])->assertRedirect();
+        $this->assertSame('Тестовая категория ГДЕ', $cat->fresh()->name);
+
+        // Без расходов — удаляется; с расходами — скрывается (is_active=false).
+        $this->actingAs($fin)->delete(route('expenseCategories.destroy', $cat->id))->assertRedirect();
+        $this->assertNull(\App\Models\ExpenseCategory::find($cat->id));
+
+        $used = \App\Models\ExpenseCategory::create(['name' => 'Тестовая категория ЖЗИ', 'is_active' => true]);
+        \App\Models\Expense::create(['category_id' => $used->id, 'amount' => 100, 'date' => now()->toDateString(), 'status' => 'confirmed']);
+        $this->actingAs($fin)->delete(route('expenseCategories.destroy', $used->id))->assertRedirect();
+        $this->assertFalse($used->fresh()->is_active);
+
+        // Менеджеру нельзя.
+        $mgr = User::factory()->create();
+        $mgr->assignRole('manager');
+        $this->actingAs($mgr)->post(route('expenseCategories.store'), ['name' => 'X'])->assertForbidden();
+    }
 }

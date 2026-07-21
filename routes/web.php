@@ -94,6 +94,9 @@ Route::middleware('auth')->group(function () {
     Route::post('finance/receipts', [\App\Http\Controllers\CashReceiptController::class, 'store'])->name('finance.receipts.store');
     Route::delete('finance/receipts/{receipt}', [\App\Http\Controllers\CashReceiptController::class, 'destroy'])->name('finance.receipts.destroy');
     // Задолженности: дебиторка (кто должен нам) / кредиторка (кому должны мы).
+    Route::post('expense-categories', [\App\Http\Controllers\ExpenseCategoryController::class, 'store'])->name('expenseCategories.store');
+    Route::put('expense-categories/{category}', [\App\Http\Controllers\ExpenseCategoryController::class, 'update'])->name('expenseCategories.update');
+    Route::delete('expense-categories/{category}', [\App\Http\Controllers\ExpenseCategoryController::class, 'destroy'])->name('expenseCategories.destroy');
     Route::post('finance/debts', [\App\Http\Controllers\DebtController::class, 'store'])->name('finance.debts.store');
     Route::put('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'update'])->name('finance.debts.update');
     Route::delete('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'destroy'])->name('finance.debts.destroy');

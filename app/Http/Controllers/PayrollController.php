@@ -39,7 +39,7 @@ class PayrollController extends Controller
             ->orderBy('date')->get()->groupBy('user_id');
 
         // Single source of truth for the payroll math (shared with Analytics & Finance).
-        $rows = $payroll->perUser()->sortByDesc('bonus')->values();
+        $rows = $payroll->perUser(true)->sortByDesc('bonus')->values();
         if (! $leadership) {
             $rows = $rows->filter(fn ($r) => $r['uid'] === $user->id)->values();
         }

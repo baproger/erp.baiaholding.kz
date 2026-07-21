@@ -78,6 +78,26 @@ const applyXpFilters = () => router.get(route('finance.index'), {
 const resetXpFilters = () => { xpSearch.value = ''; xpFrom.value = ''; xpTo.value = ''; applyXpFilters(); };
 const expTodaySum = computed(() => (props.expensesToday ?? []).reduce((sum, e) => sum + Number(e.amount || 0), 0));
 
+// Категории «Расход компании»: добавление/переименование/удаление списка.
+const showCats = ref(false);
+const newCat = ref('');
+const catNames = ref({});
+const syncCats = () => (catNames.value = Object.fromEntries((props.categories ?? []).map((c) => [c.id, c.name])));
+const openCats = () => { syncCats(); showCats.value = true; };
+const addCat = () => {
+    if (!newCat.value.trim()) return;
+    router.post(route('expenseCategories.store'), { name: newCat.value.trim() }, { preserveScroll: true, onSuccess: () => { newCat.value = ''; syncCats(); } });
+};
+const saveCat = (c) => {
+    const n = (catNames.value[c.id] ?? '').trim();
+    if (!n || n === c.name) return;
+    router.put(route('expenseCategories.update', c.id), { name: n }, { preserveScroll: true, onSuccess: syncCats });
+};
+const delCat = async (c) => {
+    if (!(await confirmDialog({ title: `Удалить категорию «${c.name}»?`, message: 'Если по ней уже есть расходы — она скроется из списка, суммы в отчётах сохранятся.', confirmText: 'Удалить', danger: true }))) return;
+    router.delete(route('expenseCategories.destroy', c.id), { preserveScroll: true, onSuccess: syncCats });
+};
+
 // Фильтр сводки «Доход − Расходы» по месяцу: пусто = за всё время.
 const finMonth = ref(props.filters?.fin_month ?? '');
 const applyFinMonth = () => router.get(route('finance.index'), {
@@ -372,6 +392,8 @@ const delExpense = async (e) => {
                     <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">сегодня <b class="tabular-nums">{{ money(expTodaySum) }}</b></span>
                     <button v-if="canManage" @click="openCompanyExpense"
                         class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700">+ Расход компании</button>
+                    <button v-if="canManage" @click="openCats"
+                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" title="Категории расходов компании">⚙ Категории</button>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 text-sm">
                     <label class="flex items-center gap-1 text-xs text-slate-400">с
@@ -756,6 +778,29 @@ const delExpense = async (e) => {
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showCompanyExpense = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="cForm.processing || !cForm.category_id || !(Number(cForm.amount) > 0)" @click="submitCompanyExpense">Сохранить расход</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+        <!-- Категории «Расход компании»: управление списком -->
+        <Modal :show="showCats" max-width="md" @close="showCats = false">
+            <div class="p-6">
+                <h3 class="mb-1 text-base font-semibold text-slate-900">Категории расходов компании</h3>
+                <p class="mb-4 text-xs text-slate-400">Переименуйте прямо в поле (сохранение — Enter или клик мимо), ✕ — удалить.</p>
+                <div class="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    <div v-for="c in categories" :key="c.id" class="flex items-center gap-2">
+                        <input v-model="catNames[c.id]" @keyup.enter="saveCat(c)" @blur="saveCat(c)" type="text"
+                            class="flex-1 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                        <button @click="delCat(c)" class="rounded p-1.5 text-slate-300 transition hover:text-rose-600" title="Удалить категорию">✕</button>
+                    </div>
+                    <div v-if="!categories.length" class="py-4 text-center text-sm text-slate-400">Категорий пока нет</div>
+                </div>
+                <div class="mt-4 flex gap-2">
+                    <input v-model="newCat" @keyup.enter="addCat" type="text" placeholder="Новая категория…"
+                        class="flex-1 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                    <PrimaryButton type="button" @click="addCat">Добавить</PrimaryButton>
+                </div>
+                <div class="mt-4 text-right">
+                    <SecondaryButton @click="showCats = false">Закрыть</SecondaryButton>
                 </div>
             </div>
         </Modal>
