@@ -64,4 +64,32 @@ class UserManagementTest extends TestCase
         $this->actingAs($fin)->post(route('users.store'), $payload('admin', 'new2@baia.kz'))
             ->assertForbidden();
     }
+
+    public function test_financist_can_edit_and_deactivate_employee_but_not_admin(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $fin = \App\Models\User::factory()->create();
+        $fin->assignRole('financist');
+        $emp = \App\Models\User::factory()->create(['name' => 'Иван']);
+        $emp->assignRole('manager');
+        $admin = \App\Models\User::factory()->create();
+        $admin->assignRole('admin');
+
+        // Правка и деактивация обычного сотрудника — можно.
+        $this->actingAs($fin)->put(route('users.update', $emp->id), [
+            'name' => 'Иван Обновлённый', 'email' => $emp->email, 'role' => 'manager',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('Иван Обновлённый', $emp->fresh()->name);
+
+        // Админа — нельзя: ни править (поля не должны измениться), ни деактивировать.
+        $adminName = $admin->name;
+        $this->actingAs($fin)->put(route('users.update', $admin->id), [
+            'name' => 'Взлом', 'email' => $admin->email, 'role' => 'admin',
+        ])->assertForbidden();
+        $this->assertSame($adminName, $admin->fresh()->name);
+        $this->actingAs($fin)->delete(route('users.destroy', $admin->id))->assertForbidden();
+
+        $this->actingAs($fin)->delete(route('users.destroy', $emp->id))->assertRedirect();
+        $this->assertFalse($emp->fresh()->is_active);
+    }
 }

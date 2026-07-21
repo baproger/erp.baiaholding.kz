@@ -51,9 +51,9 @@ class RolePermissionSeeder extends Seeder
             'project.viewAny', 'project.view',
             'client.viewAny', 'client.view',
             'department.viewAny',
-            // Финансист добавляет сотрудников (роль admin выдаёт только админ —
-            // guardRoleAssignment в UserController).
-            'user.viewAny', 'user.view', 'user.create',
+            // Финансист ведёт сотрудников: список, добавление, правка, деактивация.
+            // Админов трогать не может (guardRoleAssignment + guard в destroy).
+            'user.viewAny', 'user.view', 'user.create', 'user.update', 'user.delete',
             'payroll.view',
         ])->get());
 

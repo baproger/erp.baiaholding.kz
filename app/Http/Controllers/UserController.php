@@ -83,6 +83,9 @@ class UserController extends Controller
         $this->authorize('update', $user);
 
         $data = $request->validated();
+        // ДО записи полей: не-админ не редактирует админа (иначе поля успели
+        // бы обновиться до 403 на роли).
+        $this->guardRoleAssignment($request, $data['role'], $user);
         $user->update([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -100,7 +103,6 @@ class UserController extends Controller
         if (! empty($data['password'])) {
             $user->update(['password' => Hash::make($data['password'])]);
         }
-        $this->guardRoleAssignment($request, $data['role'], $user);
         $user->syncRoles([$data['role']]);
         $user->companies()->sync($this->companyIds($request));
 
@@ -163,9 +165,13 @@ class UserController extends Controller
         return User::where('is_active', true)->role('admin')->count();
     }
 
-    public function destroy(User $user): RedirectResponse
+    public function destroy(Request $request, User $user): RedirectResponse
     {
         $this->authorize('delete', $user);
+        // Администратора деактивирует только администратор.
+        if ($user->hasRole('admin') && ! $request->user()->hasRole('admin')) {
+            abort(403, 'Администратора деактивирует только администратор.');
+        }
         // Последнего активного админа нельзя деактивировать — иначе система
         // останется без владельца (Gate::before на admin).
         if ($user->hasRole('admin') && $this->activeAdminCount() <= 1) {
