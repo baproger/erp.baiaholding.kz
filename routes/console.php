@@ -10,3 +10,5 @@ Artisan::command('inspire', function () {
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('tasks:notify-overdue')->hourly();
+// Дни рождения: раз в день утром, чтобы «сегодня»/«через 3 дня» не дублировались.
+Schedule::command('users:notify-birthdays')->dailyAt('09:00');

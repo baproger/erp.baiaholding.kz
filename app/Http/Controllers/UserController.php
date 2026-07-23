@@ -18,19 +18,20 @@ class UserController extends Controller
     {
         $this->authorize('viewAny', User::class);
 
+        // Без пагинации: страница группирует сотрудников по отделам,
+        // поиск и фильтры — мгновенные на клиенте.
         $users = User::query()
             ->with(['department:id,name', 'roles:id,name', 'companies:companies.id,name'])
-            ->when($request->string('search')->toString(), fn ($q, $s) => $q
-                ->where('name', 'like', "%{$s}%")->orWhere('email', 'like', "%{$s}%"))
             ->orderBy('name')
-            ->paginate(20)
-            ->withQueryString()
-            ->through(fn ($u) => [
+            ->get()
+            ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'avatar' => $u->avatar,
                 'email' => $u->email,
                 'phone' => $u->phone,
+                'birth_date' => $u->birth_date?->toDateString(),
+                'hired_at' => $u->hired_at?->toDateString(),
                 'is_active' => $u->is_active,
                 'department' => $u->department,
                 'department_id' => $u->department_id,
@@ -39,15 +40,154 @@ class UserController extends Controller
                 'company_names' => $u->companies->pluck('name')->join(', '),
                 'salary' => (float) $u->salary,
                 'has_contract' => (bool) $u->contract_path,
-            ]);
+            ])
+            ->values();
 
         return Inertia::render('Users/Index', [
             'users' => $users,
-            'filters' => $request->only('search'),
-            'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name', 'head_user_id']),
             'roles' => Role::orderBy('name')->pluck('name'),
             'companies' => \App\Models\Company::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'can' => ['manage' => $request->user()->can('create', User::class)],
         ]);
+    }
+
+    /**
+     * Профиль сотрудника: сделки, заказы цеха, задачи и ЗП в одном месте.
+     * Видит руководство (user.view) или сам сотрудник; деньги (оклад/бонус) —
+     * только admin/financist и сам сотрудник (директор — наблюдатель без ЗП-детали).
+     */
+    public function show(Request $request, User $user, \App\Services\PayrollService $payroll): Response
+    {
+        $viewer = $request->user();
+        abort_unless($viewer->can('view', $user) || $viewer->id === $user->id, 403);
+
+        $seesMoney = $viewer->hasAnyRole(['admin', 'financist', 'director']) || $viewer->id === $user->id;
+
+        $deals = \App\Models\Deal::forCurrentCompany()
+            ->where('responsible_user_id', $user->id)
+            ->with('stage:id,name,is_won')
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get(['id', 'number', 'company_name', 'budget', 'deal_stage_id', 'status', 'deadline', 'created_at'])
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'number' => $d->number,
+                'company_name' => $d->company_name,
+                'budget' => $seesMoney ? (float) $d->budget : null,
+                'stage' => $d->stage?->name,
+                'is_won' => (bool) $d->stage?->is_won,
+                'status' => $d->status,
+                'deadline' => $d->deadline?->toDateString(),
+            ]);
+
+        $projects = \App\Models\Project::query()
+            ->where('responsible_user_id', $user->id)
+            ->with('stage:id,name')
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get(['id', 'number', 'name', 'workshop', 'project_stage_id', 'status', 'deadline'])
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'number' => $p->number,
+                'name' => $p->name,
+                'workshop' => $p->workshop,
+                'stage' => $p->stage?->name,
+                'status' => $p->status,
+                'deadline' => $p->deadline?->toDateString(),
+            ]);
+
+        $tasks = \App\Models\Task::where('assignee_id', $user->id)
+            ->orderByRaw("status = 'done'")->orderByDesc('created_at')
+            ->limit(30)
+            ->get(['id', 'title', 'status', 'priority', 'due_date'])
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'title' => $t->title,
+                'status' => $t->status,
+                'priority' => $t->priority,
+                'due_date' => $t->due_date?->toDateString(),
+                'overdue' => $t->status !== 'done' && $t->due_date && $t->due_date->isPast(),
+            ]);
+
+        // ЗП-строка из единого источника правды (как на странице Зарплата).
+        $payrollRow = $seesMoney
+            ? $payroll->perUser(true)->firstWhere('uid', $user->id)
+            : null;
+        $adjustments = $seesMoney
+            ? \App\Models\PayrollAdjustment::where('user_id', $user->id)
+                ->orderByDesc('date')->limit(20)->get()
+                ->map(fn ($a) => [
+                    'id' => $a->id, 'type' => $a->type, 'amount' => (float) $a->amount,
+                    'days' => $a->days !== null ? (float) $a->days : null,
+                    'date' => $a->date?->toDateString(), 'note' => $a->note,
+                ])
+            : [];
+
+        $headOf = Department::where('head_user_id', $user->id)->pluck('name');
+
+        return Inertia::render('Users/Show', [
+            'person' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar' => $user->avatar,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'birth_date' => $user->birth_date?->toDateString(),
+                'hired_at' => $user->hired_at?->toDateString(),
+                'is_active' => $user->is_active,
+                'department' => $user->department?->name,
+                'head_of' => $headOf,
+                'role' => $user->roles->first()?->name,
+                'companies' => $user->companies->pluck('name'),
+                'salary' => $seesMoney ? (float) $user->salary : null,
+                'has_contract' => (bool) $user->contract_path,
+            ],
+            'deals' => $deals,
+            'projects' => $projects,
+            'tasks' => $tasks,
+            'payrollRow' => $payrollRow,
+            'adjustments' => $adjustments,
+            'can' => ['manage' => $viewer->can('update', $user)],
+        ]);
+    }
+
+    /**
+     * Экспорт списка сотрудников в CSV (открывается в Excel): имя, отдел, роль,
+     * телефон, email, компании, даты. Только для тех, кто видит страницу.
+     */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorize('viewAny', User::class);
+
+        $roleLabels = [
+            'admin' => 'СЕО (админ)', 'director' => 'Директор', 'financist' => 'Финансист-Бухгалтер',
+            'manager' => 'Менеджер', 'employee' => 'Сотрудник (цех)', 'lawyer' => 'Юрист',
+            'cook' => 'Повар', 'designer' => 'Дизайнер', 'supplier' => 'Снабженец',
+        ];
+        $users = User::with(['department:id,name', 'roles:id,name', 'companies:companies.id,name'])
+            ->orderBy('name')->get();
+
+        return response()->streamDownload(function () use ($users, $roleLabels) {
+            $out = fopen('php://output', 'w');
+            // BOM — иначе Excel открывает кириллицу кракозябрами.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Имя', 'Отдел', 'Роль', 'Телефон', 'Email', 'Компании', 'В компании с', 'День рождения', 'Статус'], ';');
+            foreach ($users as $u) {
+                fputcsv($out, [
+                    $u->name,
+                    $u->department?->name ?? '—',
+                    $roleLabels[$u->roles->first()?->name] ?? ($u->roles->first()?->name ?? '—'),
+                    $u->phone ?? '—',
+                    $u->email,
+                    $u->companies->pluck('name')->join(', '),
+                    $u->hired_at?->format('d.m.Y') ?? '—',
+                    $u->birth_date?->format('d.m.Y') ?? '—',
+                    $u->is_active ? 'Активен' : 'Отключён',
+                ], ';');
+            }
+            fclose($out);
+        }, 'Сотрудники — '.now()->format('d.m.Y').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function store(UserRequest $request): RedirectResponse
@@ -61,6 +201,8 @@ class UserController extends Controller
             'password' => Hash::make($data['password']),
             'department_id' => $data['department_id'] ?? null,
             'phone' => $data['phone'] ?? null,
+            'birth_date' => $data['birth_date'] ?? null,
+            'hired_at' => $data['hired_at'] ?? null,
             'salary' => $data['salary'] ?? 0,
             'contract_path' => $request->hasFile('contract') ? $request->file('contract')->store('contracts') : null,
             'is_active' => $data['is_active'] ?? true,
@@ -91,6 +233,8 @@ class UserController extends Controller
             'email' => $data['email'],
             'department_id' => $data['department_id'] ?? null,
             'phone' => $data['phone'] ?? null,
+            'birth_date' => $data['birth_date'] ?? null,
+            'hired_at' => $data['hired_at'] ?? null,
             'salary' => $data['salary'] ?? 0,
             'is_active' => $data['is_active'] ?? true,
         ]);

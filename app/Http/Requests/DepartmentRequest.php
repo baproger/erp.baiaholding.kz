@@ -19,6 +19,7 @@ class DepartmentRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'head_user_id' => ['nullable', 'exists:users,id'],
             'is_active' => ['boolean'],
         ];
     }

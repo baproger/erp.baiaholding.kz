@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Task;
+use App\Notifications\DepartmentTaskOverdue;
 use App\Notifications\TaskOverdue;
 use Illuminate\Console\Command;
 
@@ -20,11 +21,16 @@ class NotifyOverdueTasks extends Command
             ->where('due_date', '<', now())
             ->whereNull('overdue_notified_at')
             ->whereNotNull('assignee_id')
-            ->with('assignee')
+            ->with('assignee.department.head')
             ->get();
 
         foreach ($tasks as $task) {
             $task->assignee?->notify(new TaskOverdue($task));
+            // Руководителю отдела исполнителя — чтобы просрочки не тонули.
+            $head = $task->assignee?->department?->head;
+            if ($head && $head->is_active && $head->id !== $task->assignee->id) {
+                $head->notify(new DepartmentTaskOverdue($task, $task->assignee->name));
+            }
             $task->forceFill(['overdue_notified_at' => now()])->saveQuietly();
         }
 

@@ -16,13 +16,14 @@ const props = defineProps({
     departments: Object,
     filters: Object,
     can: Object,
+    users: { type: Array, default: () => [] },
 });
 
 const showModal = ref(false);
 const editing = ref(null);
 const search = ref(props.filters.search ?? '');
 
-const form = useForm({ name: '', description: '', is_active: true });
+const form = useForm({ name: '', description: '', head_user_id: '', is_active: true });
 
 const openCreate = () => {
     editing.value = null;
@@ -34,6 +35,7 @@ const openEdit = (d) => {
     editing.value = d;
     form.name = d.name;
     form.description = d.description ?? '';
+    form.head_user_id = d.head_user_id ?? '';
     form.is_active = d.is_active;
     showModal.value = true;
 };
@@ -66,6 +68,7 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                     <tr>
                         <th class="px-4 py-3">Название</th>
                         <th class="px-4 py-3">Описание</th>
+                        <th class="px-4 py-3">Руководитель</th>
                         <th class="px-4 py-3">Сотрудников</th>
                         <th class="px-4 py-3">Статус</th>
                         <th class="px-4 py-3 text-right">Действия</th>
@@ -75,6 +78,10 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                     <tr v-for="d in departments.data" :key="d.id" class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-medium text-slate-900">{{ d.name }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ d.description }}</td>
+                        <td class="px-4 py-3 text-slate-600">
+                            <span v-if="d.head">⭐ {{ d.head.name }}</span>
+                            <span v-else class="text-slate-400">—</span>
+                        </td>
                         <td class="px-4 py-3">{{ d.members_count }}</td>
                         <td class="px-4 py-3">
                             <span :class="d.is_active ? 'text-green-600' : 'text-slate-400'">
@@ -87,7 +94,7 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                         </td>
                     </tr>
                     <tr v-if="!departments.data.length">
-                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">Нет данных</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td>
                     </tr>
                 </tbody>
             </table>
@@ -109,6 +116,14 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                     <div>
                         <InputLabel value="Описание" />
                         <textarea v-model="form.description" rows="3" class="mt-1 w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                    </div>
+                    <div>
+                        <InputLabel value="Руководитель отдела (⭐ + уведомления о просрочках отдела)" />
+                        <select v-model="form.head_user_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
+                            <option value="">—</option>
+                            <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+                        </select>
+                        <InputError :message="form.errors.head_user_id" class="mt-1" />
                     </div>
                     <label class="flex items-center gap-2 text-sm">
                         <input type="checkbox" v-model="form.is_active" class="rounded border-slate-300 text-indigo-600" />

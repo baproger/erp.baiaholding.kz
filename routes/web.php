@@ -53,8 +53,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('company/switch', [\App\Http\Controllers\CompanyController::class, 'switch'])->name('company.switch');
 
     // Users
+    // export — до resource: иначе GET users/export сматчится как users/{user}.
+    Route::get('users/export', [UserController::class, 'export'])->name('users.export');
     Route::get('users/{user}/contract', [UserController::class, 'contract'])->name('users.contract');
-    Route::resource('users', UserController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::resource('users', UserController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
 
     // Reference data
     Route::resource('departments', DepartmentController::class)->only(['index', 'store', 'update', 'destroy']);

@@ -17,6 +17,7 @@ class DepartmentController extends Controller
 
         $departments = Department::query()
             ->withCount('members')
+            ->with('head:id,name')
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
             ->orderBy('name')
             ->paginate(15)
@@ -25,6 +26,8 @@ class DepartmentController extends Controller
         return Inertia::render('Departments/Index', [
             'departments' => $departments,
             'filters' => $request->only('search'),
+            // Для селекта «Руководитель» в модалке отдела.
+            'users' => \App\Models\User::where('is_active', true)->orderBy('name')->get(['id', 'name', 'department_id']),
             'can' => [
                 'create' => $request->user()->can('create', Department::class),
                 'update' => $request->user()->can('update', Department::class),

@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import Avatar from '@/Components/Avatar.vue';
@@ -10,27 +10,131 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
-import Pagination from '@/Components/Pagination.vue';
 
-const props = defineProps({ users: Object, filters: Object, departments: Array, roles: Array, companies: { type: Array, default: () => [] } });
+const props = defineProps({
+    users: Array,
+    departments: Array,
+    roles: Array,
+    companies: { type: Array, default: () => [] },
+    can: { type: Object, default: () => ({ manage: false }) },
+});
 
 const roleLabels = { admin: 'СЕО (админ)', director: 'Директор', financist: 'Финансист-Бухгалтер', manager: 'Менеджер', employee: 'Сотрудник (цех)', lawyer: 'Юрист', cook: 'Повар', designer: 'Дизайнер', supplier: 'Снабженец' };
+const roleColors = {
+    admin: 'bg-purple-50 text-purple-700 ring-purple-200',
+    director: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    financist: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    manager: 'bg-blue-50 text-blue-700 ring-blue-200',
+    designer: 'bg-pink-50 text-pink-700 ring-pink-200',
+    supplier: 'bg-amber-50 text-amber-700 ring-amber-200',
+    lawyer: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
+    cook: 'bg-orange-50 text-orange-700 ring-orange-200',
+    employee: 'bg-slate-100 text-slate-600 ring-slate-200',
+};
+const companyNames = computed(() => Object.fromEntries(props.companies.map((c) => [c.id, c.name])));
+// Руководители отделов — ⭐ на карточке.
+const headIds = computed(() => new Set(props.departments.map((d) => d.head_user_id).filter(Boolean)));
+
+// 🎂: сколько дней до ближайшего дня рождения (0 = сегодня, null = не указан).
+const daysToBirthday = (u) => {
+    if (!u.birth_date) return null;
+    const bd = new Date(u.birth_date);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let next = new Date(now.getFullYear(), bd.getMonth(), bd.getDate());
+    if (next < today) next = new Date(now.getFullYear() + 1, bd.getMonth(), bd.getDate());
+    return Math.round((next - today) / 86400000);
+};
+
+// Стаж: «в компании с 03.2024 · 1 г. 4 мес.»
+const tenure = (u) => {
+    if (!u.hired_at) return null;
+    const from = new Date(u.hired_at);
+    const now = new Date();
+    let months = (now.getFullYear() - from.getFullYear()) * 12 + now.getMonth() - from.getMonth();
+    if (now.getDate() < from.getDate()) months--;
+    months = Math.max(0, months);
+    const y = Math.floor(months / 12);
+    const m = months % 12;
+    const parts = [];
+    if (y) parts.push(`${y} г.`);
+    if (m || !y) parts.push(`${m} мес.`);
+    const since = `${String(from.getMonth() + 1).padStart(2, '0')}.${from.getFullYear()}`;
+    return `с ${since} · ${parts.join(' ')}`;
+};
+
+// --- Фильтры (всё на клиенте — мгновенно, без запросов) ---
+const search = ref('');
+const deptFilter = ref('all'); // 'all' | id отдела | 0 («Без отдела»)
+const showInactive = ref(false);
+
+const inactiveCount = computed(() => props.users.filter((u) => !u.is_active).length);
+
+const visibleUsers = computed(() => {
+    const q = search.value.trim().toLowerCase();
+    return props.users.filter((u) => {
+        if (!showInactive.value && !u.is_active) return false;
+        if (deptFilter.value !== 'all' && (u.department_id ?? 0) !== deptFilter.value) return false;
+        if (!q) return true;
+        return [u.name, u.email, u.phone, u.department?.name, roleLabels[u.role]]
+            .some((v) => (v ?? '').toLowerCase().includes(q));
+    });
+});
+
+// Чипы отделов с количеством (учитывают переключатель «отключённые», но не поиск).
+const deptChips = computed(() => {
+    const pool = props.users.filter((u) => showInactive.value || u.is_active);
+    const counts = {};
+    pool.forEach((u) => { const k = u.department_id ?? 0; counts[k] = (counts[k] ?? 0) + 1; });
+    const chips = props.departments
+        .map((d) => ({ id: d.id, name: d.name, count: counts[d.id] ?? 0 }))
+        .filter((c) => c.count > 0);
+    if (counts[0]) chips.push({ id: 0, name: 'Без отдела', count: counts[0] });
+    return chips;
+});
+
+// Секции: отделы по алфавиту, «Без отдела» — в конце.
+const groups = computed(() => {
+    const map = new Map();
+    visibleUsers.value.forEach((u) => {
+        const key = u.department_id ?? 0;
+        if (!map.has(key)) map.set(key, { id: key, name: u.department?.name ?? 'Без отдела', users: [] });
+        map.get(key).users.push(u);
+    });
+    return [...map.values()].sort((a, b) => (a.id === 0) - (b.id === 0) || a.name.localeCompare(b.name, 'ru'));
+});
+
+const stats = computed(() => ({
+    total: props.users.length,
+    active: props.users.length - inactiveCount.value,
+    departments: new Set(props.users.filter((u) => u.is_active && u.department_id).map((u) => u.department_id)).size,
+}));
+
+// --- Модалка (создание/правка) ---
 const show = ref(false);
 const editing = ref(null);
-const search = ref(props.filters.search ?? '');
 
 const form = useForm({
     name: '', email: '', password: '', password_confirmation: '',
-    department_id: '', phone: '', salary: 0, contract: null, role: 'employee', is_active: true,
+    department_id: '', phone: '', birth_date: '', hired_at: '', salary: 0, contract: null, role: 'employee', is_active: true,
     company_ids: props.companies.map((c) => c.id),
 });
 
-const openCreate = () => { editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true; form.company_ids = props.companies.map((c) => c.id); show.value = true; };
+const openCreate = () => {
+    editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true;
+    form.company_ids = props.companies.map((c) => c.id);
+    // Если открыт фильтр по отделу — сразу подставляем его в форму.
+    form.department_id = typeof deptFilter.value === 'number' && deptFilter.value !== 0 ? deptFilter.value : '';
+    show.value = true;
+};
 const openEdit = (u) => {
+    if (!props.can.manage) return;
     editing.value = u;
     Object.assign(form, {
         name: u.name, email: u.email, password: '', password_confirmation: '',
-        department_id: u.department_id ?? '', phone: u.phone ?? '', salary: u.salary ?? 0, contract: null,
+        department_id: u.department_id ?? '', phone: u.phone ?? '',
+        birth_date: u.birth_date ?? '', hired_at: u.hired_at ?? '',
+        salary: u.salary ?? 0, contract: null,
         role: u.role ?? 'employee', is_active: u.is_active,
         company_ids: [...(u.company_ids ?? [])],
     });
@@ -52,7 +156,6 @@ const deactivate = async (u) => {
         router.delete(route('users.destroy', u.id), { preserveScroll: true });
     }
 };
-const doSearch = () => router.get(route('users.index'), { search: search.value }, { preserveState: true, replace: true });
 </script>
 
 <template>
@@ -60,41 +163,105 @@ const doSearch = () => router.get(route('users.index'), { search: search.value }
     <AppLayout>
         <template #header>{{ $t('page.users', 'Сотрудники') }}</template>
 
-        <div class="mb-4 flex items-center justify-between gap-3">
-            <TextInput v-model="search" placeholder="Поиск по имени/email…" class="w-72" @keyup.enter="doSearch" />
-            <PrimaryButton @click="openCreate">+ Добавить сотрудника</PrimaryButton>
+        <!-- Мини-статистика -->
+        <div class="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <p class="text-2xl font-bold text-slate-900">{{ stats.total }}</p>
+                <p class="text-xs text-slate-500">Всего</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <p class="text-2xl font-bold text-emerald-600">{{ stats.active }}</p>
+                <p class="text-xs text-slate-500">Активных</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <p class="text-2xl font-bold text-indigo-600">{{ stats.departments }}</p>
+                <p class="text-xs text-slate-500">Отделов</p>
+            </div>
         </div>
 
-        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table class="min-w-full divide-y divide-slate-100 text-sm">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr>
-                        <th class="px-4 py-3">Имя</th><th class="px-4 py-3">Email</th><th class="px-4 py-3">Отдел</th>
-                        <th class="px-4 py-3">Роль</th><th class="px-4 py-3">Статус</th><th class="px-4 py-3 text-right">Действия</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr v-for="u in users.data" :key="u.id" class="hover:bg-slate-50">
-                        <td class="px-4 py-3">
-                            <div class="flex items-center gap-2.5">
-                                <Avatar :name="u.name" :src="u.avatar" :size="34" />
-                                <span class="font-medium text-slate-900">{{ u.name }}</span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-3 text-slate-500">{{ u.email }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ u.department?.name ?? '—' }}</td>
-                        <td class="px-4 py-3">{{ roleLabels[u.role] ?? u.role ?? '—' }}</td>
-                        <td class="px-4 py-3"><span :class="u.is_active ? 'text-green-600' : 'text-slate-400'">{{ u.is_active ? 'Активен' : 'Отключён' }}</span></td>
-                        <td class="px-4 py-3 text-right space-x-2">
-                            <button class="text-indigo-600 hover:underline" @click="openEdit(u)">Изменить</button>
-                            <button class="text-red-600 hover:underline" @click="deactivate(u)">Деактивировать</button>
-                        </td>
-                    </tr>
-                    <tr v-if="!users.data.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
-                </tbody>
-            </table>
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <TextInput v-model="search" placeholder="Поиск: имя, email, телефон, отдел, роль…" class="w-full sm:w-80" />
+            <div class="flex items-center gap-2">
+                <a :href="route('users.export')">
+                    <SecondaryButton>⬇ Excel</SecondaryButton>
+                </a>
+                <Link v-if="can.manage" :href="route('departments.index')">
+                    <SecondaryButton>⚙ Отделы</SecondaryButton>
+                </Link>
+                <PrimaryButton v-if="can.manage" @click="openCreate">+ Добавить сотрудника</PrimaryButton>
+            </div>
         </div>
-        <div class="mt-4"><Pagination :links="users.links" /></div>
+
+        <!-- Фильтр по отделам -->
+        <div class="mb-5 flex flex-wrap items-center gap-2">
+            <button type="button" @click="deptFilter = 'all'"
+                class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+                :class="deptFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
+                Все
+            </button>
+            <button v-for="c in deptChips" :key="c.id" type="button" @click="deptFilter = deptFilter === c.id ? 'all' : c.id"
+                class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+                :class="deptFilter === c.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
+                {{ c.name }} <span :class="deptFilter === c.id ? 'text-indigo-200' : 'text-slate-400'">{{ c.count }}</span>
+            </button>
+            <label v-if="inactiveCount" class="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" v-model="showInactive" class="rounded border-slate-300 text-indigo-600" />
+                Отключённые ({{ inactiveCount }})
+            </label>
+        </div>
+
+        <!-- Секции по отделам -->
+        <div v-for="g in groups" :key="g.id" class="mb-7">
+            <div class="mb-2.5 flex items-center gap-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ g.name }}</h3>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{{ g.users.length }}</span>
+                <div class="h-px flex-1 bg-slate-200"></div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div v-for="u in g.users" :key="u.id"
+                    class="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md"
+                    :class="{ 'opacity-60': !u.is_active }"
+                    @click="router.visit(route('users.show', u.id))">
+                    <div class="flex items-start gap-3">
+                        <Avatar :name="u.name" :src="u.avatar" :size="44" />
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span v-if="headIds.has(u.id)" title="Руководитель отдела">⭐</span>
+                                <p class="truncate font-semibold text-slate-900">{{ u.name }}</p>
+                                <span v-if="!u.is_active" class="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Отключён</span>
+                            </div>
+                            <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                <span class="inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1"
+                                    :class="roleColors[u.role] ?? roleColors.employee">
+                                    {{ roleLabels[u.role] ?? u.role ?? '—' }}
+                                </span>
+                                <span v-if="daysToBirthday(u) === 0" class="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-semibold text-pink-600 ring-1 ring-pink-200">🎂 сегодня!</span>
+                                <span v-else-if="daysToBirthday(u) !== null && daysToBirthday(u) <= 7" class="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-semibold text-pink-600 ring-1 ring-pink-200">🎂 через {{ daysToBirthday(u) }} дн.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 space-y-1 text-sm">
+                        <a :href="`mailto:${u.email}`" class="block truncate text-slate-500 hover:text-indigo-600" @click.stop>✉️ {{ u.email }}</a>
+                        <a v-if="u.phone" :href="`tel:${u.phone}`" class="block text-slate-500 hover:text-indigo-600" @click.stop>📞 {{ u.phone }}</a>
+                        <p v-if="tenure(u)" class="text-xs text-slate-400">🗓 в компании {{ tenure(u) }}</p>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between gap-2">
+                        <div class="flex flex-wrap gap-1">
+                            <span v-for="cid in u.company_ids" :key="cid" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                                {{ companyNames[cid] }}
+                            </span>
+                        </div>
+                        <div v-if="can.manage" class="flex shrink-0 items-center gap-2 text-xs opacity-0 transition group-hover:opacity-100">
+                            <button class="font-semibold text-indigo-600 hover:underline" @click.stop="openEdit(u)">Изменить</button>
+                            <button v-if="u.is_active" class="font-semibold text-red-500 hover:underline" @click.stop="deactivate(u)">Откл.</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-if="!groups.length" class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-14 text-center text-slate-400">
+            Никого не нашли — измените поиск или фильтр
+        </div>
 
         <Modal :show="show" @close="show = false" max-width="2xl">
             <div class="p-6">
@@ -133,6 +300,16 @@ const doSearch = () => router.get(route('users.index'), { search: search.value }
                         </select>
                     </div>
                     <div><InputLabel value="Телефон" /><TextInput v-model="form.phone" class="mt-1 w-full" /></div>
+                    <div>
+                        <InputLabel value="День рождения (🎂 напомним руководству)" />
+                        <TextInput v-model="form.birth_date" type="date" class="mt-1 w-full" />
+                        <InputError :message="form.errors.birth_date" class="mt-1" />
+                    </div>
+                    <div>
+                        <InputLabel value="Дата приёма на работу (стаж)" />
+                        <TextInput v-model="form.hired_at" type="date" class="mt-1 w-full" />
+                        <InputError :message="form.errors.hired_at" class="mt-1" />
+                    </div>
                     <div>
                         <InputLabel value="Оклад, ₸ (ЗП = оклад + бонус)" />
                         <TextInput v-model="form.salary" type="number" step="0.01" min="0" class="mt-1 w-full" />
