@@ -23,3 +23,16 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Кэш статики: файлы сборки версионированы (hash в имени) — браузер может
+# хранить их год и не перекачивать; смена версии меняет имя файла.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|woff2?|ttf|svg|png|jpe?g|webp|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
+# Скрытые файлы (.env и т.п.) не отдаются никогда.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
