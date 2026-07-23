@@ -33,6 +33,11 @@ Route::get('/', function () {
 
 Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
+// ТВ-экран цеха: без логина, вход по коду (один код = один цех).
+Route::get('screen', [\App\Http\Controllers\WorkshopScreenController::class, 'show'])->name('screen.show');
+Route::post('screen', [\App\Http\Controllers\WorkshopScreenController::class, 'enter'])->middleware('throttle:10,1')->name('screen.enter');
+Route::post('screen/leave', [\App\Http\Controllers\WorkshopScreenController::class, 'leave'])->name('screen.leave');
+
 Route::middleware('auth')->group(function () {
     // Single profile page (role-aware card). `update`/`destroy` back the Breeze
     // name/email + password + delete forms; `card.update` saves the card fields.
@@ -94,6 +99,7 @@ Route::middleware('auth')->group(function () {
     Route::post('finance/receipts', [\App\Http\Controllers\CashReceiptController::class, 'store'])->name('finance.receipts.store');
     Route::delete('finance/receipts/{receipt}', [\App\Http\Controllers\CashReceiptController::class, 'destroy'])->name('finance.receipts.destroy');
     // Задолженности: дебиторка (кто должен нам) / кредиторка (кому должны мы).
+    Route::post('workshop-screens', [\App\Http\Controllers\WorkshopScreenController::class, 'upsert'])->name('workshopScreens.upsert');
     Route::post('expense-categories', [\App\Http\Controllers\ExpenseCategoryController::class, 'store'])->name('expenseCategories.store');
     Route::put('expense-categories/{category}', [\App\Http\Controllers\ExpenseCategoryController::class, 'update'])->name('expenseCategories.update');
     Route::delete('expense-categories/{category}', [\App\Http\Controllers\ExpenseCategoryController::class, 'destroy'])->name('expenseCategories.destroy');

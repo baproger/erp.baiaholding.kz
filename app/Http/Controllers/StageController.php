@@ -58,6 +58,7 @@ class StageController extends Controller
             ->orderBy('order')->get();
 
         return Inertia::render('Settings/Stages', [
+            'screens' => \App\Models\WorkshopScreen::where('company_id', $companyId)->get(['id', 'workshop', 'code', 'is_active']),
             'dealStages' => $dealStages,
             // Цех у каждой компании свой (BAIA — мебельный, ASU — швейный).
             'projectStages' => ProjectStage::withCount('projects')
