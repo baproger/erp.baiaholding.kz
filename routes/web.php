@@ -61,6 +61,16 @@ Route::middleware('auth')->group(function () {
     Route::resource('clients', ClientController::class)->only(['index', 'store', 'update', 'destroy']);
 
     // Deals
+    // Предварительные сделки (лоты): расчёт маржи до создания сделки.
+    Route::get('pre-deals', [\App\Http\Controllers\PreDealController::class, 'index'])->name('preDeals.index');
+    Route::post('pre-deals', [\App\Http\Controllers\PreDealController::class, 'store'])->name('preDeals.store');
+    Route::put('pre-deals/{preDeal}', [\App\Http\Controllers\PreDealController::class, 'update'])->name('preDeals.update');
+    Route::delete('pre-deals/{preDeal}', [\App\Http\Controllers\PreDealController::class, 'destroy'])->name('preDeals.destroy');
+    Route::post('pre-deals/{preDeal}/confirm', [\App\Http\Controllers\PreDealController::class, 'confirm'])->name('preDeals.confirm');
+    Route::post('pre-deals/{preDeal}/check/{item}', [\App\Http\Controllers\PreDealController::class, 'check'])->name('preDeals.check');
+    Route::post('pre-deal-items', [\App\Http\Controllers\PreDealController::class, 'storeItem'])->name('preDealItems.store');
+    Route::put('pre-deal-items/{item}', [\App\Http\Controllers\PreDealController::class, 'updateItem'])->name('preDealItems.update');
+    Route::delete('pre-deal-items/{item}', [\App\Http\Controllers\PreDealController::class, 'destroyItem'])->name('preDealItems.destroy');
     Route::get('deals/overdue', [DealController::class, 'overdue'])->name('deals.overdue');
     // До resource-маршрута: иначе DELETE deals/bulk сматчится как deals/{deal}.
     Route::delete('deals/bulk', [DealController::class, 'bulkDestroy'])->name('deals.bulkDestroy');
