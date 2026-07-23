@@ -58,14 +58,25 @@ class StageTimingTest extends TestCase
             ->assertInertia(fn (Assert $p) => $p->has('stageLogs', 2)->where('stageLogs.1.open', true));
     }
 
-    public function test_office_screen_shows_leaders(): void
+    public function test_office_leader_by_efficiency_not_by_count(): void
     {
         $company = Company::firstOrCreate(['code' => 'BAIA'], ['name' => 'BAIA']);
-        $mgr = User::factory()->create(['name' => 'Лидер']);
-        $mgr->assignRole('manager');
         $stage = DealStage::orderBy('order')->first()->id;
-        foreach ([1, 2] as $i) {
-            Deal::create(['number' => 'BAIA-00'.$i, 'name' => 'X', 'company_name' => 'ТОО '.$i, 'client_name' => 'И', 'budget' => 1, 'status' => 'active', 'company_id' => $company->id, 'deal_stage_id' => $stage, 'responsible_user_id' => $mgr->id]);
+        $wonStage = DealStage::where('is_won', true)->first()->id;
+
+        // A: ОДНА успешная сделка с высокой маржой — прибыль для компании есть.
+        $a = User::factory()->create(['name' => 'Эффективный']);
+        $a->assignRole('manager');
+        $deal = Deal::create(['number' => 'BAIA-001', 'name' => 'X', 'company_name' => 'Т', 'client_name' => 'И', 'budget' => 1000000, 'status' => 'closed', 'company_id' => $company->id, 'deal_stage_id' => $wonStage, 'responsible_user_id' => $a->id]);
+        $inv = \App\Models\Invoice::create(['number' => 'I-1', 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 1000000, 'status' => 'paid']);
+        \App\Models\Payment::create(['invoice_id' => $inv->id, 'amount' => 1000000, 'payment_date' => now()->toDateString()]);
+        \App\Models\Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 100000, 'date' => now()->toDateString(), 'status' => 'confirmed']);
+
+        // B: ТРИ сделки, но ни одной успешной — количеством лидером не стать.
+        $b = User::factory()->create(['name' => 'Количество']);
+        $b->assignRole('manager');
+        foreach ([2, 3, 4] as $i) {
+            Deal::create(['number' => 'BAIA-00'.$i, 'name' => 'X', 'company_name' => 'Т', 'client_name' => 'И', 'budget' => 500000, 'status' => 'active', 'company_id' => $company->id, 'deal_stage_id' => $stage, 'responsible_user_id' => $b->id]);
         }
 
         $admin = User::factory()->create();
@@ -73,17 +84,19 @@ class StageTimingTest extends TestCase
         $this->actingAs($admin)->post(route('workshopScreens.upsert'), ['company_id' => $company->id, 'kind' => 'office'])->assertRedirect();
         $code = WorkshopScreen::where('kind', 'office')->firstOrFail()->code;
 
-        // План месяца ставит админ/финансист.
-        $this->actingAs($admin)->post(route('workshopScreens.plan'), ['plan' => 20])->assertRedirect();
-
         auth()->logout();
         $this->post(route('screen.enter'), ['code' => $code]);
         $this->get(route('screen.show'))->assertOk()->assertInertia(fn (Assert $p) => $p
             ->component('Screen/Office')
-            ->where('plan', 20)
-            ->where('managers.0.name', 'Лидер')
-            ->where('managers.0.count', 2)
-            ->where('managers.0.left', 18)
-            ->where('leader.name', 'Лидер'));
+            ->where('leader.name', 'Эффективный')
+            ->where('managers.0.score', 100)
+            ->where('managers.0.won', 1)
+            ->where('managers.1.name', 'Количество')
+            ->where('managers.1.score', 0)
+            ->where('managers.1.total', 3));
+
+        // Фильтр месяца: в прошлом месяце успехов не было — лидера нет (score 0).
+        $this->get(route('screen.show', ['month' => now()->subMonthNoOverflow()->format('Y-m')]))
+            ->assertInertia(fn (Assert $p) => $p->where('managers.0.won', 0));
     }
 }
