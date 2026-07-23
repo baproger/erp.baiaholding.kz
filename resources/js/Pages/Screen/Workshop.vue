@@ -28,7 +28,6 @@ const leave = () => router.post(route('screen.leave'));
         <!-- Шапка: цех, живые часы, счётчик заказов — единый светлый стиль -->
         <div class="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
             <div class="flex items-center gap-3">
-                <span class="text-3xl">🏭</span>
                 <div>
                     <h1 class="text-2xl font-bold leading-tight text-slate-900 lg:text-3xl">{{ title }}</h1>
                     <div class="text-sm text-slate-400">заказов в работе: <b class="tabular-nums text-slate-600">{{ projects.length }}</b></div>

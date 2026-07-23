@@ -148,7 +148,7 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
                 <button v-for="t in workshopTabs" :key="t.key" type="button" @click="workshopTab = t.key"
                     class="rounded-lg px-4 py-1.5 text-sm font-semibold transition-all"
                     :class="activeWs === t.key ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'">
-                    🏭 {{ t.label }}
+                    {{ t.label }}
                 </button>
             </div>
         </div>
@@ -216,7 +216,7 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
                             <span v-if="typeBadge(stage)" class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">{{ typeBadge(stage) }}</span>
                             <span v-if="stage.gate_task_title" class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" :title="`Задача: ${stage.gate_task_title} · ${gateRoles[stage.gate_task_role] ?? stage.gate_task_role} · ${stage.gate_task_days} дн.`">🔒 гейт</span>
                             <span v-if="stage.is_completed" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title="Заказ готов → сделка на Логистику">🏁 завершающий</span>
-                            <span v-if="stage.workshop" class="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">🏭 {{ stage.workshop }}</span>
+                            <span v-if="stage.workshop" class="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{{ stage.workshop }}</span>
                             <span v-if="occupants(stage)" class="text-[11px] text-slate-400">· {{ occupants(stage) }} {{ isWorkshop ? 'заказ.' : 'сдел.' }}</span>
                         </div>
                         <!-- Действия -->

@@ -42,7 +42,6 @@ const copy = (code) => navigator.clipboard?.writeText(code);
                 <div class="divide-y divide-slate-50">
                     <div v-for="r in c.rows" :key="r.label" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
                         <div class="flex items-center gap-2">
-                            <span class="text-lg">🏭</span>
                             <span class="text-sm font-medium text-slate-800">{{ r.label }}</span>
                             <span v-if="r.screen && !r.screen.is_active" class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">отключён</span>
                         </div>

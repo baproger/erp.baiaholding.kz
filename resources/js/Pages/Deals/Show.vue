@@ -369,7 +369,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <p class="mb-4 text-xs text-slate-400">У компании несколько цехов — у каждого своя воронка этапов.</p>
                 <div class="space-y-2">
                     <button v-for="w in workshops" :key="w" @click="sendToWorkshop(w)"
-                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-800 transition hover:border-emerald-400 hover:bg-emerald-50">🏭 {{ w }}</button>
+                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-800 transition hover:border-emerald-400 hover:bg-emerald-50">{{ w }}</button>
                 </div>
                 <div class="mt-4 text-right">
                     <SecondaryButton @click="showWorkshopPick = false">Отмена</SecondaryButton>

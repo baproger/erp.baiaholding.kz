@@ -10,9 +10,8 @@ const submit = () => form.post(route('screen.enter'), { onError: () => form.rese
     <div class="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div class="w-full max-w-sm">
             <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-                <div class="text-5xl">🏭</div>
-                <h1 class="mt-4 text-2xl font-bold text-slate-900">Экран цеха</h1>
-                <p class="mt-2 text-sm text-slate-500">Введите код экрана — его выдаёт администратор в Настройки → Этапы → Цех</p>
+                <h1 class="text-2xl font-bold text-slate-900">Экран цеха</h1>
+                <p class="mt-2 text-sm text-slate-500">Введите код экрана — его выдаёт администратор в Настройки → Экраны</p>
                 <form @submit.prevent="submit" class="mt-6">
                     <input v-model="form.code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="••••••"
                         class="w-full rounded-2xl border-slate-300 bg-slate-50 py-4 text-center text-3xl font-bold tracking-[0.5em] text-slate-900 placeholder-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" autofocus />

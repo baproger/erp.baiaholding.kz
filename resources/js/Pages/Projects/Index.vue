@@ -52,7 +52,7 @@ const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preser
         <div v-if="view === 'kanban'" class="space-y-6">
         <div v-for="g in workshopGroups" :key="g.key">
             <div v-if="g.name" class="mb-2 flex items-center gap-2">
-                <span class="text-sm font-bold text-slate-800">🏭 {{ g.name }}</span>
+                <span class="text-sm font-bold text-slate-800">{{ g.name }}</span>
                 <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs tabular-nums text-slate-500">{{ g.stages.reduce((n, s) => n + byStage(s.id).length, 0) }}</span>
             </div>
             <div class="flex gap-4 overflow-x-auto pb-4">
