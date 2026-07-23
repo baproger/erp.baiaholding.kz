@@ -8,9 +8,9 @@ import FinancePanel from '@/Components/FinancePanel.vue';
 import DocumentPanel from '@/Components/DocumentPanel.vue';
 import CommentPanel from '@/Components/CommentPanel.vue';
 import HistoryPanel from '@/Components/HistoryPanel.vue';
-import { formatDate } from '@/utils/format';
+import { formatDuration, formatDate, formatDateTime } from '@/utils/format';
 
-const props = defineProps({ project: Object, stages: Array, users: Array, finance: Object, financeEntityType: String, financeEntityId: Number, financeInvoices: Array, financeExpenses: Array, canSeeMoney: Boolean, history: Array });
+const props = defineProps({ project: Object, stages: Array, users: Array, finance: Object, financeEntityType: String, financeEntityId: Number, financeInvoices: Array, financeExpenses: Array, canSeeMoney: Boolean, history: Array, stageLogs: { type: Array, default: () => [] } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
 const tab = ref('info');
 const lastStage = computed(() => props.stages[props.stages.length - 1]);
@@ -55,6 +55,24 @@ const sendToAct = () => router.post(route('projects.toAct', props.project.id), {
                     🚚 Готово — отправить на «Логистику»
                 </button>
                 <span v-else class="inline-flex items-center gap-2 text-sm font-semibold text-green-600">✓ Отправлено на «Логистику»</span>
+            </div>
+
+            <!-- Тайминг этапов: сколько времени заказ провёл на каждом -->
+            <div v-if="stageLogs.length" class="mt-4 border-t pt-4">
+                <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">⏱ Тайминг этапов</div>
+                <div class="space-y-1.5">
+                    <div v-for="(l, i) in stageLogs" :key="i" class="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm"
+                        :class="l.open ? 'bg-indigo-50' : 'bg-slate-50'">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-slate-800">{{ l.stage }}</span>
+                            <span v-if="l.open" class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">сейчас</span>
+                        </div>
+                        <div class="flex items-center gap-3 tabular-nums">
+                            <span class="text-xs text-slate-400">{{ formatDateTime(l.entered_at) }}<template v-if="l.left_at"> → {{ formatDateTime(l.left_at) }}</template></span>
+                            <b :class="l.open ? 'text-indigo-700' : 'text-slate-700'">{{ formatDuration(l.seconds) }}</b>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

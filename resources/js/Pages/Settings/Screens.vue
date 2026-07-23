@@ -6,9 +6,9 @@ import { confirmDialog } from '@/composables/useConfirm';
 const props = defineProps({ companies: Array });
 
 const screenUrl = `${window.location.origin}/screen`;
-const genCode = async (company, r) => {
+const genCode = async (company, r, kind = 'workshop') => {
     if (r.screen && !(await confirmDialog({ title: 'Выдать новый код?', message: `Экран «${r.label}» со старым кодом сразу отключится — на мониторе нужно будет ввести новый код.`, confirmText: 'Новый код' }))) return;
-    router.post(route('workshopScreens.upsert'), { company_id: company.id, workshop: r.workshop }, { preserveScroll: true });
+    router.post(route('workshopScreens.upsert'), { company_id: company.id, workshop: r.workshop ?? null, kind }, { preserveScroll: true });
 };
 const toggle = (r) => router.post(route('workshopScreens.toggle', r.screen.id), {}, { preserveScroll: true });
 const copy = (code) => navigator.clipboard?.writeText(code);
@@ -58,6 +58,24 @@ const copy = (code) => navigator.clipboard?.writeText(code);
                         </div>
                     </div>
                     <div v-if="!c.rows.length" class="px-5 py-6 text-center text-sm text-slate-400">У компании нет этапов цеха</div>
+                    <!-- Экран офиса: сделки по этапам + лидеры менеджеров -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/40 px-5 py-3.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-slate-800">Офис <span class="text-xs font-normal text-slate-400">— сделки и лидеры менеджеров</span></span>
+                            <span v-if="c.office && !c.office.is_active" class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">отключён</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button v-if="c.office" @click="copy(c.office.code)" title="Скопировать код"
+                                class="rounded-lg bg-slate-900 px-3 py-1.5 font-mono text-base font-bold tracking-[0.3em] text-emerald-400 transition hover:opacity-80"
+                                :class="!c.office.is_active ? 'opacity-40' : ''">{{ c.office.code }}</button>
+                            <span v-else class="text-xs text-slate-400">кода нет</span>
+                            <button @click="genCode(c, { workshop: null, label: 'Офис', screen: c.office }, 'office')"
+                                class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">{{ c.office ? 'Новый код' : 'Выдать код' }}</button>
+                            <button v-if="c.office" @click="toggle({ screen: c.office })"
+                                class="rounded-lg px-2.5 py-1.5 text-xs font-medium transition"
+                                :class="c.office.is_active ? 'text-slate-400 hover:bg-rose-50 hover:text-rose-600' : 'text-emerald-600 hover:bg-emerald-50'">{{ c.office.is_active ? 'Отключить' : 'Включить' }}</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

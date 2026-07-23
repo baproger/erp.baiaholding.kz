@@ -49,7 +49,11 @@ class ProjectController extends Controller
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
             // Цеху на карточке нужны срок, описание, заметка и адрес (город) из сделки.
             ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name,address,deadline,description,note'])
-            ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())]);
+            ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
+            // Тайминг: когда заказ вошёл на текущий этап (открытый лог).
+            ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
+                ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
+                ->latest('entered_at')->limit(1)]);
         $this->scope($base, $request);
         // Поиск во вложенной скобке — иначе orWhere «вырывается» из скоупа
         // компании/владельца и показал бы чужие заказы (утечка между фирмами).
@@ -165,6 +169,15 @@ class ProjectController extends Controller
             'financeExpenses' => $canSeeMoney ? $source->expenses : [],
             'canSeeMoney' => $canSeeMoney,
             'history' => $history,
+            // Тайминг этапов: сколько заказ провёл на каждом (открытый — тикает).
+            'stageLogs' => $project->stageLogs()->orderBy('entered_at')->orderBy('id')->get()
+                ->map(fn ($l) => [
+                    'stage' => $l->stage_name,
+                    'entered_at' => $l->entered_at->toIso8601String(),
+                    'left_at' => $l->left_at?->toIso8601String(),
+                    'seconds' => $l->left_at ? (int) $l->duration_seconds : (int) abs(now()->diffInSeconds($l->entered_at)),
+                    'open' => $l->left_at === null,
+                ]),
         ]);
     }
 

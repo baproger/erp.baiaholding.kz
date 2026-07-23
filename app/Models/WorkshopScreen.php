@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** ТВ-экран цеха: код доступа открывает канбан только своего цеха. */
 class WorkshopScreen extends Model
 {
-    protected $fillable = ['company_id', 'workshop', 'code', 'is_active'];
+    protected $fillable = ['company_id', 'workshop', 'kind', 'code', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
 

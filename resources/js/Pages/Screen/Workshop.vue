@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatDuration } from '@/utils/format';
 
 const props = defineProps({ screen: Object, stages: Array, projects: Array });
 
@@ -10,7 +10,9 @@ const byStage = (id) => props.projects.filter((p) => p.stage_id === id);
 // ТВ-режим: часы + автообновление раз в 30 секунд.
 const clock = ref('');
 let clockTimer = null, refreshTimer = null;
-const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+const nowTs = ref(Date.now());
+const tick = () => { clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); nowTs.value = Date.now(); };
+const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Date(p.stage_entered_at).getTime()) / 1000) : null;
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
@@ -56,7 +58,10 @@ const leave = () => router.post(route('screen.leave'));
                 <div class="flex-1 space-y-2.5 px-3 pb-3">
                     <div v-for="p in byStage(stage.id)" :key="p.id" class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
                         <div class="text-lg font-bold leading-snug text-slate-900">{{ p.name }}</div>
-                        <div class="text-xs text-slate-300">{{ p.number }}</div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-300">{{ p.number }}</span>
+                            <span v-if="onStage(p)" class="rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-bold tabular-nums text-indigo-600" title="Время на этапе">⏱ {{ onStage(p) }}</span>
+                        </div>
                         <div v-if="p.address" class="mt-1.5 text-sm text-slate-500">📍 {{ p.address }}</div>
                         <div v-if="p.deadline" class="mt-1 text-sm font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></div>
                         <div v-if="p.description" class="mt-1.5 whitespace-pre-line text-sm leading-snug text-slate-500">{{ p.description }}</div>

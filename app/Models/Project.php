@@ -29,6 +29,32 @@ class Project extends Model
         'completed_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        // Тайминг этапов: вход заказа на этап открывает таймер, смена этапа
+        // закрывает старый и открывает новый, завершение/отмена — закрывает.
+        static::created(function (Project $p) {
+            if ($p->project_stage_id) {
+                ProjectStageLog::open($p);
+            }
+        });
+        static::updated(function (Project $p) {
+            if ($p->wasChanged('project_stage_id')) {
+                ProjectStageLog::closeOpen($p);
+                if ($p->project_stage_id && ! in_array($p->status, ['completed', 'cancelled'], true)) {
+                    ProjectStageLog::open($p);
+                }
+            } elseif ($p->wasChanged('status') && in_array($p->status, ['completed', 'cancelled'], true)) {
+                ProjectStageLog::closeOpen($p);
+            }
+        });
+    }
+
+    public function stageLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ProjectStageLog::class);
+    }
+
     public function deal(): BelongsTo
     {
         return $this->belongsTo(Deal::class);

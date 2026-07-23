@@ -5,7 +5,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { deadlineClass } from '@/utils/deadline';
-import { formatDate } from '@/utils/format';
+import { onMounted, onUnmounted } from 'vue';
+import { formatDate, formatDuration } from '@/utils/format';
 
 const props = defineProps({ projects: [Array, Object], stages: Array, view: String, filters: Object, canSeeMoney: Boolean });
 
@@ -37,6 +38,12 @@ const workshopGroups = computed(() => {
 });
 const lastStageOf = (g) => [...g.stages].reverse().find((s) => s.is_completed)?.id ?? g.stages[g.stages.length - 1]?.id;
 const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preserveScroll: true, preserveState: false });
+// Тайминг этапа: сколько заказ уже на текущем этапе (тикает раз в минуту).
+const nowTs = ref(Date.now());
+let durTimer = null;
+onMounted(() => (durTimer = setInterval(() => (nowTs.value = Date.now()), 60000)));
+onUnmounted(() => clearInterval(durTimer));
+const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Date(p.stage_entered_at).getTime()) / 1000) : null;
 </script>
 
 <template>
@@ -68,7 +75,10 @@ const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preser
                     <Link v-for="p in byStage(stage.id)" :key="p.id" :href="route('projects.show', p.id)" draggable="true" @dragstart="draggingId = p.id"
                         class="block cursor-move rounded-md bg-white p-3 shadow-sm border border-slate-200 hover:ring-indigo-300">
                         <div class="text-sm font-bold text-slate-900">{{ p.deal?.company_name || p.name }}</div>
-                        <div class="text-[10px] text-slate-300">{{ p.number }}</div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] text-slate-300">{{ p.number }}</span>
+                            <span v-if="onStage(p)" class="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-indigo-600" title="Время на текущем этапе">⏱ {{ onStage(p) }}</span>
+                        </div>
                         <div v-if="canSeeMoney" class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
                         <div class="mt-1 text-xs text-slate-400">{{ p.client?.name ?? '—' }}</div>
                         <!-- Для цеха: город/адрес, срок, описание и заметка из сделки -->
