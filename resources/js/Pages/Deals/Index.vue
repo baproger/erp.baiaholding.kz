@@ -251,8 +251,10 @@ const applyBinMatch = () => {
                                 class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
                         </td>
                         <td class="px-4 py-3 text-slate-400">{{ deal.number }}</td>
-                        <td class="px-4 py-3 font-medium text-slate-900">{{ deal.company_name || deal.name }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ deal.client_name || deal.client?.name || '—' }}</td>
+                        <td class="px-4 py-3">
+                            <div class="line-clamp-2 max-w-md font-medium leading-snug text-slate-900" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}</div>
+                        </td>
+                        <td class="px-4 py-3"><div class="max-w-40 truncate text-slate-500" :title="deal.client_name || deal.client?.name">{{ deal.client_name || deal.client?.name || '—' }}</div></td>
                         <td class="px-4 py-3"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
                         <td class="px-4 py-3">{{ money(deal.budget) }}</td>
                         <td class="px-4 py-3" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}</td>
