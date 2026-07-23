@@ -45,6 +45,7 @@ const needsOptions = () => form.type === 'select' || form.type === 'radio';
         <div class="mb-4 flex gap-2 border-b">
             <Link :href="route('settings.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Общие</Link>
             <Link :href="route('stages.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Этапы</Link>
+            <Link :href="route('screens.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Экраны</Link>
             <Link :href="route('custom-fields.index')" class="border-b-2 border-indigo-600 px-3 py-2 text-sm font-medium text-indigo-600">Доп. поля</Link>
         </div>
         <div class="mb-4 flex justify-end"><PrimaryButton @click="openCreate">+ Новое поле</PrimaryButton></div>

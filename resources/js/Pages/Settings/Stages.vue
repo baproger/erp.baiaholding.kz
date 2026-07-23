@@ -9,7 +9,6 @@ import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 
 const props = defineProps({
-    screens: { type: Array, default: () => [] },
     dealStages: Array, projectStages: Array,
     companies: Array, selectedCompanyId: Number,
     stageTypes: Object, gateRoles: Object, missingTypes: Object,
@@ -41,13 +40,6 @@ const stages = computed(() => (isWorkshop.value
     ? (props.projectStages ?? []).filter((s) => (s.workshop ?? '') === activeWs.value)
     : props.dealStages));
 
-// 📺 Экраны цехов: код на каждый цех (открывает /screen только своего цеха).
-const screenRows = computed(() => {
-    const rows = workshopNames.value.map((w) => ({ workshop: w, label: w }));
-    if (!rows.length || (props.projectStages ?? []).some((s) => s.company_id && !s.workshop)) rows.push({ workshop: null, label: 'Единый цех' });
-    return rows.map((r) => ({ ...r, screen: (props.screens ?? []).find((sc) => (sc.workshop ?? null) === r.workshop) }));
-});
-const genCode = (r) => router.post(route('workshopScreens.upsert'), { company_id: funnel.value || null, workshop: r.workshop }, { preserveScroll: true });
 const switchFunnel = (v) => {
     funnel.value = v;
     router.get(route('stages.index'), { company: v }, { preserveState: true, preserveScroll: true, replace: true });
@@ -126,6 +118,7 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
         <div class="mb-5 flex gap-1 border-b border-slate-200">
             <Link :href="route('settings.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Общие</Link>
             <Link :href="route('stages.index')" class="border-b-2 border-indigo-600 px-3 py-2 text-sm font-medium text-indigo-600">Этапы</Link>
+            <Link :href="route('screens.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Экраны</Link>
             <Link :href="route('custom-fields.index')" class="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Доп. поля</Link>
         </div>
 
@@ -314,23 +307,6 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
 
                 <div v-if="!stages.length" class="px-5 py-12 text-center text-sm text-slate-400">
                     Этапов нет — нажмите «+ Добавить этап»
-                </div>
-            </div>
-        </div>
-        <!-- 📺 Экраны цехов (ТВ) -->
-        <div v-if="isWorkshop" class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-100 px-5 py-3.5">
-                <h3 class="text-sm font-semibold text-slate-900">📺 Экраны цехов (ТВ-мониторы)</h3>
-                <p class="mt-0.5 text-xs text-slate-400">На мониторе цеха откройте <b>{{ $page.props.appUrl ?? '' }}/screen</b> и введите код — экран покажет канбан только своего цеха (без сумм, автообновление). Новый код отключает старый.</p>
-            </div>
-            <div class="divide-y divide-slate-50">
-                <div v-for="r in screenRows" :key="r.label" class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-                    <span class="text-sm font-medium text-slate-800">🏭 {{ r.label }}</span>
-                    <div class="flex items-center gap-3">
-                        <code v-if="r.screen" class="rounded-lg bg-slate-900 px-3 py-1.5 text-base font-bold tracking-[0.3em] text-emerald-400">{{ r.screen.code }}</code>
-                        <span v-else class="text-xs text-slate-400">кода нет</span>
-                        <button @click="genCode(r)" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">{{ r.screen ? 'Новый код' : 'Выдать код' }}</button>
-                    </div>
                 </div>
             </div>
         </div>

@@ -80,10 +80,50 @@ class WorkshopScreenController extends Controller
         return redirect()->route('screen.show');
     }
 
-    /** Админка: выдать/перегенерировать код экрана цеха (Настройки → Этапы). */
-    public function upsert(Request $request): RedirectResponse
+    /** Настройки → Экраны: все цеха всех компаний, коды и статусы. */
+    public function admin(Request $request): Response
+    {
+        $this->guardAdmin($request);
+
+        $screens = WorkshopScreen::get()->keyBy(fn ($s) => ($s->company_id ?? 0).'|'.($s->workshop ?? ''));
+        $companies = \App\Models\Company::orderBy('id')->get(['id', 'name'])->map(function ($c) use ($screens) {
+            $stages = ProjectStage::where('company_id', $c->id)->where('is_active', true)->get(['workshop']);
+            $rows = $stages->pluck('workshop')->filter()->unique()->values()
+                ->map(fn ($w) => ['workshop' => $w, 'label' => $w]);
+            if ($rows->isEmpty() || $stages->contains(fn ($s) => $s->workshop === null)) {
+                $rows->push(['workshop' => null, 'label' => 'Единый цех']);
+            }
+
+            return [
+                'id' => $c->id, 'name' => $c->name,
+                'rows' => $rows->map(fn ($r) => $r + [
+                    'screen' => ($sc = $screens->get($c->id.'|'.($r['workshop'] ?? '')))
+                        ? ['id' => $sc->id, 'code' => $sc->code, 'is_active' => $sc->is_active] : null,
+                ])->values(),
+            ];
+        });
+
+        return Inertia::render('Settings/Screens', ['companies' => $companies]);
+    }
+
+    /** Включить/выключить экран (код перестаёт работать сразу). */
+    public function toggle(Request $request, WorkshopScreen $screen): RedirectResponse
+    {
+        $this->guardAdmin($request);
+        $screen->update(['is_active' => ! $screen->is_active]);
+
+        return back()->with('success', $screen->is_active ? 'Экран включён.' : 'Экран отключён.');
+    }
+
+    private function guardAdmin(Request $request): void
     {
         abort_unless($request->user()->hasRole('admin') || $request->user()->can('setting.update'), 403);
+    }
+
+    /** Админка: выдать/перегенерировать код экрана цеха. */
+    public function upsert(Request $request): RedirectResponse
+    {
+        $this->guardAdmin($request);
         $data = $request->validate([
             'company_id' => ['nullable', 'exists:companies,id'],
             'workshop' => ['nullable', 'string', 'max:100'],
