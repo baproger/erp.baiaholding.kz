@@ -79,9 +79,15 @@ class StageController extends Controller
     private function reindexFunnel(string $model, ?int $companyId): void
     {
         $stages = $model::where('company_id', $companyId)->orderBy('order')->orderBy('id')->get();
-        foreach ($stages as $i => $s) {
-            if ((int) $s->order !== $i + 1) {
-                $s->update(['order' => $i + 1]);
+        // У цеха нумерация ВНУТРИ каждого цеха (у BAIA их два) — 1..N на цех.
+        $groups = $model === ProjectStage::class
+            ? $stages->groupBy(fn ($s) => $s->workshop ?? '')
+            : collect(['' => $stages]);
+        foreach ($groups as $group) {
+            foreach ($group->values() as $i => $s) {
+                if ((int) $s->order !== $i + 1) {
+                    $s->update(['order' => $i + 1]);
+                }
             }
         }
     }
@@ -97,6 +103,7 @@ class StageController extends Controller
 
         $max = $model::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->when($data['kind'] === 'project', fn ($q) => $q->where('workshop', $data['workshop'] ?? null))
             ->max('order') ?? 0;
         $stage = $model::create([
             'name' => $data['name'],
@@ -186,6 +193,8 @@ class StageController extends Controller
         $neighbor = $model::query()
             // Обмен местами только внутри воронки своей компании (сделки и цех).
             ->where('company_id', $stage->company_id)
+            // Цех: стрелки двигают этап только внутри СВОЕГО цеха.
+            ->when($kind === 'project', fn ($q) => $q->where('workshop', $stage->workshop))
             ->when($dir === 'up', fn ($q) => $q->where('order', '<', $stage->order)->orderByDesc('order'))
             ->when($dir === 'down', fn ($q) => $q->where('order', '>', $stage->order)->orderBy('order'))
             ->first();

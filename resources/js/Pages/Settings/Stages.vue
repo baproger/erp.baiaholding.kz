@@ -23,9 +23,23 @@ const funnel = ref(props.selectedCompanyId);
 const kindTab = ref('deal');
 const isWorkshop = computed(() => kindTab.value === 'project');
 const kind = computed(() => kindTab.value);
-const stages = computed(() => (isWorkshop.value ? props.projectStages : props.dealStages));
 // Существующие цеха компании (BAIA: «Металл цех», «Ағаш цех») — подсказки в поле.
 const workshopNames = computed(() => [...new Set((props.projectStages ?? []).map((s) => s.workshop).filter(Boolean))]);
+
+// Подвкладки цехов: каждый цех настраивается ОТДЕЛЬНО (свой список этапов).
+const workshopTabs = computed(() => {
+    const tabs = workshopNames.value.map((w) => ({ key: w, label: w }));
+    if (!tabs.length || (props.projectStages ?? []).some((s) => s.company_id && !s.workshop)) tabs.push({ key: '', label: 'Единый цех' });
+    return tabs;
+});
+const workshopTab = ref(null);
+const activeWs = computed(() => {
+    const keys = workshopTabs.value.map((t) => t.key);
+    return workshopTab.value !== null && keys.includes(workshopTab.value) ? workshopTab.value : (keys[0] ?? '');
+});
+const stages = computed(() => (isWorkshop.value
+    ? (props.projectStages ?? []).filter((s) => (s.workshop ?? '') === activeWs.value)
+    : props.dealStages));
 
 // 📺 Экраны цехов: код на каждый цех (открывает /screen только своего цеха).
 const screenRows = computed(() => {
@@ -42,7 +56,7 @@ const switchFunnel = (v) => {
 // Добавление
 const newForm = useForm({ kind: 'deal', name: '', color: '#6366F1', workshop: '' });
 const adding = ref(false);
-const startAdd = () => { adding.value = true; editing.value = null; newForm.reset(); newForm.kind = kind.value; newForm.color = '#6366F1'; };
+const startAdd = () => { adding.value = true; editing.value = null; newForm.reset(); newForm.kind = kind.value; newForm.color = '#6366F1'; newForm.workshop = isWorkshop.value ? activeWs.value : ''; };
 const add = () => newForm
     .transform((d) => ({ ...d, kind: kind.value }))
     .post(route('stages.store', { company: funnel.value }), { preserveScroll: true, onSuccess: () => (adding.value = false) });
@@ -136,6 +150,14 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
                     Цех
                 </button>
             </div>
+            <!-- Выбор цеха: у BAIA два — настраиваются отдельно -->
+            <div v-if="isWorkshop && workshopTabs.length > 1" class="inline-flex rounded-xl bg-slate-100 p-1">
+                <button v-for="t in workshopTabs" :key="t.key" type="button" @click="workshopTab = t.key"
+                    class="rounded-lg px-4 py-1.5 text-sm font-semibold transition-all"
+                    :class="activeWs === t.key ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'">
+                    🏭 {{ t.label }}
+                </button>
+            </div>
         </div>
 
         <!-- Предупреждение о незаданных обязательных типах -->
@@ -150,7 +172,7 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
         <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                 <div>
-                    <h3 class="font-semibold text-slate-900">{{ isWorkshop ? 'Этапы цеха' : 'Воронка сделок' }}</h3>
+                    <h3 class="font-semibold text-slate-900">{{ isWorkshop ? 'Этапы — ' + (activeWs || 'единый цех') : 'Воронка сделок' }}</h3>
                     <p class="text-xs text-slate-400">{{ companyName }} · перетаскивать порядок стрелками ↑↓ слева</p>
                 </div>
                 <PrimaryButton @click="startAdd">+ Добавить этап</PrimaryButton>
