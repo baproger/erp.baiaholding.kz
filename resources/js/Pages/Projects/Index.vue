@@ -23,7 +23,19 @@ const onDrop = (stage) => {
 };
 const switchView = (v) => router.get(route('projects.index'), { ...props.filters, view: v }, { preserveState: true });
 const advance = (p) => router.patch(route('projects.advance', p.id), {}, { preserveScroll: true, preserveState: false });
-const lastStageId = computed(() => props.stages[props.stages.length - 1]?.id);
+// Секции канбана: у BAIA два цеха («Металл цех» / «Ағаш цех») — своя строка
+// этапов на каждый; у ASU один цех (workshop=null) — одна секция без шапки.
+const workshopGroups = computed(() => {
+    const groups = [];
+    for (const s of props.stages) {
+        const key = s.workshop ?? '';
+        let g = groups.find((x) => x.key === key);
+        if (!g) groups.push(g = { key, name: s.workshop, stages: [] });
+        g.stages.push(s);
+    }
+    return groups;
+});
+const lastStageOf = (g) => [...g.stages].reverse().find((s) => s.is_completed)?.id ?? g.stages[g.stages.length - 1]?.id;
 const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preserveScroll: true, preserveState: false });
 </script>
 
@@ -37,8 +49,14 @@ const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preser
             <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-r-md px-4 py-1.5 text-sm" @click="switchView('list')">Список</button>
         </div>
 
-        <div v-if="view === 'kanban'" class="flex gap-4 overflow-x-auto pb-4">
-            <div v-for="stage in stages" :key="stage.id" class="flex w-72 flex-shrink-0 flex-col rounded-lg bg-slate-200/60" @dragover.prevent @drop="onDrop(stage)">
+        <div v-if="view === 'kanban'" class="space-y-6">
+        <div v-for="g in workshopGroups" :key="g.key">
+            <div v-if="g.name" class="mb-2 flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-800">🏭 {{ g.name }}</span>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs tabular-nums text-slate-500">{{ g.stages.reduce((n, s) => n + byStage(s.id).length, 0) }}</span>
+            </div>
+            <div class="flex gap-4 overflow-x-auto pb-4">
+            <div v-for="stage in g.stages" :key="stage.id" class="flex w-72 flex-shrink-0 flex-col rounded-lg bg-slate-200/60" @dragover.prevent @drop="onDrop(stage)">
                 <div class="flex items-center justify-between px-3 py-2">
                     <div class="flex items-center gap-2">
                         <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: stage.color }"></span>
@@ -58,12 +76,14 @@ const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preser
                         <div v-if="p.deal?.deadline || p.deadline" class="mt-1 text-xs" :class="deadlineClass(p.deal?.deadline ?? p.deadline, p.status === 'completed') || 'text-slate-400'">⏰ {{ formatDate(p.deal?.deadline ?? p.deadline) }}</div>
                         <div v-if="p.deal?.description" class="mt-1 whitespace-pre-line text-xs leading-snug text-slate-500">{{ p.deal.description }}</div>
                         <div v-if="p.deal?.note" class="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800">📌 {{ p.deal.note }}</div>
-                        <button v-if="p.project_stage_id === lastStageId" @click.prevent.stop="sendToAct(p)" class="mt-2 w-full rounded bg-teal-600 py-1 text-xs font-semibold text-white hover:bg-teal-700">🚚 Готово → Логистика</button>
+                        <button v-if="p.project_stage_id === lastStageOf(g)" @click.prevent.stop="sendToAct(p)" class="mt-2 w-full rounded bg-teal-600 py-1 text-xs font-semibold text-white hover:bg-teal-700">🚚 Готово → Логистика</button>
                         <button v-else @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-slate-100 py-1 text-xs text-slate-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>
                     <div v-if="!byStage(stage.id).length" class="py-6 text-center text-xs text-slate-400">Пусто</div>
                 </div>
             </div>
+            </div>
+        </div>
         </div>
 
         <div v-else class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

@@ -15,16 +15,23 @@ class ProjectService
      * (returns it), but a completed prior run starts a fresh workshop cycle —
      * otherwise re-sending would close the deal with no active project (lost).
      */
-    public function createFromDeal(Deal $deal): Project
+    public function createFromDeal(Deal $deal, ?string $workshop = null): Project
     {
         if ($deal->project && $deal->project->status !== 'completed') {
             return $deal->project;
         }
 
-        // Заказ попадает в цех СВОЕЙ компании (BAIA — мебельный, ASU — швейный).
-        $firstStage = ProjectStage::funnel($deal->company_id ? (int) $deal->company_id : null)->first();
+        // Заказ попадает в цех СВОЕЙ компании; у BAIA цехов два («Металл цех» /
+        // «Ағаш цех») — берётся воронка выбранного цеха.
+        $companyId = $deal->company_id ? (int) $deal->company_id : null;
+        $available = ProjectStage::workshopsFor($companyId);
+        if (! in_array($workshop, $available, true)) {
+            $workshop = count($available) === 1 ? $available[0] : null;
+        }
+        $firstStage = ProjectStage::funnel($companyId, $workshop)->first();
 
         return Project::create([
+            'workshop' => $workshop,
             'number' => $this->numbers->generate(),
             'name' => $deal->company_name ?: $deal->name,
             'deal_id' => $deal->id,

@@ -177,6 +177,7 @@ class DealController extends Controller
                 'company' => round($dealRemainder - $dealBonus, 2),
             ],
             'chatId' => $dealChat->id,
+            'workshops' => \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null),
             'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'stages' => DealStage::with('translations')->where('is_active', true)
                 ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
@@ -338,13 +339,19 @@ class DealController extends Controller
         return back()->with('error', 'Это последний этап.');
     }
 
-    public function sendToWorkshop(Deal $deal, \App\Services\ProjectService $projects): \Illuminate\Http\RedirectResponse
+    public function sendToWorkshop(Request $request, Deal $deal, \App\Services\ProjectService $projects): \Illuminate\Http\RedirectResponse
     {
         $this->authorize('update', $deal);
         if ($deal->project && $deal->project->status !== 'completed') {
             return back()->with('error', 'Заказ уже в цехе.');
         }
-        $project = $projects->createFromDeal($deal);
+        // У BAIA два цеха — при отправке нужно выбрать («Металл цех» / «Ағаш цех»).
+        $available = \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null);
+        $workshop = $request->string('workshop')->toString() ?: null;
+        if (count($available) > 1 && ! in_array($workshop, $available, true)) {
+            return back()->with('error', 'Выберите цех: '.implode(' или ', $available).'.');
+        }
+        $project = $projects->createFromDeal($deal, $workshop);
         $deal->update(['status' => 'closed', 'closed_at' => now()]);
         return back()->with('success', 'Отправлено в цех: '.$project->number.'.');
     }

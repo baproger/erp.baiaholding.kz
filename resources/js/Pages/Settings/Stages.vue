@@ -23,13 +23,15 @@ const kindTab = ref('deal');
 const isWorkshop = computed(() => kindTab.value === 'project');
 const kind = computed(() => kindTab.value);
 const stages = computed(() => (isWorkshop.value ? props.projectStages : props.dealStages));
+// Существующие цеха компании (BAIA: «Металл цех», «Ағаш цех») — подсказки в поле.
+const workshopNames = computed(() => [...new Set((props.projectStages ?? []).map((s) => s.workshop).filter(Boolean))]);
 const switchFunnel = (v) => {
     funnel.value = v;
     router.get(route('stages.index'), { company: v }, { preserveState: true, preserveScroll: true, replace: true });
 };
 
 // Добавление
-const newForm = useForm({ kind: 'deal', name: '', color: '#6366F1' });
+const newForm = useForm({ kind: 'deal', name: '', color: '#6366F1', workshop: '' });
 const adding = ref(false);
 const startAdd = () => { adding.value = true; editing.value = null; newForm.reset(); newForm.kind = kind.value; newForm.color = '#6366F1'; };
 const add = () => newForm
@@ -40,7 +42,7 @@ const move = (stage, direction) => router.patch(route('stages.move', [kind.value
 
 // Редактор этапа: имя + цвет + (для сделок) тип и гейт / (для цеха) завершающий.
 const editing = ref(null);
-const editForm = useForm({ name: '', color: '#6366F1', stage_type: '', gate_task_title: '', gate_task_role: 'financist', gate_task_days: '', is_completed: false });
+const editForm = useForm({ name: '', color: '#6366F1', stage_type: '', gate_task_title: '', gate_task_role: 'financist', gate_task_days: '', is_completed: false, workshop: '' });
 const startEdit = (stage) => {
     editing.value = stage.id;
     adding.value = false;
@@ -52,10 +54,11 @@ const startEdit = (stage) => {
     editForm.gate_task_role = stage.gate_task_role ?? 'financist';
     editForm.gate_task_days = stage.gate_task_days ?? '';
     editForm.is_completed = !!stage.is_completed;
+    editForm.workshop = stage.workshop ?? '';
 };
 const saveEdit = (stage) => editForm
     .transform((d) => isWorkshop.value
-        ? { name: d.name, color: d.color, is_completed: d.is_completed }
+        ? { name: d.name, color: d.color, is_completed: d.is_completed, workshop: d.workshop || null }
         : {
             name: d.name, color: d.color,
             stage_type: d.stage_type || null,
@@ -160,6 +163,11 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
                             <input type="color" v-model="newForm.color" class="h-7 w-7 cursor-pointer rounded border-0 bg-transparent p-0" title="Свой цвет" />
                         </div>
                     </div>
+                    <div v-if="isWorkshop" class="min-w-[160px]">
+                        <InputLabel value="Цех (для BAIA: Металл / Ағаш)" />
+                        <TextInput v-model="newForm.workshop" list="workshop-names" placeholder="Пусто = единый цех" class="mt-1 w-full" />
+                        <datalist id="workshop-names"><option v-for="w in workshopNames" :key="w" :value="w" /></datalist>
+                    </div>
                     <PrimaryButton :disabled="newForm.processing || !newForm.name" @click="add">Добавить</PrimaryButton>
                     <SecondaryButton @click="adding = false">Отмена</SecondaryButton>
                 </div>
@@ -184,6 +192,7 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
                             <span v-if="typeBadge(stage)" class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">{{ typeBadge(stage) }}</span>
                             <span v-if="stage.gate_task_title" class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" :title="`Задача: ${stage.gate_task_title} · ${gateRoles[stage.gate_task_role] ?? stage.gate_task_role} · ${stage.gate_task_days} дн.`">🔒 гейт</span>
                             <span v-if="stage.is_completed" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700" title="Заказ готов → сделка на Логистику">🏁 завершающий</span>
+                            <span v-if="stage.workshop" class="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">🏭 {{ stage.workshop }}</span>
                             <span v-if="occupants(stage)" class="text-[11px] text-slate-400">· {{ occupants(stage) }} {{ isWorkshop ? 'заказ.' : 'сдел.' }}</span>
                         </div>
                         <!-- Действия -->
@@ -217,6 +226,11 @@ const companyName = computed(() => props.companies.find((c) => c.id === funnel.v
                                 </select>
                                 <div v-if="editForm.errors.stage_type" class="mt-1 text-xs text-red-600">{{ editForm.errors.stage_type }}</div>
                             </div>
+                        </div>
+
+                        <div v-if="isWorkshop" class="mt-3">
+                            <InputLabel value="Цех этапа (у BAIA два: Металл цех / Ағаш цех)" />
+                            <TextInput v-model="editForm.workshop" list="workshop-names" placeholder="Пусто = единый цех компании" class="mt-1 w-full sm:w-72" />
                         </div>
 
                         <!-- Цех: завершающий этап -->

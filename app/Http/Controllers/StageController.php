@@ -105,6 +105,7 @@ class StageController extends Controller
             'checklist' => [],
             'type' => $data['kind'] === 'project' ? 'project' : 'sale',
             'company_id' => $companyId,
+            'workshop' => $data['kind'] === 'project' ? ($data['workshop'] ?? null) : null,
         ]);
         $stage->translations()->updateOrCreate(['locale' => app()->getLocale()], ['name' => $data['name']]);
 
@@ -125,10 +126,16 @@ class StageController extends Controller
 
         // «Завершающий этап» — только у цеха: по нему заказ считается готовым
         // и сделка возвращается на «Логистику». Завершающий один на воронку.
+        if ($kind === 'project' && $request->has('workshop')) {
+            $updates['workshop'] = $data['workshop'] ?: null;
+        }
         if ($kind === 'project' && $request->has('is_completed')) {
             $isCompleted = (bool) $data['is_completed'];
             if ($isCompleted) {
-                ProjectStage::where('company_id', $stage->company_id)->where('id', '!=', $stage->id)
+                // Завершающий один НА ЦЕХ (у BAIA их два — у каждого свой).
+                ProjectStage::where('company_id', $stage->company_id)
+                    ->where('workshop', $updates['workshop'] ?? $stage->workshop)
+                    ->where('id', '!=', $stage->id)
                     ->update(['is_completed' => false]);
             }
             $updates['is_completed'] = $isCompleted;
@@ -248,6 +255,7 @@ class StageController extends Controller
             'gate_task_role' => ['nullable', Rule::in(['financist', 'designer', 'supplier', 'manager', 'director', 'admin'])],
             'gate_task_days' => ['nullable', 'integer', 'min:1', 'max:365'],
             'is_completed' => ['nullable', 'boolean'],
+            'workshop' => ['nullable', 'string', 'max:100'],
         ]);
     }
 }

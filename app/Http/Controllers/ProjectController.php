@@ -68,6 +68,8 @@ class ProjectController extends Controller
                 'id' => $s->id,
                 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyCodes[$s->company_id] ?? '') : ''),
                 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed,
+                // Цех (у BAIA их два) — канбан рисует секцию на каждый.
+                'workshop' => $s->workshop,
             ]);
 
         $projects = $view === 'list'
@@ -153,7 +155,7 @@ class ProjectController extends Controller
                 : null,
             // Этапы цеха компании этого заказа (по исходной сделке); свои
             // приоритетны, «общие» — фолбэк (иначе степпер двоит Кесу+Кесу…).
-            'stages' => ProjectStage::companyQuery($project->deal?->company_id ? (int) $project->deal->company_id : null)
+            'stages' => ProjectStage::companyQuery($project->deal?->company_id ? (int) $project->deal->company_id : null, $project->workshop)
                 ->with('translations')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_completed' => $s->is_completed]),
             'finance' => $canSeeMoney ? $finance->summaryFor($source) : null,
@@ -191,7 +193,7 @@ class ProjectController extends Controller
         $this->authorize('view', $project);
         // «Далее» — по ПОЗИЦИИ в воронке цеха своей компании (не по order >
         // current): при задвоенном order соседний этап не перескакивается.
-        $funnel = ProjectStage::funnel($project->deal?->company_id ? (int) $project->deal->company_id : null)->values();
+        $funnel = ProjectStage::funnel($project->deal?->company_id ? (int) $project->deal->company_id : null, $project->workshop)->values();
         $idx = $funnel->search(fn ($s) => $s->id === $project->project_stage_id);
         $next = $idx !== false ? $funnel->get($idx + 1) : $funnel->first();
         if (! $next) {

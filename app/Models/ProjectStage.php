@@ -11,7 +11,7 @@ class ProjectStage extends Model
     use HasFactory;
 
     protected $fillable = [
-        'company_id', 'name', 'order', 'color', 'checklist', 'type', 'is_completed', 'is_active',
+        'company_id', 'workshop', 'name', 'order', 'color', 'checklist', 'type', 'is_completed', 'is_active',
     ];
 
     protected $casts = [
@@ -26,7 +26,7 @@ class ProjectStage extends Model
      * легаси/тесты) — ТОЛЬКО как фолбэк, иначе одинаковые названия двоятся
      * (Кесу+Кесу…) в степпере заказа.
      */
-    public static function companyQuery(?int $companyId): \Illuminate\Database\Eloquent\Builder
+    public static function companyQuery(?int $companyId, ?string $workshop = null): \Illuminate\Database\Eloquent\Builder
     {
         $q = static::where('is_active', true)->orderBy('order')->orderBy('id');
 
@@ -36,12 +36,26 @@ class ProjectStage extends Model
                 : $q->whereNull('company_id');
         }
 
+        // Цех внутри компании (у BAIA их два — «Металл цех» и «Ағаш цех»):
+        // воронка конкретного цеха. null = единственный цех (ASU, легаси).
+        if ($workshop !== null) {
+            $q->where('workshop', $workshop);
+        }
+
         return $q;
     }
 
-    public static function funnel(?int $companyId = null): \Illuminate\Support\Collection
+    public static function funnel(?int $companyId = null, ?string $workshop = null): \Illuminate\Support\Collection
     {
-        return static::companyQuery($companyId)->get();
+        return static::companyQuery($companyId, $workshop)->get();
+    }
+
+    /** Названия цехов компании (пусто или один элемент = выбор не нужен). */
+    public static function workshopsFor(?int $companyId): array
+    {
+        return static::companyQuery($companyId)
+            ->whereNotNull('workshop')->distinct()->orderBy('workshop')
+            ->pluck('workshop')->all();
     }
 
     public function projects(): HasMany

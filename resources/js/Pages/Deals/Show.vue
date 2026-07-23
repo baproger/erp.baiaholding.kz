@@ -21,7 +21,7 @@ import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null } });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] } });
 
 const tab = ref('finance');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
@@ -75,7 +75,13 @@ const moveStage = async (id) => {
     router.patch(route('deals.stage', props.deal.id), { deal_stage_id: id }, { preserveScroll: true });
 };
 const advance = () => router.patch(route('deals.advance', props.deal.id), {}, { preserveScroll: true });
-const sendToWorkshop = () => router.post(route('deals.toWorkshop', props.deal.id), {}, { preserveScroll: true });
+// У BAIA два цеха — сначала выбор («Металл цех» / «Ағаш цех»), у ASU сразу.
+const showWorkshopPick = ref(false);
+const sendToWorkshop = (w = null) => {
+    if (!w && props.workshops.length > 1) { showWorkshopPick.value = true; return; }
+    router.post(route('deals.toWorkshop', props.deal.id), { workshop: w ?? props.workshops[0] ?? null },
+        { preserveScroll: true, onSuccess: () => (showWorkshopPick.value = false) });
+};
 const setResponsible = (e) => router.patch(route('deals.responsible', props.deal.id), { responsible_user_id: e.target.value || null }, { preserveScroll: true });
 const destroy = async () => {
     if (await confirmDialog({ title: 'Удалить сделку', message: 'Сделка будет удалена. Это действие необратимо.', confirmText: 'Удалить', danger: true })) {
@@ -165,7 +171,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
             <div class="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
                 <PrimaryButton v-if="can.update && !isWorkshopStage && !isLastStage && !managerFrozen" @click="advance">Далее →</PrimaryButton>
-                <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-all duration-150 hover:bg-emerald-700">
+                <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop()" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-all duration-150 hover:bg-emerald-700">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
                     Отправить в цех
                 </button>
@@ -353,6 +359,20 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showEdit = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="editForm.processing" @click="saveEdit">Сохранить</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+        <!-- Выбор цеха (BAIA: Металл / Ағаш) -->
+        <Modal :show="showWorkshopPick" max-width="sm" @close="showWorkshopPick = false">
+            <div class="p-6">
+                <h3 class="mb-1 text-base font-semibold text-slate-900">В какой цех отправить?</h3>
+                <p class="mb-4 text-xs text-slate-400">У компании несколько цехов — у каждого своя воронка этапов.</p>
+                <div class="space-y-2">
+                    <button v-for="w in workshops" :key="w" @click="sendToWorkshop(w)"
+                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-800 transition hover:border-emerald-400 hover:bg-emerald-50">🏭 {{ w }}</button>
+                </div>
+                <div class="mt-4 text-right">
+                    <SecondaryButton @click="showWorkshopPick = false">Отмена</SecondaryButton>
                 </div>
             </div>
         </Modal>
