@@ -68,42 +68,61 @@ class WorkshopScreenController extends Controller
         ]);
     }
 
-    /** Экран «Офис»: сделки по этапам + лидеры менеджеров (без сумм). */
+    /**
+     * Экран «Офис»: отдел продаж (роль manager) — сделки каждого за текущий
+     * месяц против плана (Настройки → Экраны), лидер месяца справа. Без сумм.
+     */
     private function office(WorkshopScreen $screen): Response
     {
         $companyId = $screen->company_id ? (int) $screen->company_id : null;
+        $plan = max(1, (int) \App\Models\Setting::get('sales_plan_monthly', 20));
+        $monthStart = now()->startOfMonth();
 
-        $stages = \App\Models\DealStage::funnel($companyId)
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color]);
-
-        $deals = \App\Models\Deal::query()
+        $base = \App\Models\Deal::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
-            ->where('status', 'active')
-            ->with('responsible:id,name')
-            ->latest()->get()
-            ->map(fn ($d) => [
-                'number' => $d->number,
-                'name' => $d->company_name ?: $d->name,
-                'stage_id' => $d->deal_stage_id,
-                'manager' => $d->responsible?->name,
-                'deadline' => optional($d->deadline)->toDateString(),
-                'overdue' => $d->deadline?->isPast() ?? false,
-            ]);
+            ->whereNotNull('responsible_user_id')
+            ->where('created_at', '>=', $monthStart);
+        $counts = (clone $base)->where('status', '!=', 'cancelled')
+            ->groupBy('responsible_user_id')->selectRaw('responsible_user_id uid, count(*) c')->pluck('c', 'uid');
+        $wonCounts = \App\Models\Deal::won()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->whereNotNull('responsible_user_id')->where('created_at', '>=', $monthStart)
+            ->groupBy('responsible_user_id')->selectRaw('responsible_user_id uid, count(*) c')->pluck('c', 'uid');
+        $activeCounts = \App\Models\Deal::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->whereNotNull('responsible_user_id')->where('status', 'active')
+            ->groupBy('responsible_user_id')->selectRaw('responsible_user_id uid, count(*) c')->pluck('c', 'uid');
 
-        // Лидеры: сколько сделок у каждого менеджера + сколько успешных.
-        $base = \App\Models\Deal::query()->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->whereNotNull('responsible_user_id');
-        $totals = (clone $base)->where('status', '!=', 'cancelled')->groupBy('responsible_user_id')->selectRaw('responsible_user_id uid, count(*) c')->pluck('c', 'uid');
-        $wonCounts = \App\Models\Deal::won()->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->whereNotNull('responsible_user_id')->groupBy('responsible_user_id')->selectRaw('responsible_user_id uid, count(*) c')->pluck('c', 'uid');
-        $leaders = \App\Models\User::whereIn('id', $totals->keys())->where('is_active', true)->get(['id', 'name', 'avatar'])
-            ->map(fn ($u) => ['name' => $u->name, 'avatar' => $u->avatar, 'total' => (int) ($totals[$u->id] ?? 0), 'won' => (int) ($wonCounts[$u->id] ?? 0)])
-            ->sortByDesc('total')->values();
+        // Весь отдел продаж (роль manager), даже с нулём сделок за месяц.
+        $managers = \App\Models\User::role('manager')->where('is_active', true)->get(['id', 'name', 'avatar'])
+            ->map(fn ($u) => [
+                'name' => $u->name,
+                'avatar' => $u->avatar,
+                'count' => (int) ($counts[$u->id] ?? 0),
+                'won' => (int) ($wonCounts[$u->id] ?? 0),
+                'active' => (int) ($activeCounts[$u->id] ?? 0),
+                'left' => max(0, $plan - (int) ($counts[$u->id] ?? 0)),
+                'pct' => min(100, (int) round(($counts[$u->id] ?? 0) / $plan * 100)),
+            ])
+            ->sortByDesc('count')->values();
 
         return Inertia::render('Screen/Office', [
             'screen' => ['company' => $screen->company?->name],
-            'stages' => $stages,
-            'deals' => $deals,
-            'leaders' => $leaders,
+            'plan' => $plan,
+            'monthLabel' => now()->locale('ru')->translatedFormat('LLLL Y'),
+            'managers' => $managers,
+            'leader' => $managers->first(),
         ]);
+    }
+
+    /** План сделок на месяц для экрана «Офис» — ставит админ или финансист. */
+    public function plan(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'financist']) || $request->user()->can('setting.update'), 403);
+        $data = $request->validate(['plan' => ['required', 'integer', 'min:1', 'max:1000']]);
+        \App\Models\Setting::set('sales_plan_monthly', $data['plan']);
+
+        return back()->with('success', 'План сделок на месяц: '.$data['plan'].'.');
     }
 
     public function enter(Request $request): RedirectResponse
@@ -151,7 +170,10 @@ class WorkshopScreenController extends Controller
             ];
         });
 
-        return Inertia::render('Settings/Screens', ['companies' => $companies]);
+        return Inertia::render('Settings/Screens', [
+            'companies' => $companies,
+            'salesPlan' => (int) \App\Models\Setting::get('sales_plan_monthly', 20),
+        ]);
     }
 
     /** Включить/выключить экран (код перестаёт работать сразу). */

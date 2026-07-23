@@ -73,12 +73,17 @@ class StageTimingTest extends TestCase
         $this->actingAs($admin)->post(route('workshopScreens.upsert'), ['company_id' => $company->id, 'kind' => 'office'])->assertRedirect();
         $code = WorkshopScreen::where('kind', 'office')->firstOrFail()->code;
 
+        // План месяца ставит админ/финансист.
+        $this->actingAs($admin)->post(route('workshopScreens.plan'), ['plan' => 20])->assertRedirect();
+
         auth()->logout();
         $this->post(route('screen.enter'), ['code' => $code]);
         $this->get(route('screen.show'))->assertOk()->assertInertia(fn (Assert $p) => $p
             ->component('Screen/Office')
-            ->has('deals', 2)
-            ->where('leaders.0.name', 'Лидер')
-            ->where('leaders.0.total', 2));
+            ->where('plan', 20)
+            ->where('managers.0.name', 'Лидер')
+            ->where('managers.0.count', 2)
+            ->where('managers.0.left', 18)
+            ->where('leader.name', 'Лидер'));
     }
 }

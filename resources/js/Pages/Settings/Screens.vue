@@ -1,9 +1,14 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ companies: Array });
+const props = defineProps({ companies: Array, salesPlan: Number });
+
+// План сделок на месяц (для экрана «Офис») — ставит админ или финансист.
+const planVal = ref(props.salesPlan ?? 20);
+const savePlan = () => router.post(route('workshopScreens.plan'), { plan: planVal.value }, { preserveScroll: true });
 
 const screenUrl = `${window.location.origin}/screen`;
 const genCode = async (company, r, kind = 'workshop') => {
@@ -32,6 +37,12 @@ const copy = (code) => navigator.clipboard?.writeText(code);
             <div class="text-sm text-slate-700">
                 На мониторе цеха откройте <button @click="copy(screenUrl)" class="rounded-lg bg-white px-2 py-0.5 font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50" title="Скопировать">{{ screenUrl }}</button>
                 и введите код цеха. Экран показывает канбан <b>только своего цеха</b> — без сумм, с автообновлением каждые 30 секунд.
+                Экран «Офис» — отдел продаж против плана месяца и лидер.
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-medium text-slate-500">План сделок/мес:</span>
+                <input v-model.number="planVal" @change="savePlan" type="number" min="1" max="1000"
+                    class="w-20 rounded-lg border-slate-300 py-1.5 text-center text-sm font-semibold shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
             </div>
         </div>
 

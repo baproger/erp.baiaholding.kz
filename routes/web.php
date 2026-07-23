@@ -102,6 +102,7 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/screens', [\App\Http\Controllers\WorkshopScreenController::class, 'admin'])->name('screens.index');
     Route::post('workshop-screens', [\App\Http\Controllers\WorkshopScreenController::class, 'upsert'])->name('workshopScreens.upsert');
     Route::post('workshop-screens/{screen}/toggle', [\App\Http\Controllers\WorkshopScreenController::class, 'toggle'])->name('workshopScreens.toggle');
+    Route::post('workshop-screens/plan', [\App\Http\Controllers\WorkshopScreenController::class, 'plan'])->name('workshopScreens.plan');
     Route::post('expense-categories', [\App\Http\Controllers\ExpenseCategoryController::class, 'store'])->name('expenseCategories.store');
     Route::put('expense-categories/{category}', [\App\Http\Controllers\ExpenseCategoryController::class, 'update'])->name('expenseCategories.update');
     Route::delete('expense-categories/{category}', [\App\Http\Controllers\ExpenseCategoryController::class, 'destroy'])->name('expenseCategories.destroy');
