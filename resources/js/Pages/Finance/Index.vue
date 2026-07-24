@@ -12,7 +12,7 @@ import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 import DdsPanel from '@/Components/DdsPanel.vue';
 
-const props = defineProps({ invoices: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
+const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
@@ -53,6 +53,14 @@ const delReceipt = (r) => router.delete(route('finance.receipts.destroy', r.id),
 
 // Прошлые поступления: аккордеон снизу, фильтр серверный (поиск + период).
 const pastOpen = ref(!!(props.filters?.rc_search || props.filters?.rc_from || props.filters?.rc_to));
+// Прошлые счета: аккордеон + поиск по номеру (параметр search).
+const invPastOpen = ref(false);
+const invSearch = ref(props.filters?.search ?? '');
+const applyInvFilters = () => router.get(route('finance.index'),
+    { ...props.filters, search: invSearch.value || undefined },
+    { preserveState: true, preserveScroll: true, replace: true, onSuccess: () => (invPastOpen.value = true) });
+const resetInvFilters = () => { invSearch.value = ''; applyInvFilters(); };
+
 const rcSearch = ref(props.filters?.rc_search ?? '');
 const rcFrom = ref(props.filters?.rc_from ?? '');
 const rcTo = ref(props.filters?.rc_to ?? '');
@@ -564,31 +572,11 @@ const delExpense = async (e) => {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <!-- Зарплаты сотрудников -->
-            <div class="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 lg:col-span-1">
-                <h3 class="mb-4 text-sm font-semibold text-slate-900">Зарплаты сотрудников</h3>
-                <div class="space-y-2">
-                    <div v-for="s in salaries" :key="s.user" class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                        <div class="flex items-center gap-2.5">
-                            <Avatar :name="s.user" :src="s.avatar" :size="34" />
-                            <div>
-                                <div class="text-sm font-medium text-slate-800">{{ s.user }}</div>
-                                <div class="text-[11px] text-slate-400">маржа {{ s.margin }}%</div>
-                            </div>
-                        </div>
-                        <div class="text-sm font-bold text-green-600">{{ money(s.bonus) }}</div>
-                    </div>
-                    <div v-if="!salaries.length" class="py-6 text-center text-sm text-slate-400">Нет данных</div>
-                </div>
-                <div v-if="salaries.length" class="mt-3 flex items-center justify-between border-t pt-3 text-sm">
-                    <span class="font-medium text-slate-500">Итого ЗП</span>
-                    <span class="font-bold text-amber-600">{{ money(totals.salaries) }}</span>
-                </div>
-            </div>
-
+        <!-- Блок «Зарплаты сотрудников» убран (24.07.2026) — ЗП живёт на своей
+             странице; здесь остаются только Счета на всю ширину. -->
+        <div class="mt-6">
             <!-- Счета -->
-            <div class="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200 lg:col-span-2">
+            <div class="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b px-6 py-4">
                     <span class="text-sm font-semibold text-slate-900">Счета</span>
                     <!-- Дебиторка: выставлено / оплачено / клиенты должны -->
@@ -598,6 +586,7 @@ const delExpense = async (e) => {
                         <span class="rounded-full px-2.5 py-1 font-medium" :class="invoiceTotals.debt > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'">долг клиентов <b class="tabular-nums">{{ money(invoiceTotals.debt) }}</b></span>
                     </div>
                 </div>
+                <!-- Сегодняшние счета -->
                 <table class="min-w-full divide-y divide-slate-100 text-sm">
                     <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                         <tr>
@@ -606,7 +595,7 @@ const delExpense = async (e) => {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        <tr v-for="inv in invoices.data" :key="inv.id" class="hover:bg-slate-50">
+                        <tr v-for="inv in invoicesToday" :key="inv.id" class="hover:bg-slate-50">
                             <td class="px-4 py-3 font-medium text-slate-900">{{ inv.number }}</td>
                             <td class="px-4 py-3">
                                 <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
@@ -619,10 +608,50 @@ const delExpense = async (e) => {
                             <td class="px-4 py-3 text-green-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
                             <td class="px-4 py-3"><StatusBadge :status="inv.status" /></td>
                         </tr>
-                        <tr v-if="!invoices.data.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Счетов нет</td></tr>
+                        <tr v-if="!invoicesToday.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Сегодня счетов нет</td></tr>
                     </tbody>
                 </table>
-                <div class="p-4"><Pagination :links="invoices.links" /></div>
+
+                <!-- Прошлые счета: аккордеон с поиском по номеру -->
+                <div class="border-t border-slate-100">
+                    <button type="button" @click="invPastOpen = !invPastOpen" class="flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left">
+                        <div class="flex min-w-0 items-center gap-2">
+                            <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="invPastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                            <span class="text-sm font-semibold text-slate-900">Прошлые счета</span>
+                        </div>
+                        <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-600">{{ invoicesPastStats?.count ?? 0 }} · {{ money(invoicesPastStats?.sum) }}</span>
+                    </button>
+                    <div v-show="invPastOpen" class="border-t border-slate-100">
+                        <div class="flex flex-wrap items-center gap-2 px-6 py-3">
+                            <input v-model="invSearch" @keyup.enter="applyInvFilters" type="text" placeholder="Поиск по номеру счёта"
+                                class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                            <button @click="applyInvFilters" class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-900">Найти</button>
+                            <button v-if="filters?.search" @click="resetInvFilters"
+                                class="rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100">Сбросить</button>
+                        </div>
+                        <table class="min-w-full divide-y divide-slate-100 text-sm">
+                            <tbody class="divide-y divide-slate-50">
+                                <tr v-for="inv in invoicesPast" :key="inv.id" class="hover:bg-slate-50">
+                                    <td class="px-4 py-3">
+                                        <span class="font-medium text-slate-900">{{ inv.number }}</span>
+                                        <span class="block text-[10px] text-slate-400">{{ formatDate(inv.date) }}</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
+                                            class="text-indigo-600 hover:underline">{{ inv.link.label }}</Link>
+                                        <span v-else-if="inv.link" class="text-slate-400">{{ inv.link.label }}</span>
+                                        <span v-else class="text-slate-400">—</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-500">{{ inv.client?.name ?? '—' }}</td>
+                                    <td class="px-4 py-3">{{ money(inv.amount) }}</td>
+                                    <td class="px-4 py-3 text-green-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
+                                    <td class="px-4 py-3"><StatusBadge :status="inv.status" /></td>
+                                </tr>
+                                <tr v-if="!invoicesPast.length"><td colspan="6" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых счетов не найдено</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 

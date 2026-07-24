@@ -55,40 +55,58 @@ class InvoiceController extends Controller
                 ->orWhere(fn ($p) => $p->where('invoiceable_type', 'project')
                     ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))));
 
-        $invoices = (clone $invBase)
+        // Ссылка на сделку/заказ счёта — «откуда деньги» есть ВСЕГДА:
+        // даже у удалённой сделки показываем номер и заказчика (серым).
+        $mapInvoice = function ($i) {
+            $target = $i->invoiceable;
+            $link = null;
+            if ($target instanceof \App\Models\Deal) {
+                $link = ['type' => 'deal', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->company_name ?? ''), ' ·')];
+            } elseif ($target instanceof \App\Models\Project) {
+                $link = ['type' => 'project', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->name ?? ''), ' ·')];
+            } elseif ($i->invoiceable_type === 'deal' && $i->invoiceable_id) {
+                $trashed = \App\Models\Deal::withTrashed()->find($i->invoiceable_id);
+                if ($trashed) {
+                    $number = preg_replace('/#del\d+$/', '', (string) $trashed->number);
+                    $link = ['type' => 'deal', 'id' => null, 'label' => trim($number.' · '.($trashed->company_name ?? ''), ' ·').' (сделка удалена)'];
+                }
+            }
+
+            return [
+                'id' => $i->id,
+                'number' => $i->number,
+                'client' => $i->client,
+                'amount' => (float) $i->amount,
+                'payments_sum_amount' => (float) ($i->payments_sum_amount ?? 0),
+                'status' => $i->status,
+                'date' => ($i->issue_date ?? $i->created_at)?->toDateString(),
+                'link' => $link,
+            ];
+        };
+
+        // Счета: на странице — только сегодняшние; прошлые — аккордеоном
+        // снизу с поиском по номеру (как Поступления/Расходы).
+        $todayD = now()->toDateString();
+        $isToday = fn ($q) => $q->where(fn ($w) => $w
+            ->whereDate('issue_date', $todayD)
+            ->orWhere(fn ($n) => $n->whereNull('issue_date')->whereDate('created_at', $todayD)));
+        $invoicesToday = $isToday((clone $invBase))
+            ->with(['client:id,name', 'invoiceable'])
+            ->withSum('payments as payments_sum_amount', 'amount')
+            ->latest()->get()->map($mapInvoice)->values();
+        $invPastBase = fn () => (clone $invBase)->whereNot(fn ($w) => $w
+            ->whereDate('issue_date', $todayD)
+            ->orWhere(fn ($n) => $n->whereNull('issue_date')->whereDate('created_at', $todayD)));
+        $invoicesPast = $invPastBase()
             ->with(['client:id,name', 'invoiceable'])
             ->withSum('payments as payments_sum_amount', 'amount')
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where('number', 'like', "%{$s}%"))
             ->when($request->string('status')->toString(), fn ($q, $st) => $q->where('status', $st))
-            ->latest()->paginate(20)->withQueryString()
-            // Ссылка на сделку/заказ счёта — кликабельна в блоке «Счета».
-            // Отсылка «откуда деньги» есть ВСЕГДА: даже у удалённой сделки
-            // показываем её номер и заказчика (серым, без ссылки).
-            ->through(function ($i) {
-                $target = $i->invoiceable;
-                $link = null;
-                if ($target instanceof \App\Models\Deal) {
-                    $link = ['type' => 'deal', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->company_name ?? ''), ' ·')];
-                } elseif ($target instanceof \App\Models\Project) {
-                    $link = ['type' => 'project', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->name ?? ''), ' ·')];
-                } elseif ($i->invoiceable_type === 'deal' && $i->invoiceable_id) {
-                    $trashed = \App\Models\Deal::withTrashed()->find($i->invoiceable_id);
-                    if ($trashed) {
-                        $number = preg_replace('/#del\d+$/', '', (string) $trashed->number);
-                        $link = ['type' => 'deal', 'id' => null, 'label' => trim($number.' · '.($trashed->company_name ?? ''), ' ·').' (сделка удалена)'];
-                    }
-                }
-
-                return [
-                    'id' => $i->id,
-                    'number' => $i->number,
-                    'client' => $i->client,
-                    'amount' => (float) $i->amount,
-                    'payments_sum_amount' => (float) ($i->payments_sum_amount ?? 0),
-                    'status' => $i->status,
-                    'link' => $link,
-                ];
-            });
+            ->latest()->limit(100)->get()->map($mapInvoice)->values();
+        $invoicesPastStats = [
+            'count' => $invPastBase()->count(),
+            'sum' => (float) $invPastBase()->sum('amount'),
+        ];
 
         // Дебиторка для финансиста: выставлено / оплачено / остаток к оплате.
         $invoiced = (float) (clone $invBase)->sum('amount');
@@ -245,7 +263,9 @@ class InvoiceController extends Controller
         $incomeTotal = round($invoicePaidP + $receiptManualP, 2);
 
         return Inertia::render('Finance/Index', [
-            'invoices' => $invoices,
+            'invoicesToday' => $invoicesToday,
+            'invoicesPast' => $invoicesPast,
+            'invoicesPastStats' => $invoicesPastStats,
             'invoiceTotals' => $invoiceTotals,
             'expensesToday' => $expensesToday,
             'expensesPast' => $expensesPast,
