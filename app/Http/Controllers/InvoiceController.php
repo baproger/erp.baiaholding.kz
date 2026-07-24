@@ -171,14 +171,8 @@ class InvoiceController extends Controller
         }
         $expensesTotal = round($categoryRows->sum('sum') + $dealExpenses + $payrollTotal + $taxRow, 2);
 
-        // Остатки касса/банк: (платежи по счетам + ручные поступления) минус
-        // расходы — всё по способу оплаты (нал/банк).
-        $payByMethod = \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->select('id'))
-            ->groupBy('payment_method')->selectRaw('payment_method m, sum(amount) s')->pluck('s', 'm');
-        $expCash = (float) $confirmedNoPeriod()->where('payment_method', 'cash')->sum('amount');
-        $expBank = (float) $confirmedNoPeriod()->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount');
-        $payCash = (float) ($payByMethod['cash'] ?? 0);
-        $payBank = (float) collect($payByMethod)->except('cash')->sum();
+        // Остатки касса/банк считает FinanceService::companyBalances (ниже):
+        // касса — общая на холдинг, банк — по своей фирме.
 
         // Задолженности: дебиторка вручную (плюс автоматическая по счетам) и кредиторка.
         $debtBase = \App\Models\Debt::query()
@@ -189,6 +183,8 @@ class InvoiceController extends Controller
 
         // «Доход» — итог Сводного отчёта (остаток − бонус по каждой сделке).
         $dealsIncome = app(\App\Services\FinanceService::class)->dealsIncome($companyId ?: null, $mStart, $mEnd);
+        // Остатки касса/банк — из единого FinanceService (касса общая на холдинг).
+        $balances = app(\App\Services\FinanceService::class)->companyBalances($companyId ?: null);
 
         // Поступления денег (вводит финансист): нал/банк, откуда, дата, комментарий.
         $receiptBase = \App\Models\CashReceipt::query()
@@ -231,6 +227,13 @@ class InvoiceController extends Controller
             'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
+            // ДДС — ручная сводка (Excel-стиль): счета компаний и долги.
+            // Никаких расчётов из системы — только то, что ввёл финансист.
+            'dds' => [
+                'accounts' => \App\Models\DdsEntry::where('kind', 'account')->orderBy('sort')->orderBy('id')->get(),
+                'debts' => \App\Models\DdsEntry::where('kind', 'debt')->orderBy('sort')->orderBy('id')->get(),
+                'date' => (string) \App\Models\Setting::get('dds_date', ''),
+            ],
             'receiptsToday' => $receiptsToday,
             'receiptsPast' => $receiptsPast,
             'receiptsPastStats' => $receiptsPastStats,
@@ -242,8 +245,10 @@ class InvoiceController extends Controller
                 'receivablesTotal' => round($invoiceTotals['debt'] + $receivableDebts->sum('amount'), 2),
                 'payables' => (float) $payableDebts->sum('amount'),
                 'dealsIncome' => $dealsIncome,
-                'cash' => round($payCash + $receiptCash - $expCash, 2),
-                'bank' => round($payBank + $receiptBank - $expBank, 2),
+                // Единый источник (FinanceService::companyBalances): касса —
+                // ОБЩАЯ на холдинг (нал в одной кассе), банк — по своей фирме.
+                'cash' => $balances['cash'],
+                'bank' => $balances['bank'],
                 'income' => $incomeTotal,
                 'incomeInvoices' => $invoicePaidP,
                 'incomeManual' => $receiptManualP,

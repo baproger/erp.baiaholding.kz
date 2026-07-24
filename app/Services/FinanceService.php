@@ -10,12 +10,24 @@ use Illuminate\Support\Facades\DB;
 class FinanceService
 {
     /**
-     * Остатки денег фирмы (касса/банк) = платежи по счетам + поступления
+     * Остатки денег (касса/банк) = платежи по счетам + поступления
      * (cash_receipts) − подтверждённые расходы, всё по способу оплаты.
-     * Та же математика, что в сводке на странице Финансы; показывается
-     * бухгалтеру в форме расхода («доступно N»).
+     *
+     * КАССА (наличные) — ЕДИНАЯ на весь холдинг: физически деньги в одной
+     * кассе, расход налом ЛЮБОЙ фирмы (BAIA или ASU) уменьшает общий остаток.
+     * БАНК — раздельно по компаниям (у каждой фирмы свои счета).
+     * Показывается на Финансах и бухгалтеру в форме расхода («доступно N»).
      */
     public function companyBalances(?int $companyId): array
+    {
+        return [
+            'cash' => $this->methodBalance(null, 'cash'),       // весь холдинг
+            'bank' => $this->methodBalance($companyId, 'bank'), // своя фирма
+        ];
+    }
+
+    /** Остаток по способу оплаты (cash|bank); $companyId null = без фильтра фирмы. */
+    private function methodBalance(?int $companyId, string $kind): float
     {
         $invIds = Invoice::query()
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
@@ -25,12 +37,16 @@ class FinanceService
                     ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))))
             ->select('id');
 
-        $payByMethod = Payment::whereIn('invoice_id', $invIds)
-            ->groupBy('payment_method')->selectRaw('payment_method m, sum(amount) s')->pluck('s', 'm');
+        $pay = Payment::whereIn('invoice_id', $invIds);
+        $pay = $kind === 'cash'
+            ? $pay->where('payment_method', 'cash')
+            // Банк = всё, что не нал (включая платежи без указанного способа — как раньше).
+            : $pay->where(fn ($q) => $q->where('payment_method', '!=', 'cash')->orWhereNull('payment_method'));
+        $paySum = (float) $pay->sum('amount');
 
-        $rec = \App\Models\CashReceipt::query()->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
-        $recCash = (float) (clone $rec)->where('method', 'cash')->sum('amount');
-        $recBank = (float) (clone $rec)->where('method', 'bank')->sum('amount');
+        $recSum = (float) \App\Models\CashReceipt::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->where('method', $kind === 'cash' ? 'cash' : 'bank')->sum('amount');
 
         $exp = \App\Models\Expense::query()->where('status', 'confirmed')
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
@@ -39,13 +55,11 @@ class FinanceService
                 ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
                     ->whereIn('expenseable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))
                 ->orWhere('company_id', $c)));
-        $expCash = (float) (clone $exp)->where('payment_method', 'cash')->sum('amount');
-        $expBank = (float) (clone $exp)->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount');
+        $expSum = (float) ($kind === 'cash'
+            ? (clone $exp)->where('payment_method', 'cash')->sum('amount')
+            : (clone $exp)->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount'));
 
-        return [
-            'cash' => round((float) ($payByMethod['cash'] ?? 0) + $recCash - $expCash, 2),
-            'bank' => round((float) collect($payByMethod)->except('cash')->sum() + $recBank - $expBank, 2),
-        ];
+        return round($paySum + $recSum - $expSum, 2);
     }
 
     /**

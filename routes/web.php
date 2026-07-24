@@ -109,6 +109,11 @@ Route::middleware('auth')->group(function () {
 
     // Finance
     Route::get('finance', [InvoiceController::class, 'index'])->name('finance.index');
+    // ДДС — ручная сводка финансиста (без связей с расчётами).
+    Route::post('finance/dds', [\App\Http\Controllers\DdsController::class, 'store'])->name('finance.dds.store');
+    Route::put('finance/dds/{entry}', [\App\Http\Controllers\DdsController::class, 'update'])->name('finance.dds.update');
+    Route::delete('finance/dds/{entry}', [\App\Http\Controllers\DdsController::class, 'destroy'])->name('finance.dds.destroy');
+    Route::post('finance/dds-date', [\App\Http\Controllers\DdsController::class, 'date'])->name('finance.dds.date');
     // Поступления денег (нал/банк) — вводит финансист/админ.
     Route::post('finance/receipts', [\App\Http\Controllers\CashReceiptController::class, 'store'])->name('finance.receipts.store');
     Route::delete('finance/receipts/{receipt}', [\App\Http\Controllers\CashReceiptController::class, 'destroy'])->name('finance.receipts.destroy');

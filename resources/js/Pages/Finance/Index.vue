@@ -10,8 +10,9 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
+import DdsPanel from '@/Components/DdsPanel.vue';
 
-const props = defineProps({ invoices: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean });
+const props = defineProps({ invoices: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
@@ -175,8 +176,14 @@ const delExpense = async (e) => {
     <AppLayout>
         <template #header>{{ $t('page.finance', 'Финансы') }}</template>
 
-        <!-- Верхний ряд: договоры · дебиторка · касса · банк -->
-        <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <!-- ================= ДДС: ручная сводка финансиста (первый блок) ================= -->
+        <div class="mb-4">
+            <DdsPanel :dds="dds" :can-manage="canManage" />
+        </div>
+
+        <!-- Верхний ряд: договоры · дебиторка · касса · банк.
+             «Кредиторка (мы должны)» скрыта по просьбе владельца (24.07.2026). -->
+        <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Общая сумма договоров</div>
                 <div class="mt-1 text-xl font-bold tabular-nums text-slate-800">{{ money(summary.contracts) }}</div>
@@ -186,20 +193,15 @@ const delExpense = async (e) => {
                 <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.receivablesTotal > 0 ? 'text-rose-600' : 'text-slate-800'">{{ money(summary.receivablesTotal) }}</div>
                 <div class="mt-0.5 text-[11px]" :class="summary.receivablesTotal > 0 ? 'text-rose-400' : 'text-slate-400'">счета {{ money(summary.receivables) }} · вручную {{ money(summary.receivablesManual) }}</div>
             </div>
-            <div class="rounded-xl border p-5 shadow-sm" :class="summary.payables > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'">
-                <div class="text-[11px] uppercase tracking-wide" :class="summary.payables > 0 ? 'text-amber-600' : 'text-slate-400'">Кредиторка (мы должны)</div>
-                <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.payables > 0 ? 'text-amber-600' : 'text-slate-800'">{{ money(summary.payables) }}</div>
-                <div class="mt-0.5 text-[11px]" :class="summary.payables > 0 ? 'text-amber-500' : 'text-slate-400'">ведёт финансист</div>
-            </div>
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в кассе</div>
                 <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.cash >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(summary.cash) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">наличные: поступило − потрачено</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">наличные ОБЩИЕ по холдингу (BAIA + ASU)</div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в банке</div>
                 <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.bank >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(summary.bank) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">безнал: поступило − потрачено</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">безнал своей компании: поступило − потрачено</div>
             </div>
         </div>
 
@@ -334,11 +336,12 @@ const delExpense = async (e) => {
             </div>
         </div>
 
-        <!-- ================= Задолженности (аккордеоны) ================= -->
-        <div class="mt-6 grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <!-- ================= Задолженности (аккордеоны) =================
+             Кредиторка скрыта по просьбе владельца (24.07.2026) — вернуть:
+             добавить обратно строку { type: 'payable', … } в массив. -->
+        <div class="mt-6 grid grid-cols-1 items-start gap-4">
             <div v-for="acc in [
                     { type: 'receivable', title: 'Дебиторская задолженность — кто нам должен', list: debts.receivables, total: summary.receivablesTotal, color: 'rose' },
-                    { type: 'payable', title: 'Кредиторская задолженность — кому мы должны', list: debts.payables, total: summary.payables, color: 'amber' },
                 ]" :key="acc.type" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <!-- Шапка-аккордеон: клик сворачивает/разворачивает -->
                 <button type="button" @click="debtOpen[acc.type] = !debtOpen[acc.type]"
