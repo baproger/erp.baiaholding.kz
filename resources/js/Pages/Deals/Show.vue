@@ -83,6 +83,18 @@ const sendToWorkshop = (w = null) => {
         { preserveScroll: true, onSuccess: () => (showWorkshopPick.value = false) });
 };
 const setResponsible = (e) => router.patch(route('deals.responsible', props.deal.id), { responsible_user_id: e.target.value || null }, { preserveScroll: true });
+// Ручной % бонуса менеджера по сделке — меняет финансист/админ.
+const editBonusRate = ref(false);
+const bonusRateInput = ref(null);
+const openBonusEdit = () => {
+    bonusRateInput.value = props.deal.bonus_rate_override !== null ? Number(props.deal.bonus_rate_override) : Number(props.profit.bonusRate);
+    editBonusRate.value = true;
+};
+const saveBonusRate = (auto = false) => {
+    router.patch(route('deals.bonusRate', props.deal.id),
+        { bonus_rate_override: auto ? null : bonusRateInput.value },
+        { preserveScroll: true, onSuccess: () => (editBonusRate.value = false) });
+};
 const destroy = async () => {
     if (await confirmDialog({ title: 'Удалить сделку', message: 'Сделка будет удалена. Это действие необратимо.', confirmText: 'Удалить', danger: true })) {
         router.delete(route('deals.destroy', props.deal.id), { onSuccess: () => router.get(route('deals.index')) });
@@ -323,7 +335,26 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <div class="flex justify-between"><span class="text-slate-500">Налог {{ profit.taxRate }}%</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.tax) }}</span></div>
                         <div class="flex justify-between"><span class="text-slate-500">Прочие расходы</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.expense) }}</span></div>
                         <div class="flex justify-between border-t border-slate-100 pt-2"><span class="text-slate-500">Остаток</span><span class="font-semibold tabular-nums text-slate-800">{{ money(profit.remainder) }}</span></div>
-                        <div class="flex justify-between"><span class="text-slate-500">ЗП сотрудника {{ profit.bonusRate }}%</span><span class="font-medium tabular-nums text-emerald-600">− {{ money(profit.bonus) }}</span></div>
+                        <!-- Бонус менеджера: авто-ступень от маржи или ручной % финансиста -->
+                        <div class="flex items-center justify-between">
+                            <span class="flex items-center gap-1.5 text-slate-500">
+                                ЗП сотрудника {{ profit.bonusRate }}%
+                                <span class="rounded px-1 py-px text-[9px] font-bold uppercase" :class="profit.bonusManual ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'">{{ profit.bonusManual ? 'вручную' : 'авто' }}</span>
+                                <button v-if="canAccounting" @click="openBonusEdit" title="Изменить % бонуса" class="text-slate-300 hover:text-indigo-500">✎</button>
+                            </span>
+                            <span class="font-medium tabular-nums text-emerald-600">− {{ money(profit.bonus) }}</span>
+                        </div>
+                        <div v-if="editBonusRate" class="rounded-lg bg-slate-50 p-2.5">
+                            <div class="mb-1.5 text-[11px] text-slate-500">Ручной % бонуса по этой сделке (пусто/«Авто» — по ступеням маржи):</div>
+                            <div class="flex items-center gap-1.5">
+                                <input v-model="bonusRateInput" type="number" min="0" max="100" step="0.5"
+                                    class="w-20 rounded-lg border-slate-200 py-1 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                                <span class="text-sm text-slate-500">%</span>
+                                <button @click="saveBonusRate(false)" class="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700">Сохранить</button>
+                                <button @click="saveBonusRate(true)" class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-white">Авто</button>
+                                <button @click="editBonusRate = false" class="ml-auto text-slate-400 hover:text-slate-600">✕</button>
+                            </div>
+                        </div>
                         <div class="rounded-xl px-4 py-3 text-white" style="background-color: #1A3B5C">
                             <div class="text-[11px] font-semibold uppercase tracking-wide text-white/70">Чистая прибыль компании</div>
                             <div class="mt-0.5 text-[28px] font-bold leading-tight tabular-nums tracking-tight">{{ money(profit.company) }}</div>

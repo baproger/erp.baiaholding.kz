@@ -100,7 +100,10 @@ const delAdj = async (a) => {
                             <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
                             <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
-                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</td>
+                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
+                                {{ money(d.bonus) }}
+                                <span v-if="d.bonus_manual" class="ml-1 rounded bg-amber-100 px-1 py-px text-[9px] font-bold uppercase text-amber-700" :title="'Ручной % финансиста: ' + d.bonus_rate + '%'">{{ d.bonus_rate }}%</span>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -251,7 +254,10 @@ const delAdj = async (a) => {
                                                     <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
                                                     <td class="px-3 py-2 text-right tabular-nums text-rose-600">{{ money(d.expense) }}</td>
                                                     <td class="px-3 py-2 text-right tabular-nums text-rose-600">{{ money(d.tax) }}</td>
-                                                    <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</td>
+                                                    <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
+                                                        {{ money(d.bonus) }}
+                                                        <span v-if="d.bonus_manual" class="ml-1 rounded bg-amber-100 px-1 py-px text-[9px] font-bold uppercase text-amber-700" :title="'Ручной % финансиста: ' + d.bonus_rate + '%'">{{ d.bonus_rate }}%</span>
+                                                    </td>
                                                 </tr>
                                             </tbody>
                                         </table>

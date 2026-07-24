@@ -51,7 +51,7 @@ class ReportController extends Controller
                     ->when($to, fn ($q2, $d) => $q2->whereDate('created_at', '<=', $d)))))
             ->latest()
             ->get(['id', 'number', 'bin', 'company_name', 'address', 'client_name', 'lot_number', 'unit',
-                'budget', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at', 'contract_date']);
+                'budget', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at', 'contract_date']);
 
         // Оплачено по сделке — платежи по её счетам (одним запросом на всех).
         $paidByDeal = Payment::join('invoices', 'payments.invoice_id', '=', 'invoices.id')
@@ -85,8 +85,9 @@ class ReportController extends Controller
             $expense = $material + $other;
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - $expense, 2);
-            // Та же ступенчатая формула бонуса, что на карточке сделки и в ЗП.
-            $bonus = PayrollService::marginBonus($budget, $remainder, $tax);
+            // Та же формула бонуса, что на карточке сделки и в ЗП (с ручным % финансиста).
+            $bonus = PayrollService::marginBonus($budget, $remainder, $tax,
+                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
             $company = round($remainder - $bonus, 2);
 
             return [

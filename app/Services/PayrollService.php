@@ -43,16 +43,26 @@ class PayrollService
     }
 
     /**
-     * Bonus for one deal: remainder = budget − tax − expenses. The tier is picked
-     * by the PRE-TAX margin (the one shown on the deal card) and applied to the remainder.
+     * Эффективная ставка бонуса (доля, не %): ручной % финансиста по сделке
+     * (deals.bonus_rate_override) или авто-ступень от маржи.
      */
-    public static function marginBonus(float $budget, float $remainder, float $tax = 0): float
+    public static function effectiveBonusRate(float $marginPct, ?float $override = null): float
+    {
+        return $override !== null ? $override / 100 : self::bonusRateForMargin($marginPct);
+    }
+
+    /**
+     * Bonus for one deal: remainder = budget − tax − expenses. The tier is picked
+     * by the PRE-TAX margin (the one shown on the deal card) and applied to the
+     * remainder. $override — ручной % финансиста по этой сделке (null = авто).
+     */
+    public static function marginBonus(float $budget, float $remainder, float $tax = 0, ?float $override = null): float
     {
         if ($budget <= 0 || $remainder <= 0) {
             return 0.0;
         }
 
-        return round($remainder * self::bonusRateForMargin(self::marginPct($budget, $remainder, $tax)), 2);
+        return round($remainder * self::effectiveBonusRate(self::marginPct($budget, $remainder, $tax), $override), 2);
     }
 
     /**
@@ -119,7 +129,7 @@ class PayrollService
             ->whereIn('deal_stage_id', $stageFilter)
             ->where('status', '!=', 'cancelled')
             ->orderByDesc('budget')
-            ->get(['id', 'number', 'company_name', 'budget', 'deal_stage_id', 'responsible_user_id', 'status']);
+            ->get(['id', 'number', 'company_name', 'budget', 'bonus_rate_override', 'deal_stage_id', 'responsible_user_id', 'status']);
 
         $ids = $deals->pluck('id');
         $paidByDeal = Payment::query()
@@ -140,7 +150,8 @@ class PayrollService
             $remainder = round($budget - $tax - $expense, 2);
             // Пропорционально оплаченному — как в perUser, строки сходятся с итогом.
             $payRatio = $budget > 0 ? min(1, $paid / $budget) : 0;
-            $bonus = round(self::marginBonus($budget, $remainder, $tax) * $payRatio, 2);
+            $override = $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null;
+            $bonus = round(self::marginBonus($budget, $remainder, $tax, $override) * $payRatio, 2);
             $marginPct = self::marginPct($budget, $remainder, $tax);
 
             return [
@@ -155,7 +166,9 @@ class PayrollService
                 'expense' => $expense,
                 'tax' => $tax,
                 'margin_pct' => $marginPct,
-                'bonus_rate' => self::bonusRateForMargin($marginPct) * 100,
+                'bonus_rate' => round(self::effectiveBonusRate($marginPct, $override) * 100, 2),
+                // Ручной % финансиста (бейдж «вручную» на странице ЗП).
+                'bonus_manual' => $override !== null,
                 'bonus' => $bonus,
                 'net' => round($remainder - $bonus, 2),
             ];
@@ -171,7 +184,7 @@ class PayrollService
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
         $deals = Deal::won()->forCurrentCompany()->whereNotNull('responsible_user_id')
-            ->get(['id', 'budget', 'responsible_user_id']);
+            ->get(['id', 'budget', 'bonus_rate_override', 'responsible_user_id']);
         $ids = $deals->pluck('id');
 
         $paidByDeal = Payment::query()
@@ -205,7 +218,8 @@ class PayrollService
                 'budget' => $budget,
                 'tax' => $tax,
                 'remainder' => $remainder,
-                'bonus' => round(self::marginBonus($budget, $remainder, $tax) * $payRatio, 2),
+                'bonus' => round(self::marginBonus($budget, $remainder, $tax,
+                    $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null) * $payRatio, 2),
             ];
         })->groupBy('uid');
 

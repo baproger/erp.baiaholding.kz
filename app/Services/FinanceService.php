@@ -64,7 +64,7 @@ class FinanceService
             ->when($from && $to, fn ($q) => $q->where(fn ($w) => $w
                 ->whereBetween('contract_date', [$from, $to])
                 ->orWhere(fn ($n) => $n->whereNull('contract_date')->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to))))
-            ->get(['id', 'budget']);
+            ->get(['id', 'budget', 'bonus_rate_override']);
 
         $expByDeal = \App\Models\Expense::where('status', 'confirmed')
             ->where('expenseable_type', 'deal')
@@ -76,7 +76,8 @@ class FinanceService
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - (float) ($expByDeal[$d->id] ?? 0), 2);
 
-            return $remainder - \App\Services\PayrollService::marginBonus($budget, $remainder, $tax);
+            return $remainder - \App\Services\PayrollService::marginBonus($budget, $remainder, $tax,
+                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
         }), 2);
     }
 

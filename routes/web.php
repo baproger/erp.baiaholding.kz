@@ -84,6 +84,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('deals/{deal}/advance', [DealController::class, 'advance'])->name('deals.advance');
     Route::post('deals/{deal}/to-workshop', [DealController::class, 'sendToWorkshop'])->name('deals.toWorkshop');
     Route::patch('deals/{deal}/responsible', [DealController::class, 'updateResponsible'])->name('deals.responsible');
+    // Ручной % бонуса менеджера по сделке (финансист/админ).
+    Route::patch('deals/{deal}/bonus-rate', [DealController::class, 'updateBonusRate'])->name('deals.bonusRate');
     Route::patch('deals/{deal}/stage-task', [DealController::class, 'completeStageTask'])->name('deals.stageTask');
 
     // Склад (приход товара + остатки, у каждой компании свой)

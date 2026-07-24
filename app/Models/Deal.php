@@ -24,7 +24,7 @@ class Deal extends Model
 
     protected $fillable = [
         'company_id', 'number', 'name', 'client_name', 'company_name', 'address', 'bin', 'contract_date', 'lot_number', 'unit', 'source', 'client_id', 'responsible_user_id', 'department_id',
-        'deal_stage_id', 'budget', 'deadline', 'description', 'note', 'status', 'closed_at',
+        'deal_stage_id', 'budget', 'bonus_rate_override', 'deadline', 'description', 'note', 'status', 'closed_at',
     ];
 
     protected $casts = [

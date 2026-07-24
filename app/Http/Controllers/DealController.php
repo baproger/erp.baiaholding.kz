@@ -146,8 +146,10 @@ class DealController extends Controller
         // Ступенчатый бонус: ступень по марже ДО налога (как «Маржа» на карточке),
         // сам бонус — % от остатка (после налога). Та же формула в ЗП/аналитике.
         $dealMarginPct = \App\Services\PayrollService::marginPct($dealBudget, $dealRemainder, $dealTax);
-        $dealBonusRate = \App\Services\PayrollService::bonusRateForMargin($dealMarginPct);
-        $dealBonus = \App\Services\PayrollService::marginBonus($dealBudget, $dealRemainder, $dealTax);
+        // Ручной % финансиста по этой сделке (null = авто-ступень от маржи).
+        $bonusOverride = $deal->bonus_rate_override !== null ? (float) $deal->bonus_rate_override : null;
+        $dealBonusRate = \App\Services\PayrollService::effectiveBonusRate($dealMarginPct, $bonusOverride);
+        $dealBonus = \App\Services\PayrollService::marginBonus($dealBudget, $dealRemainder, $dealTax, $bonusOverride);
 
         // Галочка-гейт текущего этапа (настраивается в Настройки → Этапы).
         $gateStage = self::gateStage($deal);
@@ -194,6 +196,7 @@ class DealController extends Controller
                 'expense' => $confirmedExpense,
                 'remainder' => $dealRemainder,
                 'bonus' => $dealBonus, 'bonusRate' => round($dealBonusRate * 100, 1),
+                'bonusManual' => $bonusOverride !== null,
                 'company' => round($dealRemainder - $dealBonus, 2),
             ],
             'chatId' => $dealChat->id,
@@ -374,6 +377,22 @@ class DealController extends Controller
         $project = $projects->createFromDeal($deal, $workshop);
         $deal->update(['status' => 'closed', 'closed_at' => now()]);
         return back()->with('success', 'Отправлено в цех: '.$project->number.'.');
+    }
+
+    /**
+     * Ручной % бонуса менеджера по сделке — ставит ТОЛЬКО финансист/админ.
+     * null (пустое поле) = вернуть автоматическую ступень от маржи.
+     */
+    public function updateBonusRate(Request $request, Deal $deal): RedirectResponse
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Процент бонуса меняет финансист или администратор.');
+        $validated = $request->validate(['bonus_rate_override' => ['nullable', 'numeric', 'min:0', 'max:100']]);
+
+        $deal->update(['bonus_rate_override' => $validated['bonus_rate_override'] ?? null]);
+
+        return back()->with('success', isset($validated['bonus_rate_override'])
+            ? 'Бонус менеджера по сделке: '.rtrim(rtrim(number_format((float) $validated['bonus_rate_override'], 2, '.', ''), '0'), '.').'% (вручную).'
+            : 'Бонус менеджера: автоматически по ступеням маржи.');
     }
 
     public function updateResponsible(Request $request, Deal $deal): RedirectResponse

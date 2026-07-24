@@ -92,7 +92,7 @@ class WorkshopScreenController extends Controller
             ->where(fn ($w) => $w->whereBetween('contract_date', [$mStart, $mEnd])
                 ->orWhere(fn ($n) => $n->whereNull('contract_date')
                     ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)))
-            ->get(['id', 'budget', 'responsible_user_id', 'deal_stage_id']);
+            ->get(['id', 'budget', 'bonus_rate_override', 'responsible_user_id', 'deal_stage_id']);
 
         $wonIds = \App\Models\DealStage::where('is_won', true)->pluck('id')->flip();
         $won = $deals->filter(fn ($d) => $wonIds->has($d->deal_stage_id));
@@ -115,7 +115,8 @@ class WorkshopScreenController extends Controller
                 $tax = round($budget * $taxRate, 2);
                 $remainder = round($budget - $tax - (float) ($expByDeal[$d->id] ?? 0), 2);
                 $ratio = $budget > 0 ? min(1, (float) ($paidByDeal[$d->id] ?? 0) / $budget) : 0;
-                $bonus = round(\App\Services\PayrollService::marginBonus($budget, $remainder, $tax) * $ratio, 2);
+                $bonus = round(\App\Services\PayrollService::marginBonus($budget, $remainder, $tax,
+                    $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null) * $ratio, 2);
                 $profit += $remainder - $bonus;
                 $margins[] = \App\Services\PayrollService::marginPct($budget, $remainder, $tax);
             }
