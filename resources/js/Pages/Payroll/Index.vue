@@ -34,7 +34,7 @@ const saveSalary = (r) => router.patch(route('payroll.salary', r.uid), { salary:
 
 // Корректировка: отгул/больничный — днями (сумма авто = оклад/22 × дни) или суммой.
 const showAdj = ref(false);
-const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '' });
+const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '', payment_method: 'cash' });
 const openAdj = (uid = '') => { adjForm.reset(); adjForm.user_id = uid; adjForm.date = new Date().toISOString().slice(0, 10); showAdj.value = true; };
 const submitAdj = () => adjForm.post(route('payroll.adjustments.store'), { preserveScroll: true, onSuccess: () => (showAdj.value = false) });
 const delAdj = async (a) => {
@@ -307,7 +307,20 @@ const delAdj = async (a) => {
                         <input v-model="adjForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
                         <div v-if="adjForm.errors.date" class="mt-1 text-xs text-red-600">{{ adjForm.errors.date }}</div>
                     </div>
-                    <div :class="adjForm.type === 'absence' || adjForm.type === 'sick' ? '' : 'sm:col-span-2'">
+                    <!-- Аванс — реальные деньги: откуда выданы (уйдёт в Расходы на Финансах) -->
+                    <div v-if="adjForm.type === 'advance'">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Откуда выданы деньги *</label>
+                        <div class="flex gap-2">
+                            <button type="button" @click="adjForm.payment_method = 'cash'"
+                                :class="adjForm.payment_method === 'cash' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                class="rounded-lg border px-3 py-1.5 text-sm font-medium">💵 Наличные</button>
+                            <button type="button" @click="adjForm.payment_method = 'bank'"
+                                :class="adjForm.payment_method === 'bank' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                class="rounded-lg border px-3 py-1.5 text-sm font-medium">🏦 Банк</button>
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">Аванс автоматически попадёт в Расходы на Финансах (категория «Расходы по сотрудникам»)</p>
+                    </div>
+                    <div :class="adjForm.type === 'absence' || adjForm.type === 'sick' || adjForm.type === 'advance' ? '' : 'sm:col-span-2'">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Комментарий</label>
                         <input v-model="adjForm.note" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="Причина…" />
                     </div>

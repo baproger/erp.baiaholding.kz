@@ -18,12 +18,18 @@ const map = {
     done: 'bg-green-100 text-green-700',
     legal: 'bg-indigo-100 text-indigo-700',
     individual: 'bg-teal-100 text-teal-700',
+    // Статусы счетов (invoices)
+    sent: 'bg-blue-100 text-blue-700',
+    partial: 'bg-amber-100 text-amber-700',
+    paid: 'bg-green-100 text-green-700',
 };
 
 const labels = {
     draft: 'Черновик', active: 'Активна', closed: 'Закрыта', completed: 'Завершён',
     cancelled: 'Отменена', new: 'Новая', in_progress: 'В работе', review: 'Проверка',
     done: 'Готово', legal: 'Юр. лицо', individual: 'Физ. лицо',
+    // Статусы счетов: выставлен → частично оплачен → оплачен
+    sent: 'Выставлен', partial: 'Частично оплачен', paid: 'Оплачен',
 };
 
 const cls = computed(() => map[props.status] ?? 'bg-slate-100 text-slate-700');

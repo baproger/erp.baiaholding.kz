@@ -102,6 +102,8 @@ class PayrollController extends Controller
             'amount' => ['nullable', 'numeric', 'min:0'],
             'date' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:255'],
+            // Для аванса: откуда выданы деньги (нал/банк) — уйдёт в Расходы.
+            'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
         ]);
 
         // Автосумма для отгула/больничного: оклад / 22 рабочих дня × дни.
@@ -116,14 +118,49 @@ class PayrollController extends Controller
         }
 
         $data['created_by'] = $request->user()->id;
+
+        // АВАНС — реальные деньги из кассы/банка: фиксируем и в Финансах —
+        // подтверждённый расход компании, категория «Расходы по сотрудникам»
+        // (не «прочие»). Удаление корректировки удалит и расход.
+        if ($data['type'] === 'advance') {
+            $employee = User::find($data['user_id']);
+            $category = \App\Models\ExpenseCategory::firstOrCreate(
+                ['name' => 'Расходы по сотрудникам'],
+                ['is_active' => true]
+            );
+            $expense = \App\Models\Expense::create([
+                'company_id' => \App\Support\CurrentCompany::id()
+                    ?: $employee->companies()->value('companies.id'),
+                'category_id' => $category->id,
+                'type' => 'direct',
+                'amount' => $data['amount'],
+                'date' => $data['date'],
+                'description' => 'Аванс сотруднику: '.$employee->name
+                    .(! empty($data['note']) ? ' — '.$data['note'] : ''),
+                'responsible_user_id' => $employee->id,
+                'status' => 'confirmed',
+                'payment_method' => $data['payment_method'] ?? 'cash',
+                'confirmed_by' => $request->user()->id,
+                'confirmed_at' => now(),
+            ]);
+            $data['expense_id'] = $expense->id;
+            $data['payment_method'] = $data['payment_method'] ?? 'cash';
+        }
+
         PayrollAdjustment::create($data);
 
-        return back()->with('success', 'Корректировка добавлена.');
+        return back()->with('success', $data['type'] === 'advance'
+            ? 'Аванс добавлен и зафиксирован в Расходах на Финансах.'
+            : 'Корректировка добавлена.');
     }
 
     public function destroyAdjustment(Request $request, PayrollAdjustment $adjustment): RedirectResponse
     {
         abort_unless($this->canManage($request), 403);
+        // Аванс: удаляем и его расход на Финансах (деньги вернулись в кассу).
+        if ($adjustment->expense_id) {
+            \App\Models\Expense::find($adjustment->expense_id)?->delete();
+        }
         $adjustment->delete();
 
         return back()->with('success', 'Корректировка удалена.');

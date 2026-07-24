@@ -17,7 +17,7 @@ class PayrollAdjustment extends Model
     /** Типы-удержания (минус к выплате). */
     public const DEDUCTIONS = ['absence', 'sick', 'fine', 'advance'];
 
-    protected $fillable = ['user_id', 'type', 'days', 'amount', 'date', 'note', 'created_by'];
+    protected $fillable = ['user_id', 'type', 'days', 'amount', 'date', 'note', 'created_by', 'expense_id', 'payment_method'];
 
     protected $casts = [
         'days' => 'decimal:2',

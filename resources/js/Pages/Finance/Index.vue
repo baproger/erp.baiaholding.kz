@@ -601,19 +601,25 @@ const delExpense = async (e) => {
                 <table class="min-w-full divide-y divide-slate-100 text-sm">
                     <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                         <tr>
-                            <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Клиент</th><th class="px-4 py-3">Сумма</th>
+                            <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Сделка</th><th class="px-4 py-3">Клиент</th><th class="px-4 py-3">Сумма</th>
                             <th class="px-4 py-3">Оплачено</th><th class="px-4 py-3">Статус</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         <tr v-for="inv in invoices.data" :key="inv.id" class="hover:bg-slate-50">
                             <td class="px-4 py-3 font-medium text-slate-900">{{ inv.number }}</td>
+                            <td class="px-4 py-3">
+                                <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
+                                    class="text-indigo-600 hover:underline">{{ inv.link.label }}</Link>
+                                <span v-else-if="inv.link" class="text-slate-400">{{ inv.link.label }}</span>
+                                <span v-else class="text-slate-400">—</span>
+                            </td>
                             <td class="px-4 py-3 text-slate-500">{{ inv.client?.name ?? '—' }}</td>
                             <td class="px-4 py-3">{{ money(inv.amount) }}</td>
                             <td class="px-4 py-3 text-green-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
                             <td class="px-4 py-3"><StatusBadge :status="inv.status" /></td>
                         </tr>
-                        <tr v-if="!invoices.data.length"><td colspan="5" class="px-4 py-8 text-center text-slate-400">Счетов нет</td></tr>
+                        <tr v-if="!invoices.data.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Счетов нет</td></tr>
                     </tbody>
                 </table>
                 <div class="p-4"><Pagination :links="invoices.links" /></div>

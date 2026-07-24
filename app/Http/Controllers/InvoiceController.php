@@ -56,11 +56,39 @@ class InvoiceController extends Controller
                     ->whereIn('invoiceable_id', \App\Models\Project::whereHas('deal', fn ($d) => $d->where('company_id', $c))->select('id')))));
 
         $invoices = (clone $invBase)
-            ->with('client:id,name')
+            ->with(['client:id,name', 'invoiceable'])
             ->withSum('payments as payments_sum_amount', 'amount')
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where('number', 'like', "%{$s}%"))
             ->when($request->string('status')->toString(), fn ($q, $st) => $q->where('status', $st))
-            ->latest()->paginate(20)->withQueryString();
+            ->latest()->paginate(20)->withQueryString()
+            // Ссылка на сделку/заказ счёта — кликабельна в блоке «Счета».
+            // Отсылка «откуда деньги» есть ВСЕГДА: даже у удалённой сделки
+            // показываем её номер и заказчика (серым, без ссылки).
+            ->through(function ($i) {
+                $target = $i->invoiceable;
+                $link = null;
+                if ($target instanceof \App\Models\Deal) {
+                    $link = ['type' => 'deal', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->company_name ?? ''), ' ·')];
+                } elseif ($target instanceof \App\Models\Project) {
+                    $link = ['type' => 'project', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->name ?? ''), ' ·')];
+                } elseif ($i->invoiceable_type === 'deal' && $i->invoiceable_id) {
+                    $trashed = \App\Models\Deal::withTrashed()->find($i->invoiceable_id);
+                    if ($trashed) {
+                        $number = preg_replace('/#del\d+$/', '', (string) $trashed->number);
+                        $link = ['type' => 'deal', 'id' => null, 'label' => trim($number.' · '.($trashed->company_name ?? ''), ' ·').' (сделка удалена)'];
+                    }
+                }
+
+                return [
+                    'id' => $i->id,
+                    'number' => $i->number,
+                    'client' => $i->client,
+                    'amount' => (float) $i->amount,
+                    'payments_sum_amount' => (float) ($i->payments_sum_amount ?? 0),
+                    'status' => $i->status,
+                    'link' => $link,
+                ];
+            });
 
         // Дебиторка для финансиста: выставлено / оплачено / остаток к оплате.
         $invoiced = (float) (clone $invBase)->sum('amount');
