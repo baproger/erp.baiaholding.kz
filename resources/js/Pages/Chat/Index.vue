@@ -8,7 +8,11 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ chats: Array, users: Array, canCreateGroup: Boolean });
+const props = defineProps({
+    chats: Array, users: Array, canCreateGroup: Boolean,
+    companies: { type: Array, default: () => [] },
+    trashedChats: { type: Array, default: () => [] },
+});
 const me = computed(() => usePage().props.auth.user);
 
 // ---- State ----
@@ -48,9 +52,52 @@ const togglePin = (c) => {
     pins.value = isPinned(c) ? pins.value.filter((id) => id !== c.id) : [...pins.value, c.id];
     persistPins();
 };
-// Непрочитанные — серверный счётчик (c.unread); открытые в этой сессии гасим сразу.
+// ---- Звук нового сообщения (WebAudio, без файлов; тумблер 🔔 сохраняется) ----
+const soundOn = ref(localStorage.getItem('chat_sound') !== 'off');
+const toggleSound = () => { soundOn.value = !soundOn.value; localStorage.setItem('chat_sound', soundOn.value ? 'on' : 'off'); };
+let audioCtx = null;
+const ding = () => {
+    if (!soundOn.value) return;
+    try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.type = 'sine';
+        o.frequency.setValueAtTime(880, audioCtx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.08);
+        g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+        o.start(); o.stop(audioCtx.currentTime + 0.4);
+    } catch (e) { /* браузер мог запретить звук до первого клика */ }
+};
+
+// ---- Живые бейджи: лёгкий поллинг непрочитанных и последних сообщений ----
+const live = reactive({});   // chat_id -> { unread, last }
+let statePrev = null;
+const pollState = async () => {
+    try {
+        const { data } = await window.axios.get(route('chat.state'));
+        const st = data.state || {};
+        let incoming = false;
+        for (const [id, s] of Object.entries(st)) {
+            if (statePrev && Number(id) !== activeChat.value?.id && s.unread > (statePrev[id]?.unread ?? 0)) incoming = true;
+            live[id] = s;
+        }
+        statePrev = st;
+        if (incoming) ding();
+    } catch (e) { /* ignore transient poll errors */ }
+};
+const lastOf = (c) => live[c.id]?.last ?? c.last;
+
+// Непрочитанные — серверный счётчик (live-поллинг или снапшот props); открытый чат гасим сразу.
 const locallyRead = reactive({});
-const unreadCount = (c) => locallyRead[c.id] ? 0 : (c.unread ?? 0);
+const unreadCount = (c) => {
+    if (c.id === activeChat.value?.id) return 0;
+    const s = live[c.id];
+    if (s) return s.unread;
+    return locallyRead[c.id] ? 0 : (c.unread ?? 0);
+};
 const isUnread = (c) => unreadCount(c) > 0;
 const markSeen = (c) => {
     if (!c) return;
@@ -131,12 +178,20 @@ watch([() => infoTab.value, () => activeChat.value?.id, infoOpen], () => {
 // ---- Messaging ----
 const scrollBottom = () => nextTick(() => { if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight; });
 
+// «Кто прочитал»: user_id → id последнего прочитанного им сообщения этого чата.
+const reads = ref({});
+const readersFor = (m) => (activeChat.value?.participants || [])
+    .filter((p) => p.id !== m.user_id && Number(reads.value[p.id] ?? 0) >= m.id);
+
 const loadMessages = async (reset = false) => {
     if (!activeChat.value) return;
-    if (reset) { messages.value = []; lastId.value = 0; }
+    if (reset) { messages.value = []; lastId.value = 0; reads.value = {}; }
     try {
         const { data } = await window.axios.get(route('chat.messages', activeChat.value.id), { params: { after: lastId.value } });
+        if (data.reads) reads.value = data.reads;
         if (data.messages.length) {
+            // Звук: пришло чужое сообщение в открытый чат (не первичная загрузка).
+            if (!reset && data.messages.some((m) => m.user_id !== me.value?.id)) ding();
             messages.value.push(...data.messages);
             lastId.value = data.messages[data.messages.length - 1].id;
             markSeen(activeChat.value);
@@ -265,11 +320,15 @@ const addEmoji = (e) => { form.message += e; resizeInput(); textarea.value?.focu
 
 // ---- New chat / group ----
 const showNew = ref(false);
-const newForm = useForm({ type: 'personal', name: '', description: '', participants: [] });
+const newForm = useForm({ type: 'personal', name: '', description: '', company_id: null, participants: [] });
 const userSearch = ref('');
 const filteredUsers = computed(() => {
     const q = userSearch.value.trim().toLowerCase();
-    return q ? props.users.filter((u) => u.name.toLowerCase().includes(q)) : props.users;
+    let pool = props.users;
+    // Группа фирмы — в списке только сотрудники этой фирмы (чтобы не путать BAIA и ASU).
+    const cid = showEdit.value ? editForm.company_id : (newForm.type === 'group' ? newForm.company_id : null);
+    if (cid) pool = pool.filter((u) => (u.company_ids || []).includes(cid));
+    return q ? pool.filter((u) => u.name.toLowerCase().includes(q)) : pool;
 });
 const toggleParticipant = (id) => {
     newForm.participants = newForm.participants.includes(id)
@@ -290,10 +349,11 @@ const syncActive = (id) => { const c = props.chats.find((x) => x.id === id); if 
 const canManage = (c) => props.canCreateGroup && c && c.type === 'group';
 const showEdit = ref(false);
 const editPhoto = ref(null);
-const editForm = useForm({ id: null, name: '', description: '', participants: [], photo: null });
+const editForm = useForm({ id: null, name: '', description: '', company_id: null, participants: [], photo: null });
 const openEdit = (c) => {
     editForm.id = c.id;
     editForm.name = c.name;
+    editForm.company_id = c.company_id ?? null;
     editForm.description = c.description ?? '';
     editForm.photo = null;
     editPhoto.value = null;
@@ -315,10 +375,52 @@ const saveEdit = () => {
     });
 };
 const removeChat = async (c) => {
-    if (await confirmDialog({ title: 'Удалить группу', message: `Группа «${c.name}» и все её сообщения будут удалены.`, confirmText: 'Удалить', danger: true })) {
+    if (await confirmDialog({ title: 'Удалить группу', message: `Группа «${c.name}» отправится в корзину — её можно будет восстановить.`, confirmText: 'В корзину', danger: true })) {
         router.delete(route('chat.destroy', c.id), {
             preserveScroll: true, preserveState: true,
             onSuccess: () => { infoOpen.value = false; activeChat.value = null; messages.value = []; },
+        });
+    }
+};
+
+// ---- Корзина чатов (admin/director): вернуть или стереть навсегда ----
+const showTrash = ref(false);
+const restoreChat = (c) => router.post(route('chat.restore', c.id), {}, { preserveScroll: true, preserveState: true });
+const purgeChat = async (c) => {
+    if (await confirmDialog({ title: 'Удалить навсегда', message: `Чат «${c.name}» и все его сообщения будут стёрты БЕЗВОЗВРАТНО.`, confirmText: 'Стереть', danger: true })) {
+        router.delete(route('chat.force', c.id), { preserveScroll: true, preserveState: true });
+    }
+};
+
+// ---- Участники группы: добавить нового сотрудника / убрать (admin/director) ----
+const memberSearch = ref('');
+const nonMembers = computed(() => {
+    const c = activeChat.value;
+    if (!c) return [];
+    const ids = new Set((c.participants || []).map((p) => p.id));
+    const q = memberSearch.value.trim().toLowerCase();
+    return props.users
+        .filter((u) => !ids.has(u.id))
+        // В группу фирмы предлагаем только сотрудников этой фирмы.
+        .filter((u) => !c.company_id || (u.company_ids || []).includes(c.company_id))
+        .filter((u) => !q || u.name.toLowerCase().includes(q))
+        .slice(0, 30);
+});
+const addMember = (u) => {
+    const id = activeChat.value?.id;
+    if (!id) return;
+    router.post(route('chat.members.add', id), { user_id: u.id }, {
+        preserveScroll: true, preserveState: true,
+        onSuccess: () => syncActive(id),
+    });
+};
+const removeMember = async (p) => {
+    const id = activeChat.value?.id;
+    if (!id) return;
+    if (await confirmDialog({ title: 'Убрать участника', message: `${p.name} потеряет доступ к этой группе.`, confirmText: 'Убрать', danger: true })) {
+        router.delete(route('chat.members.remove', [id, p.id]), {
+            preserveScroll: true, preserveState: true,
+            onSuccess: () => syncActive(id),
         });
     }
 };
@@ -329,7 +431,8 @@ watch(() => form.message, resizeInput);
 const onVisible = () => { if (!document.hidden) loadMessages(); };
 onMounted(() => {
     if (activeChat.value) { markSeen(activeChat.value); loadMessages(true); }
-    timer = setInterval(() => { if (!document.hidden) loadMessages(); }, 4000);
+    pollState();
+    timer = setInterval(() => { if (!document.hidden) { loadMessages(); pollState(); } }, 4000);
     document.addEventListener('visibilitychange', onVisible);
 });
 onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); });
@@ -346,6 +449,11 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                 class="absolute inset-y-0 left-0 z-20 flex w-72 flex-shrink-0 flex-col border-r border-slate-200 bg-slate-50 transition-transform duration-300 lg:static lg:z-0">
                 <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
                     <h3 class="text-sm font-semibold text-slate-800">Сообщения</h3>
+                    <button @click="toggleSound" :title="soundOn ? 'Выключить звук' : 'Включить звук'"
+                        class="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-base transition-colors"
+                        :class="soundOn ? 'text-indigo-500 hover:bg-indigo-50' : 'text-slate-300 hover:bg-slate-100'">
+                        {{ soundOn ? '🔔' : '🔕' }}
+                    </button>
                     <button @click="openNew" title="Новый чат"
                         class="new-btn flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm transition-all hover:bg-indigo-700">
                         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
@@ -374,12 +482,15 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                             </span>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center justify-between gap-2">
-                                    <span class="truncate text-sm" :class="isUnread(c) ? 'font-bold text-slate-900' : 'font-medium text-slate-700'">{{ c.name }}</span>
-                                    <span v-if="c.last" class="flex-shrink-0 text-[10px] text-slate-400">{{ fmtTime(c.last.time) }}</span>
+                                    <span class="flex min-w-0 items-center gap-1.5">
+                                        <span class="truncate text-sm" :class="isUnread(c) ? 'font-bold text-slate-900' : 'font-medium text-slate-700'">{{ c.name }}</span>
+                                        <span v-if="c.company_name" class="flex-shrink-0 rounded bg-slate-200/70 px-1 py-px text-[9px] font-bold uppercase text-slate-500">{{ c.company_name }}</span>
+                                    </span>
+                                    <span v-if="lastOf(c)" class="flex-shrink-0 text-[10px] text-slate-400">{{ fmtTime(lastOf(c).time) }}</span>
                                 </div>
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="truncate text-xs" :class="isUnread(c) ? 'font-semibold text-slate-600' : 'text-slate-400'">
-                                        {{ c.last ? c.last.text : 'Нет сообщений' }}
+                                        {{ lastOf(c) ? lastOf(c).text : 'Нет сообщений' }}
                                     </span>
                                     <span v-if="unreadCount(c) > 0" class="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500 px-1 text-[10px] font-bold text-white">{{ unreadCount(c) > 99 ? '99+' : unreadCount(c) }}</span>
                                 </div>
@@ -416,6 +527,24 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                             </button>
                         </template>
                     </div>
+                    <!-- Корзина (admin/director): вернуть чат или стереть навсегда -->
+                    <div v-if="canCreateGroup && trashedChats.length" class="mb-2">
+                        <button @click="showTrash = !showTrash" class="flex w-full items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600">
+                            🗑 Корзина ({{ trashedChats.length }})
+                            <span class="ml-auto">{{ showTrash ? '▲' : '▼' }}</span>
+                        </button>
+                        <template v-if="showTrash">
+                            <div v-for="c in trashedChats" :key="'t' + c.id" class="flex items-center gap-2 rounded-xl px-2.5 py-2 opacity-80 hover:bg-white/70">
+                                <span class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-300 text-sm font-bold text-white">#</span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-medium text-slate-600">{{ c.name }}</div>
+                                    <div class="text-[10px] text-slate-400">удалён {{ fmtDay(c.deleted_at) }}</div>
+                                </div>
+                                <button @click="restoreChat(c)" title="Восстановить" class="flex-shrink-0 text-xs font-medium text-indigo-500 hover:underline">Вернуть</button>
+                                <button @click="purgeChat(c)" title="Стереть навсегда" class="flex-shrink-0 text-xs text-rose-500 hover:underline">✕</button>
+                            </div>
+                        </template>
+                    </div>
                     <div v-if="!sections.length" class="px-3 py-8 text-center text-sm text-slate-400">Ничего не найдено</div>
                 </div>
             </aside>
@@ -432,7 +561,7 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                         </span>
                         <div class="min-w-0">
                             <div class="truncate text-sm font-semibold text-slate-900">{{ activeChat?.name ?? 'Выберите чат' }}</div>
-                            <div class="text-[11px] text-slate-400">{{ activeChat ? typeLabel(activeChat) + ' · ' + (activeChat.participants?.length || 0) + ' уч.' : '' }}</div>
+                            <div class="text-[11px] text-slate-400">{{ activeChat ? typeLabel(activeChat) + (activeChat.company_name ? ' · ' + activeChat.company_name : '') + ' · ' + (activeChat.participants?.length || 0) + ' уч.' : '' }}</div>
                         </div>
                     </div>
                     <div v-if="activeChat" class="flex items-center gap-1.5">
@@ -501,6 +630,13 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                                             <span v-if="m.user_id !== me?.id && activeChat?.type !== 'personal'" class="font-semibold text-indigo-500">{{ m.user_name }}</span>
                                             <span v-if="m.edited">изменено</span>
                                             <span>{{ fmtTime(m.created_at) }}</span>
+                                            <!-- Кто прочитал: ✓ отправлено, ✓✓ прочитано (имена — по наведению) -->
+                                            <span v-if="m.user_id === me?.id"
+                                                :title="readersFor(m).length ? 'Прочитали: ' + readersFor(m).map((p) => p.name).join(', ') : 'Ещё не прочитано'"
+                                                class="cursor-default font-bold"
+                                                :class="readersFor(m).length ? 'text-sky-300' : 'text-indigo-300'">
+                                                {{ readersFor(m).length ? '✓✓' : '✓' }}<template v-if="activeChat?.type !== 'personal' && readersFor(m).length"> {{ readersFor(m).length }}</template>
+                                            </span>
                                         </div>
                                     </div>
                                     <!-- Реакции-эмодзи под сообщением -->
@@ -627,12 +763,30 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                                 <div class="mt-1 text-xs text-slate-400">Личный контакт</div>
                             </div>
                             <div v-else class="space-y-1">
-                                <div v-for="p in activeChat.participants" :key="p.id" class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                                <div v-for="p in activeChat.participants" :key="p.id" class="group/member flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
                                     <Avatar :name="p.name" :src="p.avatar" :size="32" />
                                     <span class="text-sm text-slate-700">{{ p.name }}</span>
                                     <span v-if="p.id === me?.id" class="ml-auto text-[10px] text-slate-400">вы</span>
+                                    <button v-else-if="canManage(activeChat)" @click="removeMember(p)" title="Убрать из группы"
+                                        class="ml-auto hidden text-xs text-slate-300 hover:text-rose-500 group-hover/member:block">✕</button>
                                 </div>
                                 <div v-if="!activeChat.participants?.length" class="py-4 text-center text-xs text-slate-400">Нет участников</div>
+
+                                <!-- Добавить сотрудника в группу (admin/director) -->
+                                <div v-if="canManage(activeChat)" class="mt-3 border-t border-slate-100 pt-3">
+                                    <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">➕ Добавить участника</div>
+                                    <input v-model="memberSearch" placeholder="Поиск сотрудника…"
+                                        class="mb-1.5 w-full rounded-lg border-slate-200 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                                    <div class="max-h-44 space-y-0.5 overflow-y-auto">
+                                        <button v-for="u in nonMembers" :key="u.id" @click="addMember(u)"
+                                            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-indigo-50">
+                                            <Avatar :name="u.name" :src="u.avatar" :size="26" />
+                                            <span class="min-w-0 flex-1 truncate text-slate-700">{{ u.name }}</span>
+                                            <span class="flex-shrink-0 text-indigo-500">+</span>
+                                        </button>
+                                        <div v-if="!nonMembers.length" class="py-2 text-center text-[11px] text-slate-400">Все уже в группе</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <!-- Files -->
@@ -687,6 +841,16 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                     <input v-model="newForm.name" placeholder="Название группы" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
                     <div v-if="newForm.errors.name" class="text-xs text-red-600">{{ newForm.errors.name }}</div>
                     <textarea v-model="newForm.description" rows="2" placeholder="Описание группы (необязательно)" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400"></textarea>
+                    <!-- Фирма группы: сотрудники BAIA видят группы BAIA, ASU — свои -->
+                    <div v-if="companies.length > 1" class="flex items-center gap-1.5">
+                        <span class="text-xs text-slate-500">Фирма:</span>
+                        <button type="button" @click="newForm.company_id = null"
+                            :class="!newForm.company_id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
+                            class="rounded-full px-2.5 py-1 text-xs font-semibold">Обе</button>
+                        <button v-for="co in companies" :key="co.id" type="button" @click="newForm.company_id = co.id"
+                            :class="newForm.company_id === co.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
+                            class="rounded-full px-2.5 py-1 text-xs font-semibold">{{ co.name }}</button>
+                    </div>
                 </div>
 
                 <div class="mb-1 text-xs font-medium text-slate-500">Участники ({{ newForm.participants.length }})</div>
@@ -728,6 +892,15 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                     <input v-model="editForm.name" placeholder="Название группы" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
                     <div v-if="editForm.errors.name" class="text-xs text-red-600">{{ editForm.errors.name }}</div>
                     <textarea v-model="editForm.description" rows="2" placeholder="Описание группы" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400"></textarea>
+                    <div v-if="companies.length > 1" class="flex items-center gap-1.5">
+                        <span class="text-xs text-slate-500">Фирма:</span>
+                        <button type="button" @click="editForm.company_id = null"
+                            :class="!editForm.company_id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
+                            class="rounded-full px-2.5 py-1 text-xs font-semibold">Обе</button>
+                        <button v-for="co in companies" :key="co.id" type="button" @click="editForm.company_id = co.id"
+                            :class="editForm.company_id === co.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
+                            class="rounded-full px-2.5 py-1 text-xs font-semibold">{{ co.name }}</button>
+                    </div>
                 </div>
 
                 <div class="mb-1 text-xs font-medium text-slate-500">Участники ({{ editForm.participants.length + 1 }})</div>

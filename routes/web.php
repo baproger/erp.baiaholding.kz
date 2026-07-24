@@ -172,7 +172,15 @@ Route::middleware('auth')->group(function () {
 
     // Chat
     Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
+    // Лёгкий поллинг бейджей/звука — до chat/{chat}-маршрутов.
+    Route::get('chat/state', [ChatController::class, 'state'])->middleware('throttle:120,1')->name('chat.state');
     Route::post('chat', [ChatController::class, 'store'])->middleware('throttle:30,1')->name('chat.store');
+    // Корзина чатов: вернуть / стереть навсегда (admin/director).
+    Route::post('chat/{id}/restore', [ChatController::class, 'restore'])->name('chat.restore');
+    Route::delete('chat/{id}/force', [ChatController::class, 'forceDestroy'])->name('chat.force');
+    // Участники группы: добавить нового сотрудника / убрать.
+    Route::post('chat/{chat}/members', [ChatController::class, 'addMember'])->middleware('throttle:60,1')->name('chat.members.add');
+    Route::delete('chat/{chat}/members/{user}', [ChatController::class, 'removeMember'])->name('chat.members.remove');
     Route::get('chat/{chat}/messages', [ChatController::class, 'messages'])->name('chat.messages');
     // Message send accepts file uploads — throttle to curb spam / storage exhaustion.
     Route::post('chat/{chat}/messages', [ChatController::class, 'sendMessage'])->middleware('throttle:120,1')->name('chat.send');

@@ -27,15 +27,28 @@ class ChatController extends Controller
         return $global;
     }
 
+    /**
+     * Чаты, доступные пользователю: общий + те, где он участник. Группы с
+     * company_id видят только сотрудники этой фирмы (админ — все), чтобы
+     * группы BAIA и ASU не путались между собой.
+     */
+    private function visibleChats(User $user): \Illuminate\Database\Eloquent\Builder
+    {
+        return Chat::query()
+            ->where(fn ($q) => $q->where('type', 'global')
+                ->orWhereHas('participants', fn ($p) => $p->where('users.id', $user->id)))
+            ->when(! $user->hasRole('admin'), fn ($q) => $q->where(fn ($w) => $w
+                ->whereNull('company_id')
+                ->orWhereIn('company_id', $user->companies()->pluck('companies.id'))));
+    }
+
     public function index(Request $request): Response
     {
         $user = $request->user();
         $this->ensureGlobalChat($user);
 
-        $chats = Chat::query()
-            ->where(fn ($q) => $q->where('type', 'global')
-                ->orWhereHas('participants', fn ($p) => $p->where('users.id', $user->id)))
-            ->with(['participants:id,name,avatar', 'lastMessage.user:id,name', 'pinnedMessage.user:id,name'])
+        $chats = $this->visibleChats($user)
+            ->with(['participants:id,name,avatar', 'company:id,name', 'lastMessage.user:id,name', 'pinnedMessage.user:id,name'])
             ->withCount('messages')
             ->orderByDesc('updated_at')
             ->get();
@@ -68,6 +81,8 @@ class ChatController extends Controller
                     'id' => $c->id,
                     'type' => $c->type,
                     'name' => $name,
+                    'company_id' => $c->company_id,
+                    'company_name' => $c->company?->name,
                     'description' => $c->description,
                     'avatar' => $avatar,
                     'deal_id' => $c->deal_id,
@@ -90,11 +105,48 @@ class ChatController extends Controller
                 ];
             });
 
+        $canManage = $user->hasAnyRole(['admin', 'director']);
+
         return Inertia::render('Chat/Index', [
             'chats' => $chats,
-            'users' => User::where('is_active', true)->where('id', '!=', $user->id)->orderBy('name')->get(['id', 'name', 'avatar']),
-            'canCreateGroup' => $user->hasAnyRole(['admin', 'director']),
+            'users' => User::where('is_active', true)->where('id', '!=', $user->id)->orderBy('name')
+                ->with('companies:companies.id')->get(['id', 'name', 'avatar'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'avatar' => $u->avatar, 'company_ids' => $u->companies->pluck('id')]),
+            'companies' => \App\Models\Company::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'canCreateGroup' => $canManage,
+            // Корзина: удалённые чаты может вернуть или стереть навсегда админ/директор.
+            'trashedChats' => $canManage
+                ? Chat::onlyTrashed()->orderByDesc('deleted_at')->get(['id', 'name', 'type', 'deleted_at'])
+                    ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name ?: 'Чат #'.$c->id, 'type' => $c->type, 'deleted_at' => $c->deleted_at->toIso8601String()])
+                : [],
         ]);
+    }
+
+    /**
+     * Лёгкий поллинг для списка чатов: непрочитанные и последнее сообщение —
+     * бейджи и звук новых сообщений работают без перезагрузки страницы.
+     */
+    public function state(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $chats = $this->visibleChats($user)->with('lastMessage.user:id,name')->get(['id', 'updated_at']);
+
+        $unread = ChatMessage::query()
+            ->where('user_id', '!=', $user->id)
+            ->whereIn('chat_id', $chats->pluck('id'))
+            ->whereRaw('id > COALESCE((select last_read_message_id from chat_reads where chat_reads.chat_id = chat_messages.chat_id and chat_reads.user_id = ?), 0)', [$user->id])
+            ->selectRaw('chat_id, count(*) c')->groupBy('chat_id')->pluck('c', 'chat_id');
+
+        return response()->json(['state' => $chats->mapWithKeys(fn ($c) => [$c->id => [
+            'unread' => (int) ($unread[$c->id] ?? 0),
+            'last' => $c->lastMessage ? [
+                'id' => $c->lastMessage->id,
+                'text' => Str::limit((string) $c->lastMessage->message, 42) ?: '📎 вложение',
+                'author' => $c->lastMessage->user?->name,
+                'author_id' => $c->lastMessage->user_id,
+                'time' => $c->lastMessage->created_at->toIso8601String(),
+            ] : null,
+        ]])]);
     }
 
     public function messages(Request $request, Chat $chat): JsonResponse
@@ -140,7 +192,12 @@ class ChatController extends Controller
                 'created_at' => $m->created_at->toIso8601String(),
             ]);
 
-        return response()->json(['messages' => $messages]);
+        // «Кто прочитал»: user_id → id последнего прочитанного сообщения.
+        // Фронт по нему рисует ✓✓ и список имён на своих сообщениях.
+        $reads = \Illuminate\Support\Facades\DB::table('chat_reads')
+            ->where('chat_id', $chat->id)->pluck('last_read_message_id', 'user_id');
+
+        return response()->json(['messages' => $messages, 'reads' => $reads]);
     }
 
     public function sendMessage(Request $request, Chat $chat): RedirectResponse
@@ -325,12 +382,15 @@ class ChatController extends Controller
             'name' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'type' => ['required', 'in:personal,group'],
+            'company_id' => ['nullable', 'exists:companies,id'],
             'participants' => ['array'],
             'participants.*' => ['exists:users,id'],
         ]);
 
         $chat = Chat::create([
             'type' => $validated['type'],
+            // Компания — только у групп: BAIA/ASU видят каждая своё, null — обе.
+            'company_id' => $validated['type'] === 'group' ? ($validated['company_id'] ?? null) : null,
             'name' => $validated['name'] ?? null,
             'description' => $validated['description'] ?? null,
             'is_active' => true,
@@ -353,6 +413,7 @@ class ChatController extends Controller
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'company_id' => ['nullable', 'exists:companies,id'],
             'participants' => ['array'],
             'participants.*' => ['exists:users,id'],
             'photo' => ['nullable', 'image', 'max:5120'],
@@ -362,6 +423,9 @@ class ChatController extends Controller
             'name' => $validated['name'] ?? $chat->name,
             'description' => $validated['description'] ?? $chat->description,
         ];
+        if ($chat->type === 'group' && $request->has('company_id')) {
+            $data['company_id'] = $validated['company_id'] ?? null;
+        }
         if ($photo = $request->file('photo')) {
             if ($chat->avatar) {
                 Storage::disk('local')->delete($chat->avatar);
@@ -378,17 +442,73 @@ class ChatController extends Controller
         return back()->with('success', 'Чат обновлён.');
     }
 
-    /** Delete a chat with its messages (admin/director only; the global chat is protected). */
+    /**
+     * Чат — в корзину (admin/director; общий чат защищён). Сообщения и
+     * участники сохраняются: из корзины чат можно вернуть как был.
+     */
     public function destroy(Request $request, Chat $chat): RedirectResponse
     {
         abort_if($chat->type === 'global', 403, 'Общий чат нельзя удалить.');
         abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
 
-        $chat->messages()->delete();
-        $chat->participants()->detach();
         $chat->delete();
 
-        return back()->with('success', 'Чат удалён.');
+        return back()->with('success', 'Чат перемещён в корзину.');
+    }
+
+    /** Вернуть чат из корзины (admin/director). */
+    public function restore(Request $request, int $id): RedirectResponse
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
+        Chat::onlyTrashed()->findOrFail($id)->restore();
+
+        return back()->with('success', 'Чат восстановлен.');
+    }
+
+    /** Стереть чат из корзины НАВСЕГДА: сообщения, файлы, участники (admin/director). */
+    public function forceDestroy(Request $request, int $id): RedirectResponse
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
+        $chat = Chat::onlyTrashed()->findOrFail($id);
+
+        $chat->messages()->whereNotNull('attachments')->get()->each(function ($m) {
+            foreach (($m->attachments ?? []) as $a) {
+                if (! empty($a['path'])) {
+                    Storage::disk('local')->delete($a['path']);
+                }
+            }
+        });
+        if ($chat->avatar) {
+            Storage::disk('local')->delete($chat->avatar);
+        }
+        $chat->messages()->delete();
+        $chat->participants()->detach();
+        $chat->forceDelete();
+
+        return back()->with('success', 'Чат удалён навсегда.');
+    }
+
+    /** Добавить участника в группу — новый сотрудник присоединяется к чату. */
+    public function addMember(Request $request, Chat $chat): RedirectResponse
+    {
+        abort_unless($chat->type === 'group', 403, 'Участники добавляются только в группы.');
+        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
+        $data = $request->validate(['user_id' => ['required', 'exists:users,id']]);
+
+        $chat->participants()->syncWithoutDetaching([(int) $data['user_id'] => ['joined_at' => now()]]);
+
+        return back()->with('success', 'Участник добавлен.');
+    }
+
+    /** Убрать участника из группы (admin/director). */
+    public function removeMember(Request $request, Chat $chat, User $user): RedirectResponse
+    {
+        abort_unless($chat->type === 'group', 403);
+        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
+
+        $chat->participants()->detach($user->id);
+
+        return back()->with('success', 'Участник удалён из группы.');
     }
 
     private function authorizeParticipant(Request $request, Chat $chat): void
@@ -401,6 +521,8 @@ class ChatController extends Controller
             abort_unless($deal && $request->user()->can('view', $deal), 403);
             return;
         }
+        // Группа фирмы: сотрудник другой фирмы не попадает даже по прямой ссылке.
+        abort_unless($request->user()->worksInCompany($chat->company_id), 403);
         abort_unless($chat->participants()->where('users.id', $request->user()->id)->exists(), 403);
     }
 }

@@ -68,8 +68,9 @@ class ChatTest extends TestCase
         $this->actingAs($admin)->put(route('chat.update', $chat), ['name' => 'Новое', 'participants' => []])->assertRedirect();
         $this->assertEquals('Новое', $chat->fresh()->name);
 
+        // Удаление теперь мягкое: чат уходит в корзину (восстановим при нужде).
         $this->actingAs($admin)->delete(route('chat.destroy', $chat))->assertRedirect();
-        $this->assertDatabaseMissing('chats', ['id' => $chat->id]);
+        $this->assertSoftDeleted('chats', ['id' => $chat->id]);
     }
 
     public function test_employee_cannot_edit_or_delete_group(): void

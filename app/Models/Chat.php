@@ -6,12 +6,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Chat extends Model
 {
-    protected $fillable = ['type', 'deal_id', 'name', 'description', 'avatar', 'is_active', 'pinned_message_id'];
+    use SoftDeletes; // «Корзина»: удалённый чат можно восстановить.
+
+    protected $fillable = ['type', 'company_id', 'deal_id', 'name', 'description', 'avatar', 'is_active', 'pinned_message_id'];
 
     protected $casts = ['is_active' => 'boolean'];
+
+    /** Фирма (BAIA/ASU), которой принадлежит группа; null — видна обеим. */
+    public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
 
     public function messages(): HasMany
     {
