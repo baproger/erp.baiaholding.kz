@@ -16,7 +16,7 @@ import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deals: [Array, Object], stages: Array, view: String, filters: Object, users: Array, can: Object, isLeadership: Boolean, companies: { type: Array, default: () => [] }, currentCompanyId: Number });
+const props = defineProps({ deals: [Array, Object], stages: Array, view: String, filters: Object, users: Array, can: Object, isLeadership: Boolean, companies: { type: Array, default: () => [] }, currentCompanyId: Number, workshopsByCompany: { type: Object, default: () => ({}) } });
 
 const list = computed(() => Array.isArray(props.deals) ? props.deals : props.deals.data);
 const byStage = (id) => list.value.filter((d) => d.deal_stage_id === id);
@@ -53,7 +53,15 @@ const onDrop = async (stage) => {
     router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
 };
 const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { preserveScroll: true, preserveState: false });
-const toWorkshop = (deal) => router.post(route('deals.toWorkshop', deal.id), {}, { preserveScroll: true, preserveState: false });
+// У BAIA два цеха («Металл цех» / «Ағаш цех») — сначала модалка выбора; у ASU (один цех) — сразу.
+const workshopPickDeal = ref(null);
+const workshopOptions = computed(() => workshopPickDeal.value ? (props.workshopsByCompany[workshopPickDeal.value.company_id] ?? []) : []);
+const toWorkshop = (deal, workshop = null) => {
+    const options = props.workshopsByCompany[deal.company_id] ?? [];
+    if (!workshop && options.length > 1) { workshopPickDeal.value = deal; return; }
+    router.post(route('deals.toWorkshop', deal.id), { workshop: workshop ?? options[0] ?? null },
+        { preserveScroll: true, preserveState: false, onSuccess: () => (workshopPickDeal.value = null) });
+};
 const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
 
 // Серверные фильтры: поиск, менеджер, этап, срок с—по. Один набор параметров
@@ -355,6 +363,21 @@ const applyBinMatch = () => {
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showBinModal = false">Отмена</SecondaryButton>
                     <PrimaryButton @click="applyBinMatch">Подставить данные</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Выбор цеха (BAIA: Металл / Ағаш) — как на карточке сделки -->
+        <Modal :show="!!workshopPickDeal" max-width="sm" @close="workshopPickDeal = null">
+            <div class="p-6">
+                <h3 class="mb-1 text-base font-semibold text-slate-900">В какой цех отправить?</h3>
+                <p class="mb-4 text-xs text-slate-400">{{ workshopPickDeal?.number }} · {{ workshopPickDeal?.company_name }} — у компании несколько цехов, у каждого своя воронка.</p>
+                <div class="space-y-2">
+                    <button v-for="w in workshopOptions" :key="w" @click="toWorkshop(workshopPickDeal, w)"
+                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-800 transition hover:border-emerald-400 hover:bg-emerald-50">{{ w }}</button>
+                </div>
+                <div class="mt-4 text-right">
+                    <SecondaryButton @click="workshopPickDeal = null">Отмена</SecondaryButton>
                 </div>
             </div>
         </Modal>

@@ -77,6 +77,9 @@ class DealController extends Controller
             ],
             'companies' => $request->user()->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code']),
             'currentCompanyId' => \App\Support\CurrentCompany::id(),
+            // Цеха каждой фирмы: у BAIA их два — кнопка «В цех» открывает выбор.
+            'workshopsByCompany' => \App\Models\Company::where('is_active', true)->pluck('id')
+                ->mapWithKeys(fn ($id) => [$id => \App\Models\ProjectStage::workshopsFor((int) $id)]),
         ]);
     }
 
