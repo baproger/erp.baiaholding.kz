@@ -18,10 +18,10 @@ import HistoryPanel from '@/Components/HistoryPanel.vue';
 import DealChat from '@/Components/DealChat.vue';
 import { deadlineClass, isPastDue } from '@/utils/deadline';
 import { UNITS, SOURCES } from '@/utils/dealOptions';
-import { formatDate, money } from '@/utils/format';
+import { formatDate, formatDateTime, formatDuration, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] } });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] } });
 
 const tab = ref('finance');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
@@ -287,7 +287,27 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     <FinancePanel v-if="tab==='finance'" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
                     <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
-                    <HistoryPanel v-else :history="history" />
+                    <div v-else>
+                        <!-- Тайминг этапов сделки: каждый шаг — когда, сколько заняло и кто перевёл -->
+                        <div v-if="stageLogs.length" class="mb-5">
+                            <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">⏱ Тайминг этапов</div>
+                            <div class="space-y-1.5">
+                                <div v-for="(l, i) in stageLogs" :key="i" class="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm"
+                                    :class="l.open ? 'bg-indigo-50' : 'bg-slate-50'">
+                                    <div class="flex min-w-0 items-center gap-2">
+                                        <span class="font-medium text-slate-800">{{ l.stage }}</span>
+                                        <span v-if="l.open" class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">сейчас</span>
+                                        <span v-if="l.mover" class="truncate text-[11px] text-slate-400">перевёл(а): {{ l.mover }}</span>
+                                    </div>
+                                    <div class="flex items-center gap-3 tabular-nums">
+                                        <span class="text-xs text-slate-400">{{ formatDateTime(l.entered_at) }}<template v-if="l.left_at"> → {{ formatDateTime(l.left_at) }}</template></span>
+                                        <b :class="l.open ? 'text-indigo-700' : 'text-slate-700'">{{ formatDuration(l.seconds) }}</b>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <HistoryPanel :history="history" />
+                    </div>
                 </div>
             </div>
 

@@ -36,9 +36,34 @@ class Deal extends Model
 
     protected static function booted(): void
     {
+        // История этапов (deal_stage_logs): создание открывает таймер первого
+        // этапа; смена этапа закрывает старый и открывает новый; уход в цех /
+        // отмена — закрывает; возврат в работу — открывает снова.
+        static::created(function (Deal $deal) {
+            if ($deal->deal_stage_id) {
+                DealStageLog::open($deal);
+            }
+        });
+        static::updated(function (Deal $deal) {
+            if ($deal->wasChanged('deal_stage_id')) {
+                DealStageLog::closeOpen($deal);
+                if ($deal->deal_stage_id && $deal->status !== 'cancelled') {
+                    DealStageLog::open($deal);
+                }
+            } elseif ($deal->wasChanged('status')) {
+                if (in_array($deal->status, ['closed', 'cancelled'], true)) {
+                    DealStageLog::closeOpen($deal);
+                } elseif ($deal->status === 'active' && $deal->deal_stage_id
+                    && ! DealStageLog::where('deal_id', $deal->id)->whereNull('left_at')->exists()) {
+                    DealStageLog::open($deal);
+                }
+            }
+        });
+
         // Удалили сделку — её заказ в цехе не должен висеть «в работе»:
         // отменяем (иначе канбан цеха и просроченные показывают заказ-сироту).
         static::deleted(function (Deal $deal) {
+            DealStageLog::closeOpen($deal);
             Project::where('deal_id', $deal->id)
                 ->whereNotIn('status', ['completed', 'cancelled'])
                 ->update(['status' => 'cancelled']);

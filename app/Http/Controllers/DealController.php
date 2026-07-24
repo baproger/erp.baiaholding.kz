@@ -25,6 +25,11 @@ class DealController extends Controller
         $view = $request->string('view', 'kanban')->toString();
 
         $base = Deal::query()
+            ->select('deals.*')
+            // ⏱ на канбане: когда сделка вошла на текущий этап (открытый лог).
+            ->addSelect(['stage_entered_at' => \App\Models\DealStageLog::select('entered_at')
+                ->whereColumn('deal_id', 'deals.id')->whereNull('left_at')
+                ->latest('entered_at')->limit(1)])
             ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order'])
             ->withCount('tasks')
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
@@ -162,6 +167,18 @@ class DealController extends Controller
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
             'stageTask' => $stageTask,
+            // История этапов: сколько сделка провела на каждом и кто перевёл
+            // (открытый лог — тикает, как тайминг у заказа цеха).
+            'stageLogs' => \App\Models\DealStageLog::where('deal_id', $deal->id)
+                ->with('mover:id,name')->orderBy('entered_at')->orderBy('id')->get()
+                ->map(fn ($l) => [
+                    'stage' => $l->stage_name,
+                    'mover' => $l->mover?->name,
+                    'entered_at' => $l->entered_at->toIso8601String(),
+                    'left_at' => $l->left_at?->toIso8601String(),
+                    'seconds' => $l->left_at ? (int) $l->duration_seconds : (int) abs(now()->diffInSeconds($l->entered_at)),
+                    'open' => $l->left_at === null,
+                ]),
             // Остатки касса/банк — бухгалтеру в форме расхода («доступно N»);
             // менеджеру деньги компании не показываем.
             'balances' => request()->user()->hasAnyRole(['admin', 'financist'])

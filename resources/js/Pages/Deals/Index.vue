@@ -53,6 +53,15 @@ const onDrop = async (stage) => {
     router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
 };
 const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { preserveScroll: true, preserveState: false });
+// ⏱ Сколько сделка на текущем этапе (как тайминг у заказов цеха).
+const stageTime = (deal) => {
+    if (!deal.stage_entered_at) return null;
+    const s = Math.max(0, (Date.now() - new Date(deal.stage_entered_at)) / 1000);
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d) return `${d}д ${h}ч`;
+    if (h) return `${h}ч ${m}м`;
+    return `${m}м`;
+};
 // У BAIA два цеха («Металл цех» / «Ағаш цех») — сначала модалка выбора; у ASU (один цех) — сразу.
 const workshopPickDeal = ref(null);
 const workshopOptions = computed(() => workshopPickDeal.value ? (props.workshopsByCompany[workshopPickDeal.value.company_id] ?? []) : []);
@@ -220,6 +229,7 @@ const applyBinMatch = () => {
                         </Link>
                         <div class="mt-2 flex items-center justify-between border-t pt-1.5">
                             <Link :href="route('deals.show', deal.id)" class="text-[11px] text-slate-400 hover:text-indigo-600">+ Дело</Link>
+                            <span v-if="stageTime(deal)" title="Время на текущем этапе" class="text-[10px] tabular-nums text-slate-400">⏱ {{ stageTime(deal) }}</span>
                             <button v-if="workshopIds.includes(deal.deal_stage_id)" @click="toWorkshop(deal)" class="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">📦 В цех</button>
                             <button v-else-if="!wonIds.includes(deal.deal_stage_id) && (canAccounting || !postActIds.includes(deal.deal_stage_id))" @click="advance(deal)" class="rounded bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                         </div>
