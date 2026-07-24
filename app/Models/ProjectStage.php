@@ -53,8 +53,14 @@ class ProjectStage extends Model
     /** Названия цехов компании (пусто или один элемент = выбор не нужен). */
     public static function workshopsFor(?int $companyId): array
     {
+        // reorder(): companyQuery сортирует по order/id, а MySQL запрещает
+        // DISTINCT/GROUP BY с ORDER BY по невыбранным колонкам (ошибка 3065).
+        // Цеха сортируем по позиции их первого этапа (MIN(order)).
         return static::companyQuery($companyId)
-            ->whereNotNull('workshop')->distinct()->orderBy('workshop')
+            ->whereNotNull('workshop')
+            ->reorder()
+            ->groupBy('workshop')
+            ->orderByRaw('MIN(`order`) asc')
             ->pluck('workshop')->all();
     }
 

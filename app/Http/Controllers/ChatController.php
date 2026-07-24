@@ -449,6 +449,8 @@ class ChatController extends Controller
     public function destroy(Request $request, Chat $chat): RedirectResponse
     {
         abort_if($chat->type === 'global', 403, 'Общий чат нельзя удалить.');
+        // Канал сделки живёт вместе со сделкой — удаляется только с ней.
+        abort_if($chat->deal_id !== null, 403, 'Чат сделки удаляется вместе со сделкой.');
         abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
 
         $chat->delete();

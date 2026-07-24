@@ -54,12 +54,32 @@ const togglePin = (c) => {
 };
 // ---- Звук нового сообщения (WebAudio, без файлов; тумблер 🔔 сохраняется) ----
 const soundOn = ref(localStorage.getItem('chat_sound') !== 'off');
-const toggleSound = () => { soundOn.value = !soundOn.value; localStorage.setItem('chat_sound', soundOn.value ? 'on' : 'off'); };
+const toggleSound = () => {
+    soundOn.value = !soundOn.value;
+    localStorage.setItem('chat_sound', soundOn.value ? 'on' : 'off');
+    if (soundOn.value) askNotifyPermission(); // клик — удобный момент спросить разрешение
+};
+
+// ---- Браузерные уведомления: работают из фоновой вкладки и на телефоне ----
+const askNotifyPermission = () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+        try { Notification.requestPermission(); } catch (e) { /* старые браузеры */ }
+    }
+};
+const notifyBrowser = (title, body) => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+        const n = new Notification(title, { body, tag: 'baia-chat' });
+        n.onclick = () => { window.focus(); n.close(); };
+    } catch (e) { /* ignore */ }
+};
+
 let audioCtx = null;
 const ding = () => {
     if (!soundOn.value) return;
     try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
         o.connect(g); g.connect(audioCtx.destination);
         o.type = 'sine';
@@ -79,13 +99,27 @@ const pollState = async () => {
     try {
         const { data } = await window.axios.get(route('chat.state'));
         const st = data.state || {};
-        let incoming = false;
+        const alerts = [];
         for (const [id, s] of Object.entries(st)) {
-            if (statePrev && Number(id) !== activeChat.value?.id && s.unread > (statePrev[id]?.unread ?? 0)) incoming = true;
+            const isActive = Number(id) === activeChat.value?.id;
+            // Открытый чат не «дзынькает» на переднем плане (его озвучивает loadMessages),
+            // но в фоне уведомляем и о нём.
+            if (statePrev && s.unread > (statePrev[id]?.unread ?? 0) && (!isActive || document.hidden)) {
+                alerts.push({ id: Number(id), s });
+            }
             live[id] = s;
         }
         statePrev = st;
-        if (incoming) ding();
+        if (alerts.length) {
+            ding();
+            if (document.hidden) {
+                const a = alerts[0];
+                const chat = props.chats.find((c) => c.id === a.id);
+                notifyBrowser(chat?.name ?? 'Новое сообщение в чате', a.s.last
+                    ? `${a.s.last.author ?? ''}: ${a.s.last.text}`
+                    : 'Есть непрочитанные сообщения');
+            }
+        }
     } catch (e) { /* ignore transient poll errors */ }
 };
 const lastOf = (c) => live[c.id]?.last ?? c.last;
@@ -347,6 +381,8 @@ const syncActive = (id) => { const c = props.chats.find((x) => x.id === id); if 
 
 // ---- Edit / delete group (admin/director) ----
 const canManage = (c) => props.canCreateGroup && c && c.type === 'group';
+// Удалять можно и личные чаты (в корзину); общий и каналы сделок — нельзя.
+const canDeleteChat = (c) => props.canCreateGroup && c && c.type !== 'global' && !c.deal_id;
 const showEdit = ref(false);
 const editPhoto = ref(null);
 const editForm = useForm({ id: null, name: '', description: '', company_id: null, participants: [], photo: null });
@@ -375,7 +411,8 @@ const saveEdit = () => {
     });
 };
 const removeChat = async (c) => {
-    if (await confirmDialog({ title: 'Удалить группу', message: `Группа «${c.name}» отправится в корзину — её можно будет восстановить.`, confirmText: 'В корзину', danger: true })) {
+    const label = c.type === 'group' ? 'Группа' : 'Чат';
+    if (await confirmDialog({ title: c.type === 'group' ? 'Удалить группу' : 'Удалить чат', message: `${label} «${c.name}» отправится в корзину — можно будет восстановить.`, confirmText: 'В корзину', danger: true })) {
         router.delete(route('chat.destroy', c.id), {
             preserveScroll: true, preserveState: true,
             onSuccess: () => { infoOpen.value = false; activeChat.value = null; messages.value = []; },
@@ -427,15 +464,19 @@ const removeMember = async (p) => {
 
 watch(() => form.message, resizeInput);
 
-// Фоновая вкладка сервер не дёргает; вернулись — догружаем сразу.
-const onVisible = () => { if (!document.hidden) loadMessages(); };
+// Передний план — полный поллинг (4с); фон — только лёгкий state раз в 30с,
+// чтобы звук и уведомления работали, не нагружая сервер сообщениями.
+let bgTimer = null;
+const onVisible = () => { if (!document.hidden) { loadMessages(); pollState(); } };
 onMounted(() => {
     if (activeChat.value) { markSeen(activeChat.value); loadMessages(true); }
     pollState();
+    askNotifyPermission();
     timer = setInterval(() => { if (!document.hidden) { loadMessages(); pollState(); } }, 4000);
+    bgTimer = setInterval(() => { if (document.hidden) pollState(); }, 30000);
     document.addEventListener('visibilitychange', onVisible);
 });
-onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); });
+onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.removeEventListener('visibilitychange', onVisible); });
 </script>
 
 <template>
@@ -813,14 +854,14 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                     </div>
 
                     <!-- Group management (admin/director) -->
-                    <div v-if="canManage(activeChat)" class="space-y-2 border-t border-slate-100 p-3">
-                        <button @click="openEdit(activeChat)" class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                    <div v-if="canManage(activeChat) || canDeleteChat(activeChat)" class="space-y-2 border-t border-slate-100 p-3">
+                        <button v-if="canManage(activeChat)" @click="openEdit(activeChat)" class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
                             <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                             Редактировать группу
                         </button>
-                        <button @click="removeChat(activeChat)" class="flex w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white py-2 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50">
+                        <button v-if="canDeleteChat(activeChat)" @click="removeChat(activeChat)" class="flex w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white py-2 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50">
                             <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-                            Удалить группу
+                            {{ activeChat.type === 'group' ? 'Удалить группу' : 'Удалить чат (в корзину)' }}
                         </button>
                     </div>
                 </aside>

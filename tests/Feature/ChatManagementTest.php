@@ -135,6 +135,22 @@ class ChatManagementTest extends TestCase
         $this->assertEquals('проверка', $state[$chat->id]['last']['text']);
     }
 
+    public function test_admin_deletes_personal_chat_but_not_deal_channel(): void
+    {
+        $admin = $this->admin();
+
+        // Личный чат — можно в корзину.
+        $personal = Chat::create(['type' => 'personal', 'is_active' => true]);
+        $this->actingAs($admin)->delete(route('chat.destroy', $personal->id))->assertRedirect();
+        $this->assertSoftDeleted('chats', ['id' => $personal->id]);
+
+        // Канал сделки — нельзя (живёт со сделкой).
+        $stage = \App\Models\DealStage::create(['name' => 'Этап', 'order' => 1, 'is_active' => true]);
+        $deal = \App\Models\Deal::create(['number' => 'T-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 100, 'status' => 'active', 'deal_stage_id' => $stage->id]);
+        $dealChat = Chat::create(['type' => 'group', 'deal_id' => $deal->id, 'name' => 'Сделка', 'is_active' => true]);
+        $this->actingAs($admin)->delete(route('chat.destroy', $dealChat->id))->assertForbidden();
+    }
+
     public function test_group_created_with_company_binding(): void
     {
         $admin = $this->admin();
