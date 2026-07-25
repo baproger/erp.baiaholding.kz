@@ -185,6 +185,60 @@ class WorkshopScreenController extends Controller
         return redirect()->route('screen.show');
     }
 
+    /**
+     * «Далее» с ТВ-экрана: работник цеха двигает заказ на следующий этап
+     * прямо с экрана. Доступ — по коду экрана в сессии (как и показ);
+     * заказ обязан принадлежать фирме и цеху ЭТОГО экрана.
+     */
+    /** Гард действий с экрана: активный код в сессии + заказ своего цеха/фирмы. */
+    private function screenForAction(Request $request, Project $project): WorkshopScreen
+    {
+        $screen = WorkshopScreen::where('is_active', true)->find($request->session()->get('workshop_screen_id'));
+        if (! $screen || $screen->code !== $request->session()->get('workshop_screen_code') || $screen->kind === 'office') {
+            abort(403);
+        }
+        abort_unless($project->workshop === $screen->workshop, 403, 'Заказ другого цеха.');
+        abort_if($screen->company_id && (int) ($project->deal?->company_id) !== (int) $screen->company_id, 403, 'Заказ другой фирмы.');
+        abort_if(in_array($project->status, ['completed', 'cancelled'], true), 403);
+
+        return $screen;
+    }
+
+    public function advanceProject(Request $request, Project $project): RedirectResponse
+    {
+        $screen = $this->screenForAction($request, $project);
+
+        // «Далее» — по позиции в воронке цеха (как в ERP); с последнего
+        // этапа дальше не двигаем — там кнопка «Готово» (completeProject).
+        $funnel = ProjectStage::funnel($screen->company_id ? (int) $screen->company_id : null, $project->workshop)->values();
+        $idx = $funnel->search(fn ($s) => $s->id === $project->project_stage_id);
+        $next = $idx !== false ? $funnel->get($idx + 1) : $funnel->first();
+        if (! $next) {
+            return back()->with('error', 'Это последний этап — нажмите «Готово».');
+        }
+        $project->project_stage_id = $next->id;
+        $project->save();
+
+        return back()->with('success', 'Этап: «'.$next->name.'».');
+    }
+
+    /**
+     * «Готово» с ТВ-экрана: доступно ТОЛЬКО на последнем этапе воронки цеха
+     * («Отправка») — заказ завершается, сделка возвращается на «Логистику».
+     */
+    public function completeProject(Request $request, Project $project, \App\Services\ProjectService $projects): RedirectResponse
+    {
+        $screen = $this->screenForAction($request, $project);
+
+        $funnel = ProjectStage::funnel($screen->company_id ? (int) $screen->company_id : null, $project->workshop)->values();
+        abort_unless($funnel->isNotEmpty() && $funnel->last()->id === $project->project_stage_id, 403,
+            '«Готово» доступно только на последнем этапе.');
+
+        [$ok, $message] = $projects->completeAndReturnDeal($project);
+
+        return back()->with($ok ? 'success' : 'error', $message);
+    }
+
     /** Настройки → Экраны: все цеха всех компаний, коды и статусы. */
     public function admin(Request $request): Response
     {

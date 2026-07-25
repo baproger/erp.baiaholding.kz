@@ -11,6 +11,31 @@ class ProjectService
     public function __construct(private ProjectNumberService $numbers) {}
 
     /**
+     * «Готово»: завершить заказ цеха и вернуть сделку на «Логистику»
+     * (или «Акт», если этапа логистики нет). Общая логика ERP и ТВ-экрана.
+     *
+     * @return array{0: bool, 1: string}  [успех, сообщение]
+     */
+    public function completeAndReturnDeal(Project $project): array
+    {
+        $deal = $project->deal;
+        if (! $deal) {
+            return [false, 'У заказа нет исходной сделки.'];
+        }
+
+        $companyId = $deal->company_id ? (int) $deal->company_id : null;
+        $returnStage = \App\Models\DealStage::logisticsStage($companyId) ?? \App\Models\DealStage::actStage($companyId);
+        if (! $returnStage) {
+            return [false, 'Не найден этап «Логистика».'];
+        }
+
+        $deal->update(['deal_stage_id' => $returnStage->id, 'status' => 'active', 'closed_at' => null]);
+        $project->update(['status' => 'completed', 'completed_at' => now()]);
+
+        return [true, 'Заказ завершён — сделка отправлена на «'.$returnStage->name.'».'];
+    }
+
+    /**
      * Create an execution Project from a Deal. Idempotent for an ACTIVE run
      * (returns it), but a completed prior run starts a fresh workshop cycle —
      * otherwise re-sending would close the deal with no active project (lost).

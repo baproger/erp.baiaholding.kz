@@ -37,6 +37,10 @@ Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'ind
 Route::get('screen', [\App\Http\Controllers\WorkshopScreenController::class, 'show'])->name('screen.show');
 Route::post('screen', [\App\Http\Controllers\WorkshopScreenController::class, 'enter'])->middleware('throttle:10,1')->name('screen.enter');
 Route::post('screen/leave', [\App\Http\Controllers\WorkshopScreenController::class, 'leave'])->name('screen.leave');
+// «Далее» с ТВ-экрана: двигает этап заказа своего цеха (доступ — код экрана в сессии).
+Route::post('screen/projects/{project}/advance', [\App\Http\Controllers\WorkshopScreenController::class, 'advanceProject'])->middleware('throttle:60,1')->name('screen.advanceProject');
+// «Готово» с ТВ-экрана: только с последнего этапа («Отправка») → сделка на Логистику.
+Route::post('screen/projects/{project}/complete', [\App\Http\Controllers\WorkshopScreenController::class, 'completeProject'])->middleware('throttle:30,1')->name('screen.completeProject');
 
 Route::middleware('auth')->group(function () {
     // Single profile page (role-aware card). `update`/`destroy` back the Breeze

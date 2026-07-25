@@ -22,6 +22,30 @@ onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
 
 const title = computed(() => [props.screen?.company, props.screen?.workshop].filter(Boolean).join(' · ') || 'Цех');
 const leave = () => router.post(route('screen.leave'));
+
+// «Далее» прямо с экрана: работник цеха двигает заказ на следующий этап.
+// На последнем этапе кнопки нет — «Готово» нажимается в системе.
+const lastStageId = computed(() => props.stages[props.stages.length - 1]?.id);
+const advancing = ref(null);
+const advance = (p) => {
+    if (advancing.value) return;
+    advancing.value = p.id;
+    router.post(route('screen.advanceProject', p.id), {}, {
+        preserveScroll: true,
+        onFinish: () => (advancing.value = null),
+    });
+};
+// «Готово» на последнем этапе («Отправка»): заказ завершается и уходит на
+// Логистику — спрашиваем подтверждение, чтобы не завершить случайным тыком.
+const complete = (p) => {
+    if (advancing.value) return;
+    if (!window.confirm(`Заказ «${p.name}» готов? Он завершится и уйдёт из цеха на Логистику.`)) return;
+    advancing.value = p.id;
+    router.post(route('screen.completeProject', p.id), {}, {
+        preserveScroll: true,
+        onFinish: () => (advancing.value = null),
+    });
+};
 </script>
 
 <template>
@@ -66,6 +90,16 @@ const leave = () => router.post(route('screen.leave'));
                         <div v-if="p.deadline" class="mt-1 text-sm font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></div>
                         <div v-if="p.description" class="mt-1.5 whitespace-pre-line text-sm leading-snug text-slate-500">{{ p.description }}</div>
                         <div v-if="p.note" class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm leading-snug text-amber-800">📌 {{ p.note }}</div>
+                        <!-- Крупные кнопки, чтобы удобно жать с ТВ/планшета цеха:
+                             «Далее» — следующий этап; на «Отправке» — «Готово» (в Логистику) -->
+                        <button v-if="p.stage_id !== lastStageId" @click="advance(p)" :disabled="advancing === p.id"
+                            class="mt-2.5 w-full rounded-xl bg-emerald-600 py-2.5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50">
+                            {{ advancing === p.id ? '…' : 'Далее →' }}
+                        </button>
+                        <button v-else @click="complete(p)" :disabled="advancing === p.id"
+                            class="mt-2.5 w-full rounded-xl bg-indigo-600 py-2.5 text-base font-bold text-white shadow-sm transition hover:bg-indigo-700 active:scale-95 disabled:opacity-50">
+                            {{ advancing === p.id ? '…' : 'Готово ✓ — в Логистику' }}
+                        </button>
                     </div>
                     <div v-if="!byStage(stage.id).length" class="py-8 text-center text-sm text-slate-400">Пусто</div>
                 </div>

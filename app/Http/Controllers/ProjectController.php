@@ -260,20 +260,9 @@ class ProjectController extends Controller
      */
     private function completeAndReturnDeal(Project $project): RedirectResponse
     {
-        $deal = $project->deal;
-        if (! $deal) {
-            return back()->with('error', 'У заказа нет исходной сделки.');
-        }
+        // Единая логика с «Готово» на ТВ-экране цеха (ProjectService).
+        [$ok, $message] = app(\App\Services\ProjectService::class)->completeAndReturnDeal($project);
 
-        $companyId = $deal->company_id ? (int) $deal->company_id : null;
-        $returnStage = DealStage::logisticsStage($companyId) ?? DealStage::actStage($companyId);
-        if (! $returnStage) {
-            return back()->with('error', 'Не найден этап «Логистика».');
-        }
-
-        $deal->update(['deal_stage_id' => $returnStage->id, 'status' => 'active', 'closed_at' => null]);
-        $project->update(['status' => 'completed', 'completed_at' => now()]);
-
-        return back()->with('success', 'Заказ завершён — сделка отправлена на «'.$returnStage->name.'».');
+        return back()->with($ok ? 'success' : 'error', $message);
     }
 }
