@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class DdsEntry extends Model
 {
+    use \App\Models\Concerns\Auditable; // история: кто добавил/изменил/удалил строку ДДС
+
     protected $fillable = ['kind', 'name', 'bank', 'balance', 'receivable', 'amount', 'sort'];
 
     protected $casts = [

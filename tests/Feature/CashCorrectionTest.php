@@ -36,6 +36,12 @@ class CashCorrectionTest extends TestCase
         $this->assertSame(500000.0, app(FinanceService::class)->companyBalances(null)['cash']);
         $this->assertNotNull(Setting::get('cash_correction'));
 
+        // История: каждая корректировка зафиксирована в аудите (кто и что менял).
+        $audit = \App\Models\AuditLog::where('field_name', 'Корректировка кассы (фактический остаток)')->get();
+        $this->assertSame(2, $audit->count());
+        $this->assertSame($admin->id, $audit->last()->user_id);
+        $this->assertSame('500000', $audit->last()->new_value);
+
         // Финансист и менеджер кассу НЕ корректируют — только админ.
         $this->actingAs($fin)->post(route('finance.cashCorrection'), ['actual' => 1])->assertForbidden();
         $mgr = User::factory()->create();

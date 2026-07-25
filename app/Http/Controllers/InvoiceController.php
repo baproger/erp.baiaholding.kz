@@ -335,9 +335,24 @@ class InvoiceController extends Controller
         $data = $request->validate(['actual' => ['required', 'numeric']]);
 
         $service = app(\App\Services\FinanceService::class);
+        $oldCash = $service->companyBalances(null)['cash'];
         // Расчётная касса БЕЗ текущей корректировки.
-        $raw = $service->companyBalances(null)['cash'] - (float) \App\Models\Setting::get('cash_correction', 0);
+        $raw = $oldCash - (float) \App\Models\Setting::get('cash_correction', 0);
         \App\Models\Setting::set('cash_correction', round((float) $data['actual'] - $raw, 2));
+
+        // История: кто и когда изменил остаток кассы (страница Аудит, admin).
+        \App\Models\AuditLog::create([
+            'user_id' => $request->user()->id,
+            'ip' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 255),
+            'table_name' => 'settings',
+            'record_id' => 0,
+            'action' => 'updated',
+            'field_name' => 'Корректировка кассы (фактический остаток)',
+            'old_value' => (string) $oldCash,
+            'new_value' => (string) round((float) $data['actual'], 2),
+            'created_at' => now(),
+        ]);
 
         return back()->with('success', 'Остаток в кассе установлен: '.number_format((float) $data['actual'], 0, ',', ' ').' ₸.');
     }
