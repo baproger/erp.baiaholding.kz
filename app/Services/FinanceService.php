@@ -59,7 +59,12 @@ class FinanceService
             ? (clone $exp)->where('payment_method', 'cash')->sum('amount')
             : (clone $exp)->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount'));
 
-        return round($paySum + $recSum - $expSum, 2);
+        // Корректировка кассы (инвентаризация): финансист задал фактический
+        // остаток — разница хранится в Setting и прибавляется к расчёту.
+        // История платежей/расходов не трогается, отчёты не искажаются.
+        $correction = $kind === 'cash' ? (float) \App\Models\Setting::get('cash_correction', 0) : 0.0;
+
+        return round($paySum + $recSum - $expSum + $correction, 2);
     }
 
     /**

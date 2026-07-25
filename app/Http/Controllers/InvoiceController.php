@@ -297,6 +297,8 @@ class InvoiceController extends Controller
                 // ОБЩАЯ на холдинг (нал в одной кассе), банк — по своей фирме.
                 'cash' => $balances['cash'],
                 'bank' => $balances['bank'],
+                // Ненулевая корректировка кассы — покажем пометку на плитке.
+                'cashCorrection' => (float) \App\Models\Setting::get('cash_correction', 0),
                 'income' => $incomeTotal,
                 'incomeInvoices' => $invoicePaidP,
                 'incomeManual' => $receiptManualP,
@@ -316,6 +318,25 @@ class InvoiceController extends Controller
                 'net' => $fin['company'],
             ],
         ]);
+    }
+
+    /**
+     * Корректировка кассы (инвентаризация): финансист вводит ФАКТИЧЕСКИЙ
+     * остаток наличных — система сохраняет разницу (Setting cash_correction)
+     * и прибавляет её к расчётной кассе. Старые сделки/платежи не трогаются,
+     * доходы/расходы/отчёты не искажаются.
+     */
+    public function cashCorrection(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Кассу корректирует финансист или админ.');
+        $data = $request->validate(['actual' => ['required', 'numeric']]);
+
+        $service = app(\App\Services\FinanceService::class);
+        // Расчётная касса БЕЗ текущей корректировки.
+        $raw = $service->companyBalances(null)['cash'] - (float) \App\Models\Setting::get('cash_correction', 0);
+        \App\Models\Setting::set('cash_correction', round((float) $data['actual'] - $raw, 2));
+
+        return back()->with('success', 'Остаток в кассе установлен: '.number_format((float) $data['actual'], 0, ',', ' ').' ₸.');
     }
 
     public function store(InvoiceRequest $request, InvoiceNumberService $numbers): RedirectResponse

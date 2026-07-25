@@ -109,6 +109,8 @@ Route::middleware('auth')->group(function () {
 
     // Finance
     Route::get('finance', [InvoiceController::class, 'index'])->name('finance.index');
+    // Корректировка кассы: финансист задаёт фактический остаток наличных.
+    Route::post('finance/cash-correction', [InvoiceController::class, 'cashCorrection'])->name('finance.cashCorrection');
     // ДДС — ручная сводка финансиста (без связей с расчётами).
     Route::post('finance/dds', [\App\Http\Controllers\DdsController::class, 'store'])->name('finance.dds.store');
     Route::put('finance/dds/{entry}', [\App\Http\Controllers\DdsController::class, 'update'])->name('finance.dds.update');

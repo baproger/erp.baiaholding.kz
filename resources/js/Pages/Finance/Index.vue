@@ -3,8 +3,6 @@ import { ref, computed } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
-import Avatar from '@/Components/Avatar.vue';
-import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -53,6 +51,14 @@ const delReceipt = (r) => router.delete(route('finance.receipts.destroy', r.id),
 
 // Прошлые поступления: аккордеон снизу, фильтр серверный (поиск + период).
 const pastOpen = ref(!!(props.filters?.rc_search || props.filters?.rc_from || props.filters?.rc_to));
+// Корректировка кассы (инвентаризация): финансист задаёт фактический остаток.
+const cashFixOpen = ref(false);
+const cashFixInput = ref('');
+const openCashFix = () => { cashFixInput.value = String(props.summary?.cash ?? 0); cashFixOpen.value = true; };
+const saveCashFix = () => router.post(route('finance.cashCorrection'), { actual: cashFixInput.value }, {
+    preserveScroll: true, onSuccess: () => (cashFixOpen.value = false),
+});
+
 // Прошлые счета: аккордеон + поиск по номеру (параметр search).
 const invPastOpen = ref(false);
 const invSearch = ref(props.filters?.search ?? '');
@@ -202,9 +208,22 @@ const delExpense = async (e) => {
                 <div class="mt-0.5 text-[11px]" :class="summary.receivablesTotal > 0 ? 'text-rose-400' : 'text-slate-400'">счета {{ money(summary.receivables) }} · вручную {{ money(summary.receivablesManual) }}</div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в кассе</div>
+                <div class="flex items-center justify-between">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в кассе</div>
+                    <button v-if="canManage" @click="openCashFix" title="Корректировка кассы (инвентаризация): задать фактический остаток"
+                        class="text-slate-300 hover:text-indigo-500">✎</button>
+                </div>
                 <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.cash >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(summary.cash) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">наличные ОБЩИЕ по холдингу (BAIA + ASU)</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">
+                    наличные ОБЩИЕ по холдингу (BAIA + ASU)
+                    <span v-if="summary.cashCorrection" class="text-amber-500" :title="'Корректировка: ' + money(summary.cashCorrection)">· скорректировано</span>
+                </div>
+                <div v-if="cashFixOpen" class="mt-2 flex items-center gap-1.5">
+                    <input v-model="cashFixInput" type="number" step="0.01" placeholder="Фактический остаток"
+                        class="w-32 rounded-lg border-slate-200 py-1 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                    <button @click="saveCashFix" class="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-700">ОК</button>
+                    <button @click="cashFixOpen = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в банке</div>
