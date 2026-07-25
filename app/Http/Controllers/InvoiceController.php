@@ -275,6 +275,8 @@ class InvoiceController extends Controller
             'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
+            // Корректировка кассы (✎ на плитке) — только админ.
+            'isAdmin' => $request->user()->hasRole('admin'),
             // ДДС — ручная сводка (Excel-стиль): счета компаний и долги.
             // Никаких расчётов из системы — только то, что ввёл финансист.
             'dds' => [
@@ -328,7 +330,8 @@ class InvoiceController extends Controller
      */
     public function cashCorrection(Request $request): RedirectResponse
     {
-        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Кассу корректирует финансист или админ.');
+        // Только админ (СЕО): корректировка меняет остаток всей кассы холдинга.
+        abort_unless($request->user()->hasRole('admin'), 403, 'Кассу корректирует только администратор.');
         $data = $request->validate(['actual' => ['required', 'numeric']]);
 
         $service = app(\App\Services\FinanceService::class);

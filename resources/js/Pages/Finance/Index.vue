@@ -10,7 +10,7 @@ import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 import DdsPanel from '@/Components/DdsPanel.vue';
 
-const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
+const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, isAdmin: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),
@@ -210,7 +210,7 @@ const delExpense = async (e) => {
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex items-center justify-between">
                     <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в кассе</div>
-                    <button v-if="canManage" @click="openCashFix" title="Корректировка кассы (инвентаризация): задать фактический остаток"
+                    <button v-if="isAdmin" @click="openCashFix" title="Корректировка кассы (инвентаризация): задать фактический остаток"
                         class="text-slate-300 hover:text-indigo-500">✎</button>
                 </div>
                 <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.cash >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(summary.cash) }}</div>
