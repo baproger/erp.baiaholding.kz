@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
 import Modal from '@/Components/Modal.vue';
@@ -11,6 +11,19 @@ import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, taxRate: Number, totals: Object });
 const me = props.rows[0] ?? null;
+
+// Шкала бонусов — коммерческая информация: видят только отдел продаж
+// (менеджеры), финансисты и админ; цеху и прочим сотрудникам не показываем.
+const myRoles = usePage().props.auth.user?.roles ?? [];
+const seesBonusScale = ['manager', 'financist', 'admin'].some((r) => myRoles.includes(r));
+const BONUS_TIERS = [
+    { m: 'до 10%', b: 'бонуса нет', muted: true },
+    { m: '11% – 15%', b: '5% от остатка' },
+    { m: '16% – 20%', b: '7% от остатка' },
+    { m: '21% – 30%', b: '10% от остатка' },
+    { m: '31% – 40%', b: '13% от остатка' },
+    { m: 'от 41%', b: '15% от остатка' },
+];
 
 const open = ref(new Set());
 const toggle = (uid) => { const s = new Set(open.value); s.has(uid) ? s.delete(uid) : s.add(uid); open.value = s; };
@@ -62,7 +75,7 @@ const delAdj = async (a) => {
 
         <!-- Manager: слева выплата/корректировки/сделки, справа — шкала бонусов -->
         <div v-if="!leadership" class="grid max-w-5xl grid-cols-1 items-start gap-4 lg:grid-cols-3">
-            <div class="space-y-4 lg:col-span-2">
+            <div class="space-y-4" :class="seesBonusScale ? 'lg:col-span-2' : 'lg:col-span-3'">
             <div class="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
                 <div class="text-xs uppercase text-slate-400">К выплате · {{ monthLabel }}</div>
                 <div class="mt-1 text-3xl font-bold text-green-600">{{ money(me?.final ?? me?.payout ?? 0) }}</div>
@@ -110,18 +123,11 @@ const delAdj = async (a) => {
             </div>
             </div>
 
-            <!-- Правая колонка: система бонусов (шкала по марже сделки) -->
-            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-4">
+            <!-- Правая колонка: система бонусов — только отдел продаж/финансист/админ -->
+            <div v-if="seesBonusScale" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Система бонусов — по марже сделки</div>
                 <div class="mt-3 space-y-1.5 text-sm">
-                    <div v-for="t in [
-                            { m: 'до 10%', b: 'бонуса нет', muted: true },
-                            { m: '11% – 15%', b: '5% от остатка' },
-                            { m: '16% – 20%', b: '7% от остатка' },
-                            { m: '21% – 30%', b: '10% от остатка' },
-                            { m: '31% – 40%', b: '13% от остатка' },
-                            { m: 'от 41%', b: '15% от остатка' },
-                        ]" :key="t.m" class="flex items-center justify-between rounded-lg px-3 py-1.5"
+                    <div v-for="t in BONUS_TIERS" :key="t.m" class="flex items-center justify-between rounded-lg px-3 py-1.5"
                         :class="t.muted ? 'bg-slate-50 text-slate-400' : 'bg-emerald-50/50'">
                         <span :class="t.muted ? '' : 'text-slate-600'">маржа {{ t.m }}</span>
                         <span class="font-semibold tabular-nums" :class="t.muted ? '' : 'text-emerald-700'">{{ t.b }}</span>
@@ -271,7 +277,8 @@ const delAdj = async (a) => {
                     </tbody>
                 </table>
             </div>
-            <p class="mt-3 text-xs text-slate-400">К выплате = оклад + бонус − удержания (отгул/больничный/штраф/аванс) + премии за выбранный месяц. Отгул/больничный днями: удержание = оклад / 22 × дни. Остаток = сумма договора − налог {{ taxRate }}% − расходы. Бонус по марже сделки (остаток/сумма), выплачивается пропорционально оплаченной доле (оплачено/сумма): до 10% — нет; 11–15% — 5%; 16–20% — 7%; 21–30% — 10%; 31–40% — 13%; от 41% — 15% от остатка. Чистая прибыль компании = остаток − бонус.</p>
+            <!-- Шкала бонусов — только отдел продаж/финансист/админ -->
+            <p v-if="seesBonusScale" class="mt-3 text-xs text-slate-400">К выплате = оклад + бонус − удержания (отгул/больничный/штраф/аванс) + премии за выбранный месяц. Отгул/больничный днями: удержание = оклад / 22 × дни. Остаток = сумма договора − налог {{ taxRate }}% − расходы. Бонус по марже сделки (остаток/сумма), выплачивается пропорционально оплаченной доле (оплачено/сумма): до 10% — нет; 11–15% — 5%; 16–20% — 7%; 21–30% — 10%; 31–40% — 13%; от 41% — 15% от остатка. Чистая прибыль компании = остаток − бонус.</p>
         </template>
 
         <!-- Модалка корректировки -->
