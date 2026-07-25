@@ -14,7 +14,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'department_id', 'phone', 'birth_date', 'hired_at', 'salary', 'contract_path', 'avatar', 'language', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'department_id', 'workshops', 'phone', 'birth_date', 'hired_at', 'salary', 'contract_path', 'avatar', 'language', 'is_active'])]
 // salary/contract_path скрыты по умолчанию: не утекут при случайной
 // сериализации сырой модели User во фронт. Админ-список читает их явно
 // ($u->salary) — на прямой доступ $hidden не влияет.
@@ -38,6 +38,7 @@ class User extends Authenticatable
             'salary' => 'decimal:2',
             'birth_date' => 'date',
             'hired_at' => 'date',
+            'workshops' => 'array',
         ];
     }
 
@@ -79,6 +80,17 @@ class User extends Authenticatable
         }
 
         return $companyId === null || $this->companies()->where('companies.id', $companyId)->exists();
+    }
+
+    /**
+     * Доступ к цеху BAIA («Металл цех» / «Ағаш цех»). Пустой список у
+     * сотрудника = ограничения нет; заказ без цеха (ASU) доступен всем.
+     */
+    public function worksInWorkshop(?string $workshop): bool
+    {
+        $allowed = $this->workshops ?? [];
+
+        return $workshop === null || empty($allowed) || in_array($workshop, $allowed, true);
     }
 
     /**

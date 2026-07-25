@@ -22,6 +22,17 @@ class ProjectController extends Controller
         return $request->user()->hasAnyRole(['admin', 'director', 'financist', 'manager']);
     }
 
+    /**
+     * Доступ сотрудника к цеху заказа (users.workshops): работник «Металл
+     * цеха» не видит и не двигает заказы «Ағаш цеха» (и наоборот); пустой
+     * список = все цеха (руководство, ASU, работающие на оба цеха).
+     */
+    private function assertWorkshopAccess(Project $project): void
+    {
+        abort_unless(auth()->user()->worksInWorkshop($project->workshop), 403,
+            'Заказ другого цеха: у вас доступ только к своему цеху.');
+    }
+
     private function scope($query, Request $request)
     {
         $user = $request->user();
@@ -55,6 +66,12 @@ class ProjectController extends Controller
                 ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
                 ->latest('entered_at')->limit(1)]);
         $this->scope($base, $request);
+        // Доступ по цехам: сотрудник с ограничением видит только свои цеха
+        // (заказы без цеха — ASU — видны всем).
+        $userWorkshops = $request->user()->workshops ?? [];
+        if (! empty($userWorkshops)) {
+            $base->where(fn ($w) => $w->whereNull('workshop')->orWhereIn('workshop', $userWorkshops));
+        }
         // Поиск во вложенной скобке — иначе orWhere «вырывается» из скоупа
         // компании/владельца и показал бы чужие заказы (утечка между фирмами).
         $base->when($request->string('search')->toString(), fn ($q, $s) => $q
@@ -68,6 +85,9 @@ class ProjectController extends Controller
         $companyCodes = \App\Models\Company::pluck('code', 'id');
         $stages = ProjectStage::companyQuery($companyId)
             ->with('translations')->get()
+            // Секции чужих цехов скрываем у сотрудников с ограничением.
+            ->filter(fn ($s) => empty($userWorkshops) || $s->workshop === null || in_array($s->workshop, $userWorkshops, true))
+            ->values()
             ->map(fn ($s) => [
                 'id' => $s->id,
                 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyCodes[$s->company_id] ?? '') : ''),
@@ -99,6 +119,7 @@ class ProjectController extends Controller
     public function show(Project $project, FinanceService $finance, Request $request): Response
     {
         $this->authorize('view', $project);
+        $this->assertWorkshopAccess($project);
 
         $project->load([
             'client', 'responsible:id,name,avatar', 'department:id,name',
@@ -184,6 +205,7 @@ class ProjectController extends Controller
     public function updateStage(Request $request, Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
+        $this->assertWorkshopAccess($project);
 
         $validated = $request->validate(['project_stage_id' => ['required', 'exists:project_stages,id']]);
         $stage = ProjectStage::findOrFail($validated['project_stage_id']);
@@ -204,6 +226,7 @@ class ProjectController extends Controller
     public function advance(Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
+        $this->assertWorkshopAccess($project);
         // «Далее» — по ПОЗИЦИИ в воронке цеха своей компании (не по order >
         // current): при задвоенном order соседний этап не перескакивается.
         $funnel = ProjectStage::funnel($project->deal?->company_id ? (int) $project->deal->company_id : null, $project->workshop)->values();
@@ -226,6 +249,7 @@ class ProjectController extends Controller
     public function sendToAct(Project $project): RedirectResponse
     {
         $this->authorize('view', $project);
+        $this->assertWorkshopAccess($project);
 
         return $this->completeAndReturnDeal($project);
     }

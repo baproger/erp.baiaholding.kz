@@ -35,6 +35,7 @@ class UserController extends Controller
                 'is_active' => $u->is_active,
                 'department' => $u->department,
                 'department_id' => $u->department_id,
+                'workshops' => $u->workshops ?? [],
                 'role' => $u->roles->first()?->name,
                 'company_ids' => $u->companies->pluck('id'),
                 'company_names' => $u->companies->pluck('name')->join(', '),
@@ -49,6 +50,9 @@ class UserController extends Controller
             'roles' => Role::orderBy('name')->pluck('name'),
             'companies' => \App\Models\Company::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'can' => ['manage' => $request->user()->can('create', User::class)],
+            // Цеха холдинга (у BAIA два) — чекбоксы доступа в форме сотрудника.
+            'workshopOptions' => \App\Models\Company::where('is_active', true)->pluck('id')
+                ->flatMap(fn ($id) => \App\Models\ProjectStage::workshopsFor((int) $id))->unique()->values(),
         ]);
     }
 
@@ -200,6 +204,7 @@ class UserController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'department_id' => $data['department_id'] ?? null,
+            'workshops' => array_values(array_filter($data['workshops'] ?? [])) ?: null,
             'phone' => $data['phone'] ?? null,
             'birth_date' => $data['birth_date'] ?? null,
             'hired_at' => $data['hired_at'] ?? null,
@@ -232,6 +237,7 @@ class UserController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'department_id' => $data['department_id'] ?? null,
+            'workshops' => array_values(array_filter($data['workshops'] ?? [])) ?: null,
             'phone' => $data['phone'] ?? null,
             'birth_date' => $data['birth_date'] ?? null,
             'hired_at' => $data['hired_at'] ?? null,

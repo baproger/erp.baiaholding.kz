@@ -17,6 +17,7 @@ const props = defineProps({
     roles: Array,
     companies: { type: Array, default: () => [] },
     can: { type: Object, default: () => ({ manage: false }) },
+    workshopOptions: { type: Array, default: () => [] },
 });
 
 const roleLabels = { admin: 'СЕО (админ)', director: 'Директор', financist: 'Финансист-Бухгалтер', manager: 'Менеджер', employee: 'Сотрудник (цех)', lawyer: 'Юрист', cook: 'Повар', designer: 'Дизайнер', supplier: 'Снабженец' };
@@ -116,9 +117,14 @@ const editing = ref(null);
 
 const form = useForm({
     name: '', email: '', password: '', password_confirmation: '',
-    department_id: '', phone: '', birth_date: '', hired_at: '', salary: 0, contract: null, role: 'employee', is_active: true,
+    department_id: '', workshops: [], phone: '', birth_date: '', hired_at: '', salary: 0, contract: null, role: 'employee', is_active: true,
     company_ids: props.companies.map((c) => c.id),
 });
+const toggleWorkshop = (w) => {
+    form.workshops = form.workshops.includes(w)
+        ? form.workshops.filter((x) => x !== w)
+        : [...form.workshops, w];
+};
 
 const openCreate = () => {
     editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true;
@@ -132,7 +138,7 @@ const openEdit = (u) => {
     editing.value = u;
     Object.assign(form, {
         name: u.name, email: u.email, password: '', password_confirmation: '',
-        department_id: u.department_id ?? '', phone: u.phone ?? '',
+        department_id: u.department_id ?? '', workshops: [...(u.workshops ?? [])], phone: u.phone ?? '',
         birth_date: u.birth_date ?? '', hired_at: u.hired_at ?? '',
         salary: u.salary ?? 0, contract: null,
         role: u.role ?? 'employee', is_active: u.is_active,
@@ -244,6 +250,7 @@ const deactivate = async (u) => {
                         <a :href="`mailto:${u.email}`" class="block truncate text-slate-500 hover:text-indigo-600" @click.stop>✉️ {{ u.email }}</a>
                         <a v-if="u.phone" :href="`tel:${u.phone}`" class="block text-slate-500 hover:text-indigo-600" @click.stop>📞 {{ u.phone }}</a>
                         <p v-if="tenure(u)" class="text-xs text-slate-400">🗓 в компании {{ tenure(u) }}</p>
+                        <p v-if="u.workshops?.length" class="text-xs text-slate-400">🏭 {{ u.workshops.join(' + ') }}</p>
                     </div>
                     <div class="mt-3 flex items-center justify-between gap-2">
                         <div class="flex flex-wrap gap-1">
@@ -298,6 +305,17 @@ const deactivate = async (u) => {
                         <select v-model="form.role" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
                             <option v-for="r in roles" :key="r" :value="r">{{ roleLabels[r] ?? r }}</option>
                         </select>
+                    </div>
+                    <div v-if="workshopOptions.length" class="col-span-2">
+                        <InputLabel value="Доступ к цехам (пусто = все цеха; можно выбрать оба)" />
+                        <div class="mt-1 flex flex-wrap gap-2">
+                            <button v-for="w in workshopOptions" :key="w" type="button" @click="toggleWorkshop(w)"
+                                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                                :class="form.workshops.includes(w) ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                🏭 {{ w }}
+                            </button>
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">Сотрудник увидит и сможет двигать только заказы своих цехов</p>
                     </div>
                     <div><InputLabel value="Телефон" /><TextInput v-model="form.phone" class="mt-1 w-full" /></div>
                     <div>
