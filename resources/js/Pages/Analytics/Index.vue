@@ -411,7 +411,7 @@ const donut = computed(() => {
                 <!-- ABC summary -->
                 <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-6">
                     <h3 class="mb-1 text-sm font-semibold text-slate-900">ABC-анализ</h3>
-                    <p class="mb-3 text-xs text-slate-400">По фактическому доходу: A ≈ 80%, B ≈ 15%, C ≈ 5%</p>
+                    <p class="mb-3 text-xs text-slate-400">По фактическому доходу: A ≈ 30%, B ≈ 20%, C ≈ 10%</p>
                     <div class="grid grid-cols-3 gap-2">
                         <div v-for="(s, cls) in abcSummary" :key="cls" class="rounded-lg border border-slate-100 bg-slate-50 p-3">
                             <div class="flex items-center gap-1.5"><span class="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white" :class="{ A: 'bg-emerald-600', B: 'bg-amber-500', C: 'bg-slate-400' }[cls]">{{ cls }}</span><span class="text-xs text-slate-500">{{ s.count }} сд.</span></div>

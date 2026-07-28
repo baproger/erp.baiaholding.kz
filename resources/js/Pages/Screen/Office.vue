@@ -11,16 +11,26 @@ const funnelPct = (f) => Math.min(100, Math.round((f.count || 0) / Math.max(1, f
 const checksPct = (m) => m.checks_total > 0 ? Math.round(m.checks_done / m.checks_total * 100) : 0;
 const checksClass = (p) => p >= 70 ? 'bg-emerald-100 text-emerald-700' : p >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600';
 
-// ТВ-режим: часы + автообновление раз в 30 секунд.
+// ТВ-режим: часы + автообновление раз в 10 секунд + автопрокрутка страницы,
+// чтобы при большом списке менеджеров экран сам показывал всех (вниз-вверх).
 const clock = ref('');
-let clockTimer = null, refreshTimer = null;
+let clockTimer = null, refreshTimer = null, scrollTimer = null;
 const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    refreshTimer = setInterval(() => router.reload(), 30000);
+    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 10000);
+    scrollTimer = setInterval(() => {
+        const doc = document.documentElement;
+        if (doc.scrollHeight <= window.innerHeight + 20) return; // всё влезает — не крутим
+        if (window.scrollY + window.innerHeight >= doc.scrollHeight - 4) {
+            window.scrollTo({ top: 0, behavior: 'smooth' }); // дошли до низа — наверх
+        } else {
+            window.scrollBy({ top: 2 });
+        }
+    }, 60);
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); clearInterval(scrollTimer); });
 
 const title = computed(() => ['Офис', props.screen?.company].filter(Boolean).join(' · '));
 const leave = () => router.post(route('screen.leave'));
@@ -94,8 +104,11 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                                 </div>
                                 <span class="flex-shrink-0 text-xs text-slate-400">план лотов: {{ m.total }}/{{ plan }}</span>
                             </div>
-                            <!-- Персональная воронка: Лоты → КП/Звонок… → Выиграл — эффективность менеджера -->
-                            <div class="mt-1.5 flex flex-wrap gap-1.5">
+                        </div>
+                        <!-- Справа — данные менеджера: воронка + выиграл -->
+                        <div class="text-right">
+                            <div class="flex flex-wrap items-center justify-end gap-1.5">
+                                <!-- Персональная воронка: Лоты → КП/Звонок… → Выиграл -->
                                 <span v-for="f in m.funnel" :key="f.label"
                                     class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset"
                                     :class="f.kind === 'won'
@@ -105,10 +118,8 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                                     <span class="max-w-36 truncate">{{ f.label }}</span>
                                     <b class="text-base leading-none tabular-nums" :class="f.count > 0 ? (f.kind === 'won' ? 'text-emerald-600' : 'text-slate-900') : 'text-slate-300'">{{ f.count }}</b>
                                 </span>
+                                <span class="ml-1 text-4xl font-black leading-none tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</span>
                             </div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-4xl font-black leading-none tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</div>
                             <div class="mt-1 flex items-center justify-end gap-1.5 text-xs text-slate-400">
                                 <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
                                 <!-- Чек-лист: закрыто галочек из возможных по его лотам -->

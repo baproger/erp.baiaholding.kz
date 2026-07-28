@@ -111,7 +111,7 @@ class WorkshopScreenController extends Controller
         $funnelFor = function ($rows) use ($checkItemsList) {
             return collect([['label' => 'Лоты', 'count' => $rows->count(), 'kind' => 'start']])
                 ->concat($checkItemsList->map(fn ($it) => [
-                    'label' => $it->label,
+                    'label' => trim(str_ireplace('через WhatsApp', '', $it->label)),
                     'count' => $rows->filter(fn ($p) => ! empty(($p->checks ?? [])[(string) $it->id]))->count(),
                     'kind' => 'step',
                 ]))
@@ -156,7 +156,7 @@ class WorkshopScreenController extends Controller
             'screen' => ['company' => $screen->company?->name],
             'plan' => $plan,
             'month' => $month,
-            'monthLabel' => \Illuminate\Support\Carbon::parse($mStart)->locale('ru')->translatedFormat('LLLL Y'),
+            'monthLabel' => \Illuminate\Support\Carbon::parse($mStart)->locale('ru')->translatedFormat('F Y'),
             'managers' => $managers,
             'leader' => $managers->first(),
             // Лоты месяца с чек-листами — видно, кто реально работает по лотам.
@@ -171,7 +171,7 @@ class WorkshopScreenController extends Controller
                 'plan' => $plan,
                 'kind' => 'start',
             ]])->concat($checkItemsList->map(fn ($it) => [
-                'label' => $it->label,
+                'label' => trim(str_ireplace('через WhatsApp', '', $it->label)),
                 'count' => $monthLots->filter(fn ($p) => ! empty(($p->checks ?? [])[(string) $it->id]))->count(),
                 'plan' => $plan,
                 'kind' => 'step',

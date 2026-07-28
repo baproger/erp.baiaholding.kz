@@ -11,6 +11,7 @@ import InputError from '@/Components/InputError.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
 import SearchSelect from '@/Components/SearchSelect.vue';
+import ManagerPicker from '@/Components/ManagerPicker.vue';
 import { deadlineClass } from '@/utils/deadline';
 import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, money } from '@/utils/format';
@@ -164,7 +165,8 @@ const applyBinMatch = () => {
                 <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: компания, №, лот, договор…"
                     class="w-full rounded-lg border-slate-200 py-1.5 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
-            <SearchSelect v-if="isLeadership" v-model="fResponsible" :options="users" placeholder="Все менеджеры" width="w-full sm:w-48" @change="applyFilters" />
+            <!-- Менеджеры сверху, остальные — по отделам (свёрнуты) -->
+            <ManagerPicker v-if="isLeadership" v-model="fResponsible" :users="users" width="w-full sm:w-48" @change="applyFilters" />
             <SearchSelect v-model="fStage" :options="stages" placeholder="Все этапы" width="w-full sm:w-52" @change="applyFilters" />
             <label class="flex items-center gap-1 text-xs text-slate-400">срок с
                 <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />

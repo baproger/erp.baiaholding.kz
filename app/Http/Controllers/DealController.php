@@ -98,7 +98,14 @@ class DealController extends Controller
             'view' => $view,
             'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to'),
             'isLeadership' => $request->user()->hasAnyRole(['admin', 'director', 'financist']),
-            'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // Роль/отдел — для фильтра: менеджеры сверху, остальные по отделам.
+            'users' => User::where('is_active', true)->with(['roles:id,name', 'department:id,name'])
+                ->orderBy('name')->get(['id', 'name', 'department_id'])
+                ->map(fn ($u) => [
+                    'id' => $u->id, 'name' => $u->name,
+                    'is_manager' => $u->roles->contains('name', 'manager'),
+                    'department' => $u->department?->name,
+                ])->values(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'can' => [

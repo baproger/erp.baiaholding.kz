@@ -100,7 +100,9 @@ class AnalyticsController extends Controller
         // Отменённые сделки, оставшиеся на won-этапе, успехом не считаются.
         $won = Deal::query()->forCurrentCompany()->whereIn('deal_stage_id', $wonStageIds)->where('status', '!=', 'cancelled')->count();
 
-        // ABC analysis by ACTUAL income (paid), A≤80% / B≤95% / C rest of cumulative value.
+        // ABC по ФАКТИЧЕСКОМУ доходу (оплачено). Пороги по просьбе владельца
+        // (25.07.2026): A — накопительно до 30%, B — следующие 20% (до 50%),
+        // C — остальное (~10% и хвост).
         $dealIncome = Payment::query()
             ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
             ->where('invoices.invoiceable_type', 'deal')
@@ -119,7 +121,7 @@ class AnalyticsController extends Controller
             $value = (float) $row['value'];
             $share = $totalIncome > 0 ? $value / $totalIncome * 100 : 0;
             $cumulative += $share;
-            $class = $cumulative <= 80 ? 'A' : ($cumulative <= 95 ? 'B' : 'C');
+            $class = $cumulative <= 30 ? 'A' : ($cumulative <= 50 ? 'B' : 'C');
 
             return [
                 'number' => $row['number'], 'name' => $row['name'], 'value' => $value,

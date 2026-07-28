@@ -16,7 +16,7 @@ const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Da
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    refreshTimer = setInterval(() => router.reload(), 30000);
+    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 10000);
 });
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
 
