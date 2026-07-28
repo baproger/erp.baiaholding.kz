@@ -4,11 +4,12 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ companies: Array, salesPlan: Number });
+const props = defineProps({ companies: Array, salesPlan: Number, salesPlanWon: Number });
 
 // План сделок на месяц (для экрана «Офис») — ставит админ или финансист.
 const planVal = ref(props.salesPlan ?? 20);
-const savePlan = () => router.post(route('workshopScreens.plan'), { plan: planVal.value }, { preserveScroll: true });
+const planWonVal = ref(props.salesPlanWon ?? 20);
+const savePlan = () => router.post(route('workshopScreens.plan'), { plan: planVal.value, plan_won: planWonVal.value }, { preserveScroll: true });
 
 const screenUrl = `${window.location.origin}/screen`;
 const genCode = async (company, r, kind = 'workshop') => {
@@ -40,9 +41,12 @@ const copy = (code) => navigator.clipboard?.writeText(code);
                 Экран «Офис» — отдел продаж против плана месяца и лидер.
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-xs font-medium text-slate-500">План сделок/мес:</span>
+                <span class="text-xs font-medium text-slate-500">План лотов/мес:</span>
                 <input v-model.number="planVal" @change="savePlan" type="number" min="1" max="1000"
                     class="w-20 rounded-lg border-slate-300 py-1.5 text-center text-sm font-semibold shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                <span class="text-xs font-medium text-slate-500">План выигранных/мес:</span>
+                <input v-model.number="planWonVal" @change="savePlan" type="number" min="1" max="1000"
+                    class="w-20 rounded-lg border-slate-300 py-1.5 text-center text-sm font-semibold shadow-sm focus:border-emerald-500 focus:ring-emerald-500" />
             </div>
         </div>
 

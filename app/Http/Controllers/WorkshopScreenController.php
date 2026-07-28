@@ -96,7 +96,9 @@ class WorkshopScreenController extends Controller
 
         // Чек-листы лотов («КП через WhatsApp», «Позвонил»…): видно, работает
         // ли менеджер по лоту. checks = {itemId: true} на каждом лоте.
-        $checkItems = \App\Models\PreDealChecklistItem::where('is_active', true)->count();
+        $checkItemsList = \App\Models\PreDealChecklistItem::where('is_active', true)
+            ->orderBy('order')->get(['id', 'label']);
+        $checkItems = $checkItemsList->count();
         $monthLots = \App\Models\PreDeal::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
             ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)
@@ -144,6 +146,26 @@ class WorkshopScreenController extends Controller
             'leader' => $managers->first(),
             // Лоты месяца с чек-листами — видно, кто реально работает по лотам.
             'lots' => $lotRows,
+            // Воронка отдела КРУПНО: Участвовал (лоты) → этапы чек-листа
+            // (Звонок, КП… — любые пункты из «⚙ Чек-лист») → Выигранные.
+            // План лотов и чек-листа общий (каждый лот проходит каждый шаг),
+            // у выигранных — свой план (sales_plan_won_monthly).
+            'funnel' => collect([[
+                'label' => 'Участвовал (лоты)',
+                'count' => $monthLots->count(),
+                'plan' => $plan,
+                'kind' => 'start',
+            ]])->concat($checkItemsList->map(fn ($it) => [
+                'label' => $it->label,
+                'count' => $monthLots->filter(fn ($p) => ! empty(($p->checks ?? [])[(string) $it->id]))->count(),
+                'plan' => $plan,
+                'kind' => 'step',
+            ]))->push([
+                'label' => 'Выигранные сделки',
+                'count' => $monthLots->where('status', 'confirmed')->count(),
+                'plan' => max(1, (int) \App\Models\Setting::get('sales_plan_won_monthly', 20)),
+                'kind' => 'won',
+            ])->values(),
         ]);
     }
 
@@ -151,10 +173,17 @@ class WorkshopScreenController extends Controller
     public function plan(Request $request): RedirectResponse
     {
         abort_unless($request->user()->hasAnyRole(['admin', 'financist']) || $request->user()->can('setting.update'), 403);
-        $data = $request->validate(['plan' => ['required', 'integer', 'min:1', 'max:1000']]);
+        $data = $request->validate([
+            'plan' => ['required', 'integer', 'min:1', 'max:1000'],
+            // Отдельный план ВЫИГРАННЫХ сделок (воронка на экране «Офис»).
+            'plan_won' => ['nullable', 'integer', 'min:1', 'max:1000'],
+        ]);
         \App\Models\Setting::set('sales_plan_monthly', $data['plan']);
+        if (! empty($data['plan_won'])) {
+            \App\Models\Setting::set('sales_plan_won_monthly', $data['plan_won']);
+        }
 
-        return back()->with('success', 'План сделок на месяц: '.$data['plan'].'.');
+        return back()->with('success', 'План на месяц: лотов '.$data['plan'].(! empty($data['plan_won']) ? ', выигранных '.$data['plan_won'] : '').'.');
     }
 
     public function enter(Request $request): RedirectResponse
@@ -259,6 +288,7 @@ class WorkshopScreenController extends Controller
         return Inertia::render('Settings/Screens', [
             'companies' => $companies,
             'salesPlan' => (int) \App\Models\Setting::get('sales_plan_monthly', 20),
+            'salesPlanWon' => (int) \App\Models\Setting::get('sales_plan_won_monthly', 20),
         ]);
     }
 

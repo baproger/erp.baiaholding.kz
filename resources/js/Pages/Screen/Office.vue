@@ -3,12 +3,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import Avatar from '@/Components/Avatar.vue';
 
-const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] } });
+const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] }, funnel: { type: Array, default: () => [] } });
 
-// План отдела на месяц: сколько лотов добавлено всеми к плану (например 100).
-const deptTotal = computed(() => props.managers.reduce((s, m) => s + (m.total || 0), 0));
-const deptWon = computed(() => props.managers.reduce((s, m) => s + (m.won || 0), 0));
-const planPct = computed(() => Math.min(100, Math.round(deptTotal.value / Math.max(1, props.plan) * 100)));
+// Воронка отдела: факт/план и % — цифры крупные, чтобы читались с экрана.
+const funnelPct = (f) => Math.min(100, Math.round((f.count || 0) / Math.max(1, f.plan) * 100));
 // Чек-лист: доля закрытых галочек — видно, работает менеджер по лотам или нет.
 const checksPct = (m) => m.checks_total > 0 ? Math.round(m.checks_done / m.checks_total * 100) : 0;
 const checksClass = (p) => p >= 70 ? 'bg-emerald-100 text-emerald-700' : p >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600';
@@ -56,16 +54,22 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
             </div>
         </div>
 
-        <!-- План отдела на месяц: лотов добавлено / план -->
-        <div class="mb-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <div class="flex flex-wrap items-baseline justify-between gap-2">
-                <span class="text-base font-bold text-slate-900">План лотов на {{ monthLabel }}</span>
-                <span class="text-sm text-slate-400">добавлено <b class="tabular-nums text-slate-700">{{ deptTotal }}</b> из <b class="tabular-nums text-slate-700">{{ plan }}</b> · выиграно <b class="tabular-nums text-emerald-600">{{ deptWon }}</b></span>
+        <!-- Воронка отдела КРУПНО: Участвовал → этапы чек-листа (Звонок, КП…) → Выигранные.
+             У каждого этапа свой факт/план — видно с другого конца комнаты. -->
+        <div class="mb-4 flex flex-wrap gap-3">
+            <div v-for="f in funnel" :key="f.label" class="min-w-44 flex-1 rounded-2xl border p-4 text-center shadow-sm lg:p-5"
+                :class="f.kind === 'won' ? 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white' : 'border-slate-200 bg-white'">
+                <div class="truncate text-sm font-bold uppercase tracking-wide lg:text-base" :class="f.kind === 'won' ? 'text-emerald-700' : 'text-slate-500'" :title="f.label">{{ f.label }}</div>
+                <div class="mt-2 text-5xl font-black leading-none tabular-nums lg:text-6xl" :class="f.kind === 'won' ? 'text-emerald-600' : 'text-slate-900'">
+                    {{ f.count }}<span class="text-2xl font-bold text-slate-300 lg:text-3xl">/{{ f.plan }}</span>
+                </div>
+                <div class="mx-auto mt-3 h-2.5 max-w-56 overflow-hidden rounded-full bg-slate-100">
+                    <div class="h-2.5 rounded-full transition-all duration-700"
+                        :class="f.kind === 'won' ? 'bg-emerald-500' : 'bg-indigo-500'"
+                        :style="{ width: Math.max(2, funnelPct(f)) + '%' }"></div>
+                </div>
+                <div class="mt-1 text-base font-bold tabular-nums lg:text-lg" :class="funnelPct(f) >= 100 ? 'text-emerald-600' : 'text-slate-400'">{{ funnelPct(f) }}%</div>
             </div>
-            <div class="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
-                <div class="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-700" :style="{ width: Math.max(1, planPct) + '%' }"></div>
-            </div>
-            <div class="mt-1 text-right text-xs font-semibold tabular-nums" :class="planPct >= 100 ? 'text-emerald-600' : 'text-slate-400'">{{ planPct }}% плана</div>
         </div>
 
         <div class="flex flex-col gap-4 xl:flex-row">
@@ -92,8 +96,8 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                             </div>
                         </div>
                         <div class="text-right">
-                            <div class="text-2xl font-bold tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</div>
-                            <div class="flex items-center justify-end gap-1.5 text-[11px] text-slate-400">
+                            <div class="text-4xl font-black leading-none tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</div>
+                            <div class="mt-1 flex items-center justify-end gap-1.5 text-xs text-slate-400">
                                 <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
                                 <!-- Чек-лист: закрыто галочек из возможных по его лотам -->
                                 <span class="rounded-full px-1.5 py-0.5 font-bold tabular-nums"
