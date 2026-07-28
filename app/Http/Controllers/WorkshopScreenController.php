@@ -94,8 +94,29 @@ class WorkshopScreenController extends Controller
                 sum(case when status = 'confirmed' and deal_id is not null then 1 else 0 end) deals")
             ->get()->keyBy('user_id');
 
+        // Чек-листы лотов («КП через WhatsApp», «Позвонил»…): видно, работает
+        // ли менеджер по лоту. checks = {itemId: true} на каждом лоте.
+        $checkItems = \App\Models\PreDealChecklistItem::where('is_active', true)->count();
+        $monthLots = \App\Models\PreDeal::query()
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)
+            ->with('user:id,name')
+            ->latest()
+            ->get(['id', 'user_id', 'product', 'customer', 'margin', 'status', 'checks', 'created_at']);
+        $checksDone = fn ($p) => count(array_filter($p->checks ?? []));
+        $checksByUser = $monthLots->groupBy('user_id')->map(fn ($rows) => $rows->sum($checksDone));
+        // Список лотов на экран (последние 40): лот · менеджер · чек-лист · статус.
+        $lotRows = $monthLots->take(40)->map(fn ($p) => [
+            'manager' => $p->user?->name ?? '—',
+            'product' => $p->product,
+            'customer' => $p->customer,
+            'won' => $p->status === 'confirmed',
+            'checks_done' => min($checksDone($p), $checkItems),
+            'checks_total' => $checkItems,
+        ])->values();
+
         $managers = \App\Models\User::role('manager')->where('is_active', true)->get(['id', 'name', 'avatar'])
-            ->map(function ($u) use ($lots, $plan) {
+            ->map(function (\App\Models\User $u) use ($lots, $plan, $checksByUser, $checkItems) {
                 $m = $lots[$u->id] ?? null;
                 $total = (int) ($m->total ?? 0);
                 $won = (int) ($m->won ?? 0);
@@ -107,6 +128,9 @@ class WorkshopScreenController extends Controller
                     'deals' => (int) ($m->deals ?? 0),          // из них стало сделками
                     'conversion' => $total > 0 ? (int) round($won / $total * 100) : 0,
                     'plan_pct' => min(100, (int) round($total / $plan * 100)),
+                    // Чек-лист: сделано галочек / всего возможных (лоты × пункты).
+                    'checks_done' => (int) ($checksByUser[$u->id] ?? 0),
+                    'checks_total' => $total * $checkItems,
                 ];
             })
             ->sortBy([['won', 'desc'], ['conversion', 'desc'], ['total', 'desc']])->values();
@@ -118,6 +142,8 @@ class WorkshopScreenController extends Controller
             'monthLabel' => \Illuminate\Support\Carbon::parse($mStart)->locale('ru')->translatedFormat('LLLL Y'),
             'managers' => $managers,
             'leader' => $managers->first(),
+            // Лоты месяца с чек-листами — видно, кто реально работает по лотам.
+            'lots' => $lotRows,
         ]);
     }
 

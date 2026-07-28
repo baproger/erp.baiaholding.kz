@@ -3,7 +3,15 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import Avatar from '@/Components/Avatar.vue';
 
-const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object });
+const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] } });
+
+// План отдела на месяц: сколько лотов добавлено всеми к плану (например 100).
+const deptTotal = computed(() => props.managers.reduce((s, m) => s + (m.total || 0), 0));
+const deptWon = computed(() => props.managers.reduce((s, m) => s + (m.won || 0), 0));
+const planPct = computed(() => Math.min(100, Math.round(deptTotal.value / Math.max(1, props.plan) * 100)));
+// Чек-лист: доля закрытых галочек — видно, работает менеджер по лотам или нет.
+const checksPct = (m) => m.checks_total > 0 ? Math.round(m.checks_done / m.checks_total * 100) : 0;
+const checksClass = (p) => p >= 70 ? 'bg-emerald-100 text-emerald-700' : p >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600';
 
 // ТВ-режим: часы + автообновление раз в 30 секунд.
 const clock = ref('');
@@ -48,6 +56,18 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
             </div>
         </div>
 
+        <!-- План отдела на месяц: лотов добавлено / план -->
+        <div class="mb-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <span class="text-base font-bold text-slate-900">План лотов на {{ monthLabel }}</span>
+                <span class="text-sm text-slate-400">добавлено <b class="tabular-nums text-slate-700">{{ deptTotal }}</b> из <b class="tabular-nums text-slate-700">{{ plan }}</b> · выиграно <b class="tabular-nums text-emerald-600">{{ deptWon }}</b></span>
+            </div>
+            <div class="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
+                <div class="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-700" :style="{ width: Math.max(1, planPct) + '%' }"></div>
+            </div>
+            <div class="mt-1 text-right text-xs font-semibold tabular-nums" :class="planPct >= 100 ? 'text-emerald-600' : 'text-slate-400'">{{ planPct }}% плана</div>
+        </div>
+
         <div class="flex flex-col gap-4 xl:flex-row">
             <!-- Слева: рейтинг эффективности отдела продаж -->
             <div class="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -60,7 +80,7 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                         <span class="w-7 text-center text-lg font-bold" :class="i === 0 && m.won > 0 ? '' : 'text-slate-300'">{{ i === 0 && m.won > 0 ? '👑' : i + 1 }}</span>
                         <Avatar :name="m.name" :src="m.avatar" :size="40" />
                         <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
                                 <span class="truncate text-base font-semibold text-slate-900">{{ m.name }}</span>
                                 <span class="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums" :class="convClass(m.conversion)">конверсия {{ m.conversion }}%</span>
                             </div>
@@ -73,7 +93,13 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                         </div>
                         <div class="text-right">
                             <div class="text-2xl font-bold tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</div>
-                            <div class="text-[11px] text-slate-400">выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</div>
+                            <div class="flex items-center justify-end gap-1.5 text-[11px] text-slate-400">
+                                <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
+                                <!-- Чек-лист: закрыто галочек из возможных по его лотам -->
+                                <span class="rounded-full px-1.5 py-0.5 font-bold tabular-nums"
+                                    :class="m.checks_total > 0 ? checksClass(checksPct(m)) : 'bg-slate-100 text-slate-400'"
+                                    title="Чек-лист по лотам: сделано / всего">☑ {{ m.checks_done }}/{{ m.checks_total }}</span>
+                            </div>
                         </div>
                     </div>
                     <div v-if="!managers.length" class="px-5 py-10 text-center text-sm text-slate-400">В отделе продаж пока нет менеджеров</div>
@@ -114,6 +140,34 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                 <div v-else class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
                     В {{ monthLabel }} ещё нет выигранных лотов —<br />лидер появится после первого «Выиграл»
                 </div>
+            </div>
+        </div>
+
+        <!-- Лоты месяца с чек-листами: видно, кто реально работает по лотам -->
+        <div class="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-baseline justify-between border-b border-slate-100 px-5 py-3.5">
+                <span class="text-base font-bold text-slate-900">Лоты месяца — чек-листы</span>
+                <span class="text-xs text-slate-400">☑ галочки лота («КП», «Позвонил»…) — работа менеджера по лоту</span>
+            </div>
+            <div class="divide-y divide-slate-50">
+                <div v-for="(l, i) in lots" :key="i" class="flex items-center gap-4 px-5 py-2.5">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="truncate text-sm font-semibold text-slate-900">{{ l.product || '—' }}</span>
+                            <span v-if="l.won" class="flex-shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">ВЫИГРАЛ ✓</span>
+                        </div>
+                        <div class="truncate text-xs text-slate-400">{{ l.customer || '—' }} · {{ l.manager }}</div>
+                    </div>
+                    <div class="flex w-44 flex-shrink-0 items-center gap-2">
+                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div class="h-2 rounded-full transition-all duration-700"
+                                :class="l.checks_total > 0 && l.checks_done === l.checks_total ? 'bg-emerald-500' : l.checks_done > 0 ? 'bg-amber-400' : 'bg-rose-300'"
+                                :style="{ width: Math.max(4, l.checks_total > 0 ? Math.round(l.checks_done / l.checks_total * 100) : 0) + '%' }"></div>
+                        </div>
+                        <span class="flex-shrink-0 text-xs font-bold tabular-nums" :class="l.checks_done === l.checks_total && l.checks_total > 0 ? 'text-emerald-600' : 'text-slate-500'">☑ {{ l.checks_done }}/{{ l.checks_total }}</span>
+                    </div>
+                </div>
+                <div v-if="!lots.length" class="px-5 py-8 text-center text-sm text-slate-400">В {{ monthLabel }} лотов ещё нет</div>
             </div>
         </div>
     </div>
