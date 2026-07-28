@@ -14,19 +14,21 @@ const checksClass = (p) => p >= 70 ? 'bg-emerald-100 text-emerald-700' : p >= 30
 // ТВ-режим: часы + автообновление раз в 10 секунд + автопрокрутка страницы,
 // чтобы при большом списке менеджеров экран сам показывал всех (вниз-вверх).
 const clock = ref('');
+const ratingScroller = ref(null); // контейнер списка менеджеров (автопрокрутка)
 let clockTimer = null, refreshTimer = null, scrollTimer = null;
 const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
     refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 10000);
+    // Автопрокрутка ТОЛЬКО списка менеджеров: если все влезают — стоит на месте.
     scrollTimer = setInterval(() => {
-        const doc = document.documentElement;
-        if (doc.scrollHeight <= window.innerHeight + 20) return; // всё влезает — не крутим
-        if (window.scrollY + window.innerHeight >= doc.scrollHeight - 4) {
-            window.scrollTo({ top: 0, behavior: 'smooth' }); // дошли до низа — наверх
+        const el = ratingScroller.value;
+        if (!el || el.scrollHeight <= el.clientHeight + 10) return;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
+            el.scrollTo({ top: 0, behavior: 'smooth' }); // дошли до низа — наверх
         } else {
-            window.scrollBy({ top: 2 });
+            el.scrollTop += 2;
         }
     }, 60);
 });
@@ -89,7 +91,8 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                     <span class="text-base font-bold text-slate-900">Отдел продаж — лоты за месяц</span>
                     <span class="text-xs text-slate-400">добавил лотов · выиграл · конверсия %</span>
                 </div>
-                <div class="divide-y divide-slate-50">
+                <!-- Автопрокрутка внутри блока: видно всех менеджеров, скроллбар скрыт -->
+                <div ref="ratingScroller" class="no-scrollbar max-h-[62vh] divide-y divide-slate-50 overflow-y-auto">
                     <div v-for="(m, i) in managers" :key="m.name" class="flex items-center gap-4 px-5 py-3.5">
                         <span class="w-7 text-center text-lg font-bold" :class="i === 0 && m.won > 0 ? '' : 'text-slate-300'">{{ i === 0 && m.won > 0 ? '👑' : i + 1 }}</span>
                         <Avatar :name="m.name" :src="m.avatar" :size="40" />
@@ -199,3 +202,9 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
         </div>
     </div>
 </template>
+
+<style scoped>
+/* Автопрокрутка списка менеджеров: колесо крутим программно, скроллбар прячем */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+</style>
