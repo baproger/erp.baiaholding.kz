@@ -54,7 +54,7 @@ const submit = () => (editingId.value
     : form.post(route('preDeals.store'), { preserveScroll: true, onSuccess: () => (showForm.value = false) }));
 
 const confirmDeal = async (p) => {
-    if (!(await confirmDialog({ title: 'Подтвердить сделку?', message: `«${p.product}» на ${money(p.contract_sum)} (маржа ${p.margin}%) будет создана на странице «Сделки».`, confirmText: 'Подтвердить' }))) return;
+    if (!(await confirmDialog({ title: 'Выиграл — создать сделку?', message: `«${p.product}» на ${money(p.contract_sum)} (маржа ${p.margin}%): лот отметится выигранным, сделка появится на странице «Сделки».`, confirmText: 'Выиграл ✓' }))) return;
     router.post(route('preDeals.confirm', p.id), {}, { preserveScroll: true });
 };
 const del = async (p) => {
@@ -148,7 +148,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                             <th class="px-4 py-2.5 text-right">Налог</th>
                             <th class="px-4 py-2.5 text-right">Остаток</th>
                             <th class="px-4 py-2.5 text-center">Маржа</th>
-                            <th class="px-4 py-2.5 text-center">Участвую</th>
+                            <th class="px-4 py-2.5 text-center">Выиграл</th>
                             <th class="px-4 py-2.5 text-center">Чек-лист</th>
                             <th class="px-4 py-2.5"></th>
                         </tr>
@@ -185,7 +185,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                     </template>
                                     <template v-else>
                                         <button v-if="Number(p.margin) >= minMargin" @click="confirmDeal(p)"
-                                            class="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">Подтвердить</button>
+                                            class="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">Выиграл ✓</button>
                                         <span v-else class="text-[11px] text-rose-400" title="Маржа ниже порога — сделка отклонена">отклонена</span>
                                         <button class="ml-1 rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Изменить" @click="openEdit(p)">
                                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
@@ -243,7 +243,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         <span class="text-slate-500">Остаток: <b class="tabular-nums" :class="calc.remainder >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(calc.remainder) }}</b></span>
                         <span class="ml-auto flex items-center gap-2">
                             <span class="rounded-full px-3 py-1 text-sm font-bold tabular-nums" :class="calc.pass ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'">маржа {{ calc.margin }}%</span>
-                            <span class="text-xs font-semibold" :class="calc.pass ? 'text-emerald-700' : 'text-rose-600'">{{ calc.pass ? 'участвую — да' : 'ниже ' + minMargin + '% — отклоняется' }}</span>
+                            <span class="text-xs font-semibold" :class="calc.pass ? 'text-emerald-700' : 'text-rose-600'">{{ calc.pass ? 'выиграл — да' : 'ниже ' + minMargin + '% — отклоняется' }}</span>
                         </span>
                     </div>
                 </div>

@@ -41,8 +41,11 @@ const addPayment = () => payForm.post(route('payments.store'), { preserveScroll:
 
 const showExpense = ref(false);
 const receiptInput = ref(null);
-// Тип расхода: «прочий» (нужен чек) или «по материалам» (списание со склада, чек не нужен).
-const expenseMode = ref('other'); // other | material
+// Тип расхода: прочий (чек) / доставка / закуп / по материалам (со склада).
+// Виды идут в Сводный отчёт и Аналитику отдельными колонками.
+const expenseMode = ref('other'); // other | delivery | purchase | material
+const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase' };
+const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп' };
 const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
@@ -76,7 +79,7 @@ const submitConfirm = (e) => confirmForm
 const addExpense = () => expenseForm
     .transform((d) => expenseMode.value === 'material'
         ? { ...d, file: null, amount: autoAmount.value ?? d.amount } // сервер пересчитает: кол-во × цена
-        : { ...d, material_id: '', qty: '' })
+        : { ...d, material_id: '', qty: '', type: EXPENSE_TYPE[expenseMode.value] ?? 'direct' })
     .post(route('expenses.store'), {
         preserveScroll: true, forceFormData: true,
         onSuccess: () => { expenseForm.reset('amount', 'description', 'file', 'material_id', 'qty'); if (receiptInput.value) receiptInput.value.value = ''; showExpense.value = false; },
@@ -190,14 +193,18 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showExpense = !showExpense">+ Расход</button>
             </div>
             <div v-if="showExpense" class="mb-3 rounded-xl border border-dashed border-slate-300 p-4">
-                <!-- Тип расхода -->
-                <div v-if="materials.length" class="mb-3 flex gap-2">
-                    <button type="button" @click="expenseMode = 'other'"
+                <!-- Тип расхода: прочий / доставка / закуп / материалы -->
+                <div class="mb-3 flex flex-wrap gap-2">
+                    <button v-for="m in [
+                            { k: 'other', l: 'Прочий расход (чек)' },
+                            { k: 'delivery', l: '🚚 Доставка' },
+                            { k: 'purchase', l: '📦 Закуп' },
+                        ]" :key="m.k" type="button" @click="expenseMode = m.k"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                        :class="expenseMode === 'other' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
-                        Прочий расход (чек)
+                        :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                        {{ m.l }}
                     </button>
-                    <button type="button" @click="expenseMode = 'material'"
+                    <button v-if="materials.length" type="button" @click="expenseMode = 'material'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === 'material' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         По материалам (со склада)
@@ -263,7 +270,11 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <div v-for="e in expenses" :key="e.id" class="rounded-xl bg-slate-50 p-4 text-sm">
                     <div class="flex items-start justify-between gap-3">
                         <div>
-                            <div><span class="font-medium tabular-nums text-slate-900">{{ money(e.amount) }}</span><span class="ml-2 text-slate-500">{{ e.description }}</span></div>
+                            <div>
+                                <span class="font-medium tabular-nums text-slate-900">{{ money(e.amount) }}</span>
+                                <span v-if="expenseTypeLabels[e.type]" class="ml-2 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 ring-1 ring-sky-200">{{ expenseTypeLabels[e.type] }}</span>
+                                <span class="ml-2 text-slate-500">{{ e.description }}</span>
+                            </div>
                             <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
                                 <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700">склад: {{ e.material.name }} × {{ qtyNum(e.qty) }} {{ e.material.unit }}</span>
                                 <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>

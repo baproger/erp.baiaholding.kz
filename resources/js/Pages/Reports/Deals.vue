@@ -140,8 +140,8 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             </div>
             <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 80ms">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Расходы</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-rose-600">−{{ money0(totals.material + totals.other) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">закуп {{ share(totals.material) }} · прочие {{ share(totals.other) }}</div>
+                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-rose-600">−{{ money0(totals.material + (totals.delivery ?? 0) + (totals.purchase ?? 0) + totals.other) }}</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">склад {{ money0(totals.material) }} · 🚚 {{ money0(totals.delivery ?? 0) }} · 📦 {{ money0(totals.purchase ?? 0) }} · прочие {{ money0(totals.other) }}</div>
             </div>
             <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 120ms">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div>
@@ -180,6 +180,8 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Сумма договора</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Оплачено</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Закуп (склад)</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">🚚 Доставка</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">📦 Закуп</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Прочие</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Налог</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Остаток</th>
@@ -224,6 +226,8 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums text-indigo-600">{{ money(r.material) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-sky-600">{{ money(r.delivery) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-amber-600">{{ money(r.purchase) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(r.other) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-rose-500">{{ money(r.tax) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums" :class="r.remainder < 0 ? 'font-semibold text-rose-600' : 'text-slate-700'">{{ money(r.remainder) }}</td>
@@ -234,7 +238,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <td class="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{{ money(r.company) }}</td>
                         </tr>
                         <tr v-if="!rows.length">
-                            <td colspan="13" class="px-4 py-16 text-center">
+                            <td colspan="15" class="px-4 py-16 text-center">
                                 <div class="text-3xl">📋</div>
                                 <div class="mt-2 text-sm font-medium text-slate-500">{{ filters.search || filters.from || filters.to ? 'Ничего не найдено' : 'Сделок пока нет' }}</div>
                                 <div v-if="filters.search || filters.from || filters.to" class="mt-1 text-xs text-slate-400">Попробуйте изменить поиск или период</div>
@@ -247,6 +251,8 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <td class="px-4 py-3 text-right tabular-nums">{{ money(totals.budget) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-emerald-400">{{ money(totals.paid) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-indigo-300">{{ money(totals.material) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-sky-300">{{ money(totals.delivery) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-amber-300">{{ money(totals.purchase) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-slate-300">{{ money(totals.other) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-rose-400">{{ money(totals.tax) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums">{{ money(totals.remainder) }}</td>

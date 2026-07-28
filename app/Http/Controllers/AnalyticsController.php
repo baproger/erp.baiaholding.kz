@@ -232,6 +232,20 @@ class AnalyticsController extends Controller
         $categoryRows = $byCat->map(fn ($s, $id) => ['name' => $catNames[$id] ?? '—', 'sum' => (float) $s])
             ->sortByDesc('sum')->values();
         $dealExpensesSum = (float) (clone $expFull)->whereNull('category_id')->sum('amount');
+        // Разбивка расходов по сделкам/цеху по видам: склад / доставка / закуп / прочие.
+        $dealSplitRow = (clone $expFull)->whereNull('category_id')
+            ->selectRaw("
+                sum(case when material_id is not null then amount else 0 end) as material,
+                sum(case when material_id is null and type = 'delivery' then amount else 0 end) as delivery,
+                sum(case when material_id is null and type = 'purchase' then amount else 0 end) as purchase,
+                sum(case when material_id is null and (type is null or type not in ('delivery','purchase')) then amount else 0 end) as other")
+            ->first();
+        $dealSplit = [
+            'material' => (float) ($dealSplitRow->material ?? 0),
+            'delivery' => (float) ($dealSplitRow->delivery ?? 0),
+            'purchase' => (float) ($dealSplitRow->purchase ?? 0),
+            'other' => (float) ($dealSplitRow->other ?? 0),
+        ];
         $incomeManual = (float) \App\Models\CashReceipt::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->sum('amount');
         $payrollTotal = round((float) $salaryRows->sum('payout'), 2);
@@ -245,6 +259,7 @@ class AnalyticsController extends Controller
             'incomeManual' => $incomeManual,
             'categories' => $categoryRows,
             'dealExpenses' => $dealExpensesSum,
+            'dealSplit' => $dealSplit,
             'payroll' => $payrollTotal,
             'tax' => $companyTotals['tax'],
             'expensesTotal' => round($expensesFull, 2),

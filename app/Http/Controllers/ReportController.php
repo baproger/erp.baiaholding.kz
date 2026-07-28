@@ -61,13 +61,16 @@ class ReportController extends Controller
             ->selectRaw('invoices.invoiceable_id as deal_id, sum(payments.amount) as paid')
             ->pluck('paid', 'deal_id');
 
-        // Подтверждённые расходы: закуп со склада (material_id) и прочие — раздельно.
+        // Подтверждённые расходы РАЗДЕЛЬНО: закуп со склада (material_id),
+        // доставка, закуп (тип из формы расхода) и прочие — свои колонки.
         $expByDeal = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
             ->whereIn('expenseable_id', $deals->pluck('id'))
             ->groupBy('expenseable_id')
-            ->selectRaw('expenseable_id as deal_id,
+            ->selectRaw("expenseable_id as deal_id,
                 sum(case when material_id is not null then amount else 0 end) as material,
-                sum(case when material_id is null then amount else 0 end) as other')
+                sum(case when material_id is null and type = 'delivery' then amount else 0 end) as delivery,
+                sum(case when material_id is null and type = 'purchase' then amount else 0 end) as purchase,
+                sum(case when material_id is null and (type is null or type not in ('delivery','purchase')) then amount else 0 end) as other")
             ->get()->keyBy('deal_id');
 
         // Активный заказ цеха по сделке: этап цеха показывается прямо в общей
@@ -81,8 +84,10 @@ class ReportController extends Controller
         $rows = $deals->map(function ($d) use ($paidByDeal, $expByDeal, $workshopByDeal, $taxRate) {
             $budget = (float) $d->budget;
             $material = (float) ($expByDeal[$d->id]->material ?? 0);
+            $delivery = (float) ($expByDeal[$d->id]->delivery ?? 0);
+            $purchase = (float) ($expByDeal[$d->id]->purchase ?? 0);
             $other = (float) ($expByDeal[$d->id]->other ?? 0);
-            $expense = $material + $other;
+            $expense = $material + $delivery + $purchase + $other;
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - $expense, 2);
             // Та же формула бонуса, что на карточке сделки и в ЗП (с ручным % финансиста).
@@ -101,6 +106,8 @@ class ReportController extends Controller
                 'budget' => $budget,
                 'paid' => (float) ($paidByDeal[$d->id] ?? 0),
                 'material' => $material,
+                'delivery' => $delivery,
+                'purchase' => $purchase,
                 'other' => $other,
                 'tax' => $tax,
                 'remainder' => $remainder,
@@ -129,6 +136,8 @@ class ReportController extends Controller
             'budget' => $budgetSum,
             'paid' => $rows->sum('paid'),
             'material' => $rows->sum('material'),
+            'delivery' => $rows->sum('delivery'),
+            'purchase' => $rows->sum('purchase'),
             'other' => $rows->sum('other'),
             'tax' => $rows->sum('tax'),
             'remainder' => $rows->sum('remainder'),

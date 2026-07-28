@@ -181,7 +181,8 @@ class PreDealController extends Controller
         ]);
         $preDeal->update(['status' => 'confirmed', 'deal_id' => $deal->id]);
 
-        return back()->with('success', 'Сделка '.$deal->number.' создана — смотрите на странице «Сделки».');
+        // «Выиграл» → сразу на страницу Сделки, где появилась новая сделка.
+        return redirect()->route('deals.index')->with('success', 'Выиграл! Сделка '.$deal->number.' создана.');
     }
 
     // ---- Чек-лист: пункты настраивают админ и финансист ----

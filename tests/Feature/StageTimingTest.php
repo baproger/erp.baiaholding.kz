@@ -58,25 +58,23 @@ class StageTimingTest extends TestCase
             ->assertInertia(fn (Assert $p) => $p->has('stageLogs', 2)->where('stageLogs.1.open', true));
     }
 
-    public function test_office_leader_by_efficiency_not_by_count(): void
+    public function test_office_leader_by_won_lots(): void
     {
         $company = Company::firstOrCreate(['code' => 'BAIA'], ['name' => 'BAIA']);
         $stage = DealStage::orderBy('order')->first()->id;
-        $wonStage = DealStage::where('is_won', true)->first()->id;
 
-        // A: ОДНА успешная сделка с высокой маржой — прибыль для компании есть.
-        $a = User::factory()->create(['name' => 'Эффективный']);
+        // A: добавил 2 лота, один ВЫИГРАЛ (стал сделкой) — лидер.
+        $a = User::factory()->create(['name' => 'Выигрывает']);
         $a->assignRole('manager');
-        $deal = Deal::create(['number' => 'BAIA-001', 'name' => 'X', 'company_name' => 'Т', 'client_name' => 'И', 'budget' => 1000000, 'status' => 'closed', 'company_id' => $company->id, 'deal_stage_id' => $wonStage, 'responsible_user_id' => $a->id]);
-        $inv = \App\Models\Invoice::create(['number' => 'I-1', 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 1000000, 'status' => 'paid']);
-        \App\Models\Payment::create(['invoice_id' => $inv->id, 'amount' => 1000000, 'payment_date' => now()->toDateString()]);
-        \App\Models\Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 100000, 'date' => now()->toDateString(), 'status' => 'confirmed']);
+        $deal = Deal::create(['number' => 'BAIA-001', 'name' => 'X', 'company_name' => 'Т', 'client_name' => 'И', 'budget' => 1000000, 'status' => 'active', 'company_id' => $company->id, 'deal_stage_id' => $stage, 'responsible_user_id' => $a->id]);
+        \App\Models\PreDeal::create(['company_id' => $company->id, 'user_id' => $a->id, 'product' => 'Divan', 'contract_sum' => 1000000, 'margin' => 30, 'status' => 'confirmed', 'deal_id' => $deal->id]);
+        \App\Models\PreDeal::create(['company_id' => $company->id, 'user_id' => $a->id, 'product' => 'Стол', 'contract_sum' => 500000, 'margin' => 20, 'status' => 'new']);
 
-        // B: ТРИ сделки, но ни одной успешной — количеством лидером не стать.
+        // B: добавил 3 лота, ни одного не выиграл — количеством лидером не стать.
         $b = User::factory()->create(['name' => 'Количество']);
         $b->assignRole('manager');
-        foreach ([2, 3, 4] as $i) {
-            Deal::create(['number' => 'BAIA-00'.$i, 'name' => 'X', 'company_name' => 'Т', 'client_name' => 'И', 'budget' => 500000, 'status' => 'active', 'company_id' => $company->id, 'deal_stage_id' => $stage, 'responsible_user_id' => $b->id]);
+        foreach ([1, 2, 3] as $i) {
+            \App\Models\PreDeal::create(['company_id' => $company->id, 'user_id' => $b->id, 'product' => 'Лот '.$i, 'contract_sum' => 100000, 'margin' => 10, 'status' => 'new']);
         }
 
         $admin = User::factory()->create();
@@ -88,14 +86,16 @@ class StageTimingTest extends TestCase
         $this->post(route('screen.enter'), ['code' => $code]);
         $this->get(route('screen.show'))->assertOk()->assertInertia(fn (Assert $p) => $p
             ->component('Screen/Office')
-            ->where('leader.name', 'Эффективный')
-            ->where('managers.0.score', 100)
+            ->where('leader.name', 'Выигрывает')
             ->where('managers.0.won', 1)
+            ->where('managers.0.total', 2)
+            ->where('managers.0.conversion', 50)
+            ->where('managers.0.deals', 1)
             ->where('managers.1.name', 'Количество')
-            ->where('managers.1.score', 0)
+            ->where('managers.1.won', 0)
             ->where('managers.1.total', 3));
 
-        // Фильтр месяца: в прошлом месяце успехов не было — лидера нет (score 0).
+        // Фильтр месяца: в прошлом месяце лотов не было — выигранных 0.
         $this->get(route('screen.show', ['month' => now()->subMonthNoOverflow()->format('Y-m')]))
             ->assertInertia(fn (Assert $p) => $p->where('managers.0.won', 0));
     }

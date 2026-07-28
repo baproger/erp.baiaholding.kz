@@ -24,7 +24,7 @@ const monthF = ref(props.month ?? '');
 const applyMonth = () => router.get(route('screen.show'), { month: monthF.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
 const isCurrent = computed(() => props.month === new Date().toISOString().slice(0, 7));
 
-const marginClass = (m) => m >= 40 ? 'bg-emerald-100 text-emerald-700' : m >= 20 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600';
+const convClass = (c) => c >= 50 ? 'bg-emerald-100 text-emerald-700' : c >= 25 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500';
 const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' : 'bg-amber-400';
 </script>
 
@@ -52,28 +52,28 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
             <!-- Слева: рейтинг эффективности отдела продаж -->
             <div class="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex items-baseline justify-between border-b border-slate-100 px-5 py-3.5">
-                    <span class="text-base font-bold text-slate-900">Отдел продаж — эффективность</span>
-                    <span class="text-xs text-slate-400">балл = % от прибыли лучшего · маржа · успешные сделки</span>
+                    <span class="text-base font-bold text-slate-900">Отдел продаж — лоты за месяц</span>
+                    <span class="text-xs text-slate-400">добавил лотов · выиграл · конверсия %</span>
                 </div>
                 <div class="divide-y divide-slate-50">
                     <div v-for="(m, i) in managers" :key="m.name" class="flex items-center gap-4 px-5 py-3.5">
-                        <span class="w-7 text-center text-lg font-bold" :class="i === 0 && m.score > 0 ? '' : 'text-slate-300'">{{ i === 0 && m.score > 0 ? '👑' : i + 1 }}</span>
+                        <span class="w-7 text-center text-lg font-bold" :class="i === 0 && m.won > 0 ? '' : 'text-slate-300'">{{ i === 0 && m.won > 0 ? '👑' : i + 1 }}</span>
                         <Avatar :name="m.name" :src="m.avatar" :size="40" />
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2">
                                 <span class="truncate text-base font-semibold text-slate-900">{{ m.name }}</span>
-                                <span class="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums" :class="marginClass(m.margin)">маржа {{ m.margin }}%</span>
+                                <span class="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums" :class="convClass(m.conversion)">конверсия {{ m.conversion }}%</span>
                             </div>
                             <div class="mt-1 flex items-center gap-2">
                                 <div class="h-2 w-full max-w-xs overflow-hidden rounded-full bg-slate-100">
-                                    <div class="h-2 rounded-full transition-all duration-700" :class="barClass(m.score)" :style="{ width: Math.max(2, m.score) + '%' }"></div>
+                                    <div class="h-2 rounded-full transition-all duration-700" :class="barClass(m.conversion)" :style="{ width: Math.max(2, m.conversion) + '%' }"></div>
                                 </div>
-                                <span class="flex-shrink-0 text-xs text-slate-400">план: {{ m.total }}/{{ plan }}</span>
+                                <span class="flex-shrink-0 text-xs text-slate-400">план лотов: {{ m.total }}/{{ plan }}</span>
                             </div>
                         </div>
                         <div class="text-right">
-                            <div class="text-2xl font-bold tabular-nums" :class="m.score > 0 ? 'text-slate-900' : 'text-slate-300'">{{ m.score }}</div>
-                            <div class="text-[11px] text-slate-400">баллов · успешных {{ m.won }}</div>
+                            <div class="text-2xl font-bold tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</div>
+                            <div class="text-[11px] text-slate-400">выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</div>
                         </div>
                     </div>
                     <div v-if="!managers.length" class="px-5 py-10 text-center text-sm text-slate-400">В отделе продаж пока нет менеджеров</div>
@@ -82,7 +82,7 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
 
             <!-- Справа: лидер месяца по эффективности -->
             <div class="w-full flex-shrink-0 xl:w-96">
-                <div v-if="leader && leader.score > 0" class="rounded-2xl border border-amber-200 bg-white shadow-sm">
+                <div v-if="leader && leader.won > 0" class="rounded-2xl border border-amber-200 bg-white shadow-sm">
                     <div class="rounded-t-2xl bg-amber-50/70 px-5 py-4 text-center">
                         <div class="text-3xl">👑</div>
                         <div class="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-600">Лидер — {{ monthLabel }}</div>
@@ -90,35 +90,29 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                     <div class="flex flex-col items-center px-5 py-5">
                         <Avatar :name="leader.name" :src="leader.avatar" :size="72" />
                         <div class="mt-3 text-xl font-bold text-slate-900">{{ leader.name }}</div>
-                        <div class="mt-1 text-sm text-slate-400">самая высокая прибыль для компании</div>
+                        <div class="mt-1 text-sm text-slate-400">больше всех выигранных лотов</div>
                         <div class="mt-4 grid w-full grid-cols-3 gap-2 text-center">
-                            <div class="rounded-xl bg-amber-50 p-3">
-                                <div class="text-2xl font-bold tabular-nums text-amber-600">{{ leader.score }}</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">баллов</div>
-                            </div>
                             <div class="rounded-xl bg-emerald-50 p-3">
-                                <div class="text-2xl font-bold tabular-nums text-emerald-600">{{ leader.margin }}%</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">ср. маржа</div>
+                                <div class="text-2xl font-bold tabular-nums text-emerald-600">{{ leader.won }}</div>
+                                <div class="mt-0.5 text-[11px] text-slate-400">выиграл</div>
+                            </div>
+                            <div class="rounded-xl bg-amber-50 p-3">
+                                <div class="text-2xl font-bold tabular-nums text-amber-600">{{ leader.conversion }}%</div>
+                                <div class="mt-0.5 text-[11px] text-slate-400">конверсия</div>
                             </div>
                             <div class="rounded-xl bg-indigo-50 p-3">
-                                <div class="text-2xl font-bold tabular-nums text-indigo-600">{{ leader.won }}</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">успешных</div>
+                                <div class="text-2xl font-bold tabular-nums text-indigo-600">{{ leader.total }}</div>
+                                <div class="mt-0.5 text-[11px] text-slate-400">лотов добавил</div>
                             </div>
                         </div>
-                        <div class="mt-3 grid w-full grid-cols-2 gap-2 text-center">
-                            <div class="rounded-xl bg-slate-50 p-3">
-                                <div class="text-xl font-bold tabular-nums text-slate-900">{{ leader.conversion }}%</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">конверсия в успех</div>
-                            </div>
-                            <div class="rounded-xl bg-slate-50 p-3">
-                                <div class="text-xl font-bold tabular-nums text-slate-900">{{ leader.total }}</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">сделок за месяц</div>
-                            </div>
+                        <div class="mt-3 w-full rounded-xl bg-slate-50 p-3 text-center">
+                            <div class="text-xl font-bold tabular-nums text-slate-900">{{ leader.deals }}</div>
+                            <div class="mt-0.5 text-[11px] text-slate-400">лотов стало сделками</div>
                         </div>
                     </div>
                 </div>
                 <div v-else class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
-                    В {{ monthLabel }} ещё нет успешных сделок —<br />лидер появится после первой «Оплаты успешно»
+                    В {{ monthLabel }} ещё нет выигранных лотов —<br />лидер появится после первого «Выиграл»
                 </div>
             </div>
         </div>

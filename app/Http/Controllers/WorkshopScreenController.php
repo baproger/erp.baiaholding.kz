@@ -82,68 +82,34 @@ class WorkshopScreenController extends Controller
             ? request()->query('month') : now()->format('Y-m');
         $mStart = $month.'-01';
         $mEnd = \Illuminate\Support\Carbon::parse($mStart)->endOfMonth()->toDateString();
-        $taxRate = ((float) \App\Models\Setting::get('tax_percent', 3)) / 100;
-
-        // Сделки месяца: по дате договора (без неё — по дате создания) —
-        // как фильтр «Месяц» на Финансах и в Сводном отчёте.
-        $deals = \App\Models\Deal::query()
+        // Рейтинг по ПРЕДВАРИТЕЛЬНЫМ сделкам (лотам) за месяц: сколько лотов
+        // менеджер добавил, сколько выиграл (кнопка «Выиграл» → создана
+        // сделка) и конверсия %. Деньги на экране не показываются.
+        $lots = \App\Models\PreDeal::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
-            ->whereNotNull('responsible_user_id')->where('status', '!=', 'cancelled')
-            ->where(fn ($w) => $w->whereBetween('contract_date', [$mStart, $mEnd])
-                ->orWhere(fn ($n) => $n->whereNull('contract_date')
-                    ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)))
-            ->get(['id', 'budget', 'bonus_rate_override', 'responsible_user_id', 'deal_stage_id']);
-
-        $wonIds = \App\Models\DealStage::where('is_won', true)->pluck('id')->flip();
-        $won = $deals->filter(fn ($d) => $wonIds->has($d->deal_stage_id));
-
-        $expByDeal = \App\Models\Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
-            ->whereIn('expenseable_id', $won->pluck('id'))
-            ->groupBy('expenseable_id')->selectRaw('expenseable_id d, sum(amount) s')->pluck('s', 'd');
-        $paidByDeal = \App\Models\Payment::query()
-            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
-            ->where('invoices.invoiceable_type', 'deal')
-            ->whereIn('invoices.invoiceable_id', $won->pluck('id'))
-            ->groupBy('invoices.invoiceable_id')
-            ->selectRaw('invoices.invoiceable_id d, sum(payments.amount) s')->pluck('s', 'd');
-
-        // По каждой won-сделке: прибыль компании = остаток − бонус (как в ЗП).
-        $perUser = $won->groupBy('responsible_user_id')->map(function ($rows) use ($expByDeal, $paidByDeal, $taxRate) {
-            $profit = 0.0; $margins = [];
-            foreach ($rows as $d) {
-                $budget = (float) $d->budget;
-                $tax = round($budget * $taxRate, 2);
-                $remainder = round($budget - $tax - (float) ($expByDeal[$d->id] ?? 0), 2);
-                $ratio = $budget > 0 ? min(1, (float) ($paidByDeal[$d->id] ?? 0) / $budget) : 0;
-                $bonus = round(\App\Services\PayrollService::marginBonus($budget, $remainder, $tax,
-                    $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null) * $ratio, 2);
-                $profit += $remainder - $bonus;
-                $margins[] = \App\Services\PayrollService::marginPct($budget, $remainder, $tax);
-            }
-
-            return ['profit' => $profit, 'won' => count($margins),
-                'margin' => count($margins) ? round(array_sum($margins) / count($margins), 1) : 0.0];
-        });
-        $createdCounts = $deals->groupBy('responsible_user_id')->map->count();
-        $maxProfit = max(1e-9, (float) $perUser->max('profit'));
+            ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)
+            ->groupBy('user_id')
+            ->selectRaw("user_id, count(*) total,
+                sum(case when status = 'confirmed' then 1 else 0 end) won,
+                sum(case when status = 'confirmed' and deal_id is not null then 1 else 0 end) deals")
+            ->get()->keyBy('user_id');
 
         $managers = \App\Models\User::role('manager')->where('is_active', true)->get(['id', 'name', 'avatar'])
-            ->map(function ($u) use ($perUser, $createdCounts, $maxProfit, $plan) {
-                $m = $perUser[$u->id] ?? ['profit' => 0.0, 'won' => 0, 'margin' => 0.0];
-                $total = (int) ($createdCounts[$u->id] ?? 0);
+            ->map(function ($u) use ($lots, $plan) {
+                $m = $lots[$u->id] ?? null;
+                $total = (int) ($m->total ?? 0);
+                $won = (int) ($m->won ?? 0);
 
                 return [
                     'name' => $u->name, 'avatar' => $u->avatar,
-                    // Балл: % от прибыли лучшего менеджера (сама прибыль скрыта).
-                    'score' => $m['profit'] > 0 ? (int) round($m['profit'] / $maxProfit * 100) : 0,
-                    'margin' => $m['margin'],
-                    'won' => $m['won'],
-                    'total' => $total,
-                    'conversion' => $total > 0 ? (int) round($m['won'] / $total * 100) : 0,
+                    'total' => $total,                          // лотов добавил
+                    'won' => $won,                              // выиграл
+                    'deals' => (int) ($m->deals ?? 0),          // из них стало сделками
+                    'conversion' => $total > 0 ? (int) round($won / $total * 100) : 0,
                     'plan_pct' => min(100, (int) round($total / $plan * 100)),
                 ];
             })
-            ->sortBy([['score', 'desc'], ['margin', 'desc'], ['total', 'desc']])->values();
+            ->sortBy([['won', 'desc'], ['conversion', 'desc'], ['total', 'desc']])->values();
 
         return Inertia::render('Screen/Office', [
             'screen' => ['company' => $screen->company?->name],
