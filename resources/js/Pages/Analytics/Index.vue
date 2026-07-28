@@ -175,20 +175,20 @@ const donut = computed(() => {
                  Каждая строка кликабельна — переход в раздел. -->
             <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div v-for="col in [
-                        { rows: [
+                        { grad: 'bg-gradient-to-br from-indigo-50/80 via-white to-white border-indigo-100', rows: [
                             { label: 'Общая сумма договоров', value: totals.contracts, accent: 'text-slate-900', sub: 'все сделки (кроме отменённых) · won: ' + money(totals.budget), href: route('finance.index') },
                             { label: 'Расходы', value: totals.expense, accent: 'text-rose-600', minus: true, sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
                             { label: 'Чистая прибыль', value: totals.net, accent: 'text-emerald-600', sub: 'по won-сделкам · полная — в «Деньгах компании» ниже', href: route('finance.index') },
                         ] },
-                        { rows: [
+                        { grad: 'bg-gradient-to-br from-emerald-50/80 via-white to-white border-emerald-100', rows: [
                             { label: 'Оплачено', value: totals.income, accent: 'text-emerald-600', sub: 'фактически поступило', href: route('finance.index') },
                             { label: 'Налог', value: totals.tax, accent: 'text-rose-500', minus: true, sub: 'ставка ' + totals.taxRate + '%', href: route('finance.index') },
                             { label: 'ЗП (бонусы)', value: totals.bonus, accent: 'text-slate-900', sub: 'бонусы менеджеров', href: route('payroll.index') },
                         ] },
                     ]" :key="col.rows[0].label"
-                    class="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
+                    class="divide-y divide-slate-100 rounded-xl border shadow-sm" :class="col.grad">
                     <Link v-for="r in col.rows" :key="r.label" :href="r.href"
-                        class="flex items-center justify-between gap-3 px-5 py-3.5 transition first:rounded-t-xl last:rounded-b-xl hover:bg-slate-50">
+                        class="flex items-center justify-between gap-3 px-5 py-3.5 transition first:rounded-t-xl last:rounded-b-xl hover:bg-white/60">
                         <div>
                             <div class="text-sm font-medium text-slate-700">{{ r.label }}</div>
                             <div class="mt-0.5 text-xs text-slate-400">{{ r.sub }}</div>
@@ -200,17 +200,17 @@ const donut = computed(() => {
 
             <!-- Деньги компании: касса, банк, все расходы с разбивкой (как на Финансах) -->
             <div class="grid grid-cols-2 items-start gap-4 xl:grid-cols-4">
-                <Link :href="route('finance.index')" class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
-                    <span class="text-xs font-medium text-slate-500">Остаток в кассе</span>
-                    <div class="mt-1.5 whitespace-nowrap text-2xl font-semibold tracking-tight tabular-nums" :class="companyMoney.cash >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(companyMoney.cash) }}</div>
-                    <div class="mt-1 text-xs text-slate-400">наличные: поступило − потрачено</div>
+                <Link :href="route('finance.index')" class="block rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white shadow-md transition hover:shadow-lg hover:brightness-110">
+                    <span class="text-xs font-medium text-emerald-50/90">Остаток в кассе</span>
+                    <div class="mt-1.5 whitespace-nowrap text-2xl font-semibold tracking-tight tabular-nums">{{ money(companyMoney.cash) }}</div>
+                    <div class="mt-1 text-xs text-emerald-50/70">наличные ОБЩИЕ по холдингу</div>
                 </Link>
-                <Link :href="route('finance.index')" class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
-                    <span class="text-xs font-medium text-slate-500">Остаток в банке</span>
-                    <div class="mt-1.5 whitespace-nowrap text-2xl font-semibold tracking-tight tabular-nums" :class="companyMoney.bank >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(companyMoney.bank) }}</div>
-                    <div class="mt-1 text-xs text-slate-400">безнал: поступило − потрачено</div>
+                <Link :href="route('finance.index')" class="block rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 p-4 text-white shadow-md transition hover:shadow-lg hover:brightness-110">
+                    <span class="text-xs font-medium text-sky-50/90">Остаток в банке</span>
+                    <div class="mt-1.5 whitespace-nowrap text-2xl font-semibold tracking-tight tabular-nums">{{ money(companyMoney.bank) }}</div>
+                    <div class="mt-1 text-xs text-sky-50/70">безнал: поступило − потрачено</div>
                 </Link>
-                <div class="col-span-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="col-span-2 rounded-xl border border-rose-100 bg-gradient-to-br from-rose-50/80 via-white to-orange-50/60 p-4 shadow-sm">
                     <div class="flex items-baseline justify-between">
                         <span class="text-xs font-medium text-slate-500">Все расходы компании</span>
                         <span class="text-xl font-semibold tabular-nums text-rose-600">−{{ money(companyMoney.expensesTotal) }}</span>
@@ -237,13 +237,13 @@ const donut = computed(() => {
             <!-- Долг клиентов · За период · Конверсия -->
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <Link :href="route('finance.index')" class="block rounded-xl border p-4 shadow-sm transition hover:shadow-md"
-                    :class="totals.debt > 0 ? 'border-rose-200 bg-rose-50 hover:border-rose-300' : 'border-slate-200 bg-white hover:border-slate-300'">
+                    :class="totals.debt > 0 ? 'border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 hover:border-rose-300' : 'border-slate-200 bg-gradient-to-br from-slate-50 to-white hover:border-slate-300'">
                     <span class="text-xs font-medium" :class="totals.debt > 0 ? 'text-rose-500' : 'text-slate-500'">Долг клиентов</span>
                     <div class="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums" :class="totals.debt > 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(totals.debt) }}</div>
                     <div class="mt-1 text-xs" :class="totals.debt > 0 ? 'text-rose-400' : 'text-slate-400'">по выставленным счетам</div>
                 </Link>
                 <Link :href="route('finance.index', { exp_from: filters.from, exp_to: filters.to })"
-                    class="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+                    class="block rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50/80 to-white p-4 shadow-sm transition hover:border-violet-200 hover:shadow-md">
                     <span class="text-xs font-medium text-slate-500">За период <span class="font-normal text-slate-300">{{ filters.from }} — {{ filters.to }}</span></span>
                     <div class="mt-2 space-y-1 text-sm">
                         <div class="flex justify-between"><span class="text-slate-400">Оплачено</span><b class="tabular-nums text-emerald-600">{{ money(period.paid) }}</b></div>
@@ -251,7 +251,7 @@ const donut = computed(() => {
                         <div class="flex justify-between"><span class="text-slate-400">Новых сделок</span><b class="tabular-nums text-slate-800">{{ period.newDeals }}</b></div>
                     </div>
                 </Link>
-                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50/80 to-white p-4 shadow-sm">
                     <span class="text-xs font-medium text-slate-500">Конверсия в «Оплата успешно»</span>
                     <div class="mt-1 flex items-center justify-center">
                         <svg viewBox="0 0 120 68" class="w-40">

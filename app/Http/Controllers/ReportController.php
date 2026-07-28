@@ -153,7 +153,16 @@ class ReportController extends Controller
             'totals' => $totals,
             'taxRate' => $taxRate * 100,
             'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId],
-            'managers' => \App\Models\User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // Для фильтра: менеджеры отдельно, остальные — по отделам (сворачиваются).
+            'managers' => \App\Models\User::where('is_active', true)
+                ->with(['roles:id,name', 'department:id,name'])
+                ->orderBy('name')->get(['id', 'name', 'department_id'])
+                ->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'is_manager' => $u->roles->contains('name', 'manager'),
+                    'department' => $u->department?->name,
+                ])->values(),
             'stageOptions' => $stageOptions,
         ]);
     }

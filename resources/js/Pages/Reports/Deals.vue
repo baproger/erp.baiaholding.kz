@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -22,6 +22,31 @@ let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(apply, 350); };
 const hasFilters = () => search.value || from.value || to.value || manager.value || stageF.value;
 const reset = () => { search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = ''; apply(); };
+
+// Выбор сотрудника: менеджеры отдела продаж — сверху и всегда развёрнуты,
+// остальные — по отделам, свёрнуты (раскрываются кликом).
+const pickerOpen = ref(false);
+const openDepts = ref(new Set());
+const salesManagers = computed(() => props.managers.filter((m) => m.is_manager));
+const otherGroups = computed(() => {
+    const groups = {};
+    props.managers.filter((m) => !m.is_manager).forEach((m) => {
+        const key = m.department ?? 'Без отдела';
+        (groups[key] ??= []).push(m);
+    });
+    return Object.entries(groups).map(([name, items]) => ({ name, items }))
+        .sort((a, b) => (a.name === 'Без отдела') - (b.name === 'Без отдела') || a.name.localeCompare(b.name, 'ru'));
+});
+const toggleDept = (name) => {
+    const s = new Set(openDepts.value);
+    s.has(name) ? s.delete(name) : s.add(name);
+    openDepts.value = s;
+};
+const selectedManagerName = computed(() => props.managers.find((m) => m.id === Number(manager.value))?.name ?? 'Все менеджеры');
+const pickManager = (id) => { manager.value = id; pickerOpen.value = false; apply(); };
+const closePicker = (e) => { if (!e.target.closest?.('.manager-picker')) pickerOpen.value = false; };
+onMounted(() => document.addEventListener('click', closePicker));
+onUnmounted(() => document.removeEventListener('click', closePicker));
 
 const openDeal = (id) => router.get(route('deals.show', id));
 // Цвет маржи — та же шкала, что на Аналитике: ≥40 здоровая, 20–40 тонкая, ниже — плохая.
@@ -63,10 +88,36 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             <label class="flex items-center gap-1 text-xs text-slate-400">по
                 <input v-model="to" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
             </label>
-            <select v-model="manager" @change="apply" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm sm:w-auto">
-                <option value="">Все менеджеры</option>
-                <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
-            </select>
+            <!-- Выбор сотрудника: менеджеры сверху, остальные отделы — свёрнуты -->
+            <div class="manager-picker relative w-full sm:w-auto">
+                <button type="button" @click="pickerOpen = !pickerOpen"
+                    class="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm sm:w-52">
+                    <span class="truncate">{{ selectedManagerName }}</span>
+                    <span class="text-slate-400">{{ pickerOpen ? '▲' : '▼' }}</span>
+                </button>
+                <div v-if="pickerOpen" class="absolute z-30 mt-1 max-h-80 w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                    <button type="button" @click="pickManager('')"
+                        class="block w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50" :class="!manager ? 'font-semibold text-indigo-600' : 'text-slate-700'">Все менеджеры</button>
+                    <div class="mt-1 border-t border-slate-100 px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Менеджеры (отдел продаж)</div>
+                    <button v-for="m in salesManagers" :key="m.id" type="button" @click="pickManager(m.id)"
+                        class="block w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50"
+                        :class="Number(manager) === m.id ? 'font-semibold text-indigo-600' : 'text-slate-700'">{{ m.name }}</button>
+                    <div v-if="!salesManagers.length" class="px-3 py-1.5 text-xs text-slate-400">Нет менеджеров</div>
+                    <!-- Остальные отделы: свёрнуты, раскрываются кликом -->
+                    <template v-for="g in otherGroups" :key="g.name">
+                        <button type="button" @click="toggleDept(g.name)"
+                            class="mt-1 flex w-full items-center justify-between border-t border-slate-100 px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 hover:text-slate-600">
+                            {{ g.name }} ({{ g.items.length }})
+                            <span>{{ openDepts.has(g.name) ? '▲' : '▼' }}</span>
+                        </button>
+                        <template v-if="openDepts.has(g.name)">
+                            <button v-for="m in g.items" :key="m.id" type="button" @click="pickManager(m.id)"
+                                class="block w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50"
+                                :class="Number(manager) === m.id ? 'font-semibold text-indigo-600' : 'text-slate-700'">{{ m.name }}</button>
+                        </template>
+                    </template>
+                </div>
+            </div>
             <select v-model="stageF" @change="apply" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm sm:w-auto">
                 <option value="">Все этапы</option>
                 <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
