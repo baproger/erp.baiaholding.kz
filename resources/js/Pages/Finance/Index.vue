@@ -10,7 +10,7 @@ import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 import DdsPanel from '@/Components/DdsPanel.vue';
 
-const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, totals: Object, salaries: Array, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, isAdmin: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
+const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, isAdmin: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
 // Фильтры раздела «Расходы»: вид (материалы/прочие), оплата (нал/банк),

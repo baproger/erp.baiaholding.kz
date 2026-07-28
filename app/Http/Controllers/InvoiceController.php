@@ -188,9 +188,6 @@ class InvoiceController extends Controller
         $payroll = app(PayrollService::class);
         $fin = $payroll->companyTotals();
         $payrollRows = $payroll->perUser();
-        $salaries = $payrollRows
-            ->map(fn ($r) => ['user' => $r['user'], 'avatar' => $r['avatar'], 'bonus' => $r['bonus'], 'margin' => $r['margin'], 'income' => $r['income']])
-            ->sortByDesc('bonus')->values();
 
         // ---- Сводка компании (эскиз бухгалтерии): Доход − ВСЕ расходы = Чистая прибыль ----
         // Доход = все фактические поступления по счетам компании. Сводка — за всё
@@ -272,7 +269,6 @@ class InvoiceController extends Controller
             'expensesPastStats' => $expensesPastStats,
             'expenseTotals' => $expenseTotals,
             'filters' => $request->only('search', 'status', 'exp_status', 'exp_method', 'exp_kind', 'exp_from', 'exp_to', 'xp_search', 'xp_from', 'xp_to', 'rc_search', 'rc_from', 'rc_to', 'fin_month'),
-            'salaries' => $salaries,
             'categories' => $categories,
             'canManage' => $request->user()->hasAnyRole(['admin', 'financist']),
             // Корректировка кассы (✎ на плитке) — только админ.
@@ -310,14 +306,6 @@ class InvoiceController extends Controller
                 'tax' => $taxRow,
                 'expensesTotal' => $expensesTotal,
                 'net' => round($incomeTotal - $expensesTotal, 2),
-            ],
-            'totals' => [
-                'budget' => $fin['budget'],
-                'paid' => $fin['income'],
-                'expenses' => $fin['expense'],
-                'salaries' => $fin['bonus'],
-                'tax' => $fin['tax'],
-                'net' => $fin['company'],
             ],
         ]);
     }

@@ -43,6 +43,10 @@ const filteredEmployees = computed(() => {
     return list;
 });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
+// Рейтинг сотрудников: место по списку (он отсортирован) + шкала ЗП к лидеру.
+const maxBonus = computed(() => Math.max(...(props.byEmployee ?? []).map((e) => Number(e.bonus) || 0), 1));
+const rankOf = (uid) => (props.byEmployee ?? []).findIndex((e) => e.uid === uid) + 1;
+const rankBadge = (r) => r === 1 ? '👑' : r === 2 ? '🥈' : r === 3 ? '🥉' : '#' + r;
 // Colour a per-deal margin badge: healthy ≥ 40%, thin 20–40%, poor/negative below.
 const marginClass = (m) => m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
 const maxFunnel = computed(() => Math.max(1, ...props.funnel.map((f) => f.count)));
@@ -443,19 +447,33 @@ const donut = computed(() => {
                         class="w-full rounded-xl border-slate-200 py-2 pl-9 pr-3 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                 </div>
                 <button v-for="e in filteredEmployees" :key="e.uid" @click="selected = e"
-                    :class="selected && selected.uid===e.uid ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300 hover:shadow-md'"
-                    class="group flex w-full items-center gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm transition-all">
-                    <Avatar :name="e.user" :src="e.avatar" :size="44" />
-                    <div class="min-w-0 flex-1">
-                        <div class="truncate font-semibold text-slate-900">{{ e.user }}</div>
-                        <div class="mt-0.5 flex items-center gap-1.5">
-                            <span class="rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset" :class="marginClass(e.margin)">маржа {{ e.margin }}%</span>
-                            <span class="text-[11px] text-slate-400">успешных {{ e.closed }}</span>
+                    :class="selected && selected.uid===e.uid
+                        ? 'border-indigo-400 bg-gradient-to-br from-indigo-50 to-white ring-2 ring-indigo-400/60 shadow-md'
+                        : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md'"
+                    class="group w-full rounded-2xl border p-4 text-left shadow-sm transition-all">
+                    <div class="flex items-center gap-3">
+                        <div class="relative shrink-0">
+                            <Avatar :name="e.user" :src="e.avatar" :size="44" />
+                            <!-- Место в рейтинге: 👑 лидер, 🥈🥉, дальше номер -->
+                            <span class="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold shadow ring-1 ring-slate-200"
+                                :class="rankOf(e.uid) <= 3 ? '' : 'text-slate-400'">{{ rankBadge(rankOf(e.uid)) }}</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="truncate font-semibold text-slate-900">{{ e.user }}</div>
+                            <div class="mt-0.5 flex items-center gap-1.5">
+                                <span class="rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset" :class="marginClass(e.margin)">маржа {{ e.margin }}%</span>
+                                <span class="text-[11px] text-slate-400">успешных {{ e.closed }}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-bold tabular-nums text-emerald-600">{{ money(e.bonus) }}</div>
+                            <div class="text-[10px] uppercase tracking-wide text-slate-400">ЗП</div>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <div class="text-sm font-bold tabular-nums text-emerald-600">{{ money(e.bonus) }}</div>
-                        <div class="text-[10px] uppercase tracking-wide text-slate-400">ЗП</div>
+                    <!-- Шкала ЗП относительно лидера — видно разрыв с первым местом -->
+                    <div class="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-700"
+                            :style="{ width: Math.max(3, Math.round((Number(e.bonus) || 0) / maxBonus * 100)) + '%' }"></div>
                     </div>
                 </button>
                 <div v-if="!filteredEmployees.length" class="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400 shadow-sm">{{ byEmployee.length ? 'Никто не найден' : 'Нет данных' }}</div>
@@ -463,24 +481,36 @@ const donut = computed(() => {
 
             <!-- Detail -->
             <div v-if="selected" class="space-y-4 lg:col-span-2">
-                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div class="mb-4 flex items-center gap-3">
-                        <Avatar :name="selected.user" :src="selected.avatar" :size="48" />
-                        <div>
-                            <div class="text-base font-semibold text-slate-900">{{ selected.user }}</div>
-                            <div class="text-xs text-slate-400">Маржа {{ selected.margin }}% · успешных сделок {{ selected.closed }}</div>
+                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <!-- Герой-шапка: тёмный градиент, аватар с кольцом, место в рейтинге -->
+                    <div class="flex items-center gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-5 py-4">
+                        <div class="rounded-full p-0.5 ring-2 ring-indigo-400/70">
+                            <Avatar :name="selected.user" :src="selected.avatar" :size="52" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="truncate text-lg font-bold text-white">{{ selected.user }}</div>
+                            <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span class="rounded-full bg-white/10 px-2 py-0.5 font-semibold text-indigo-200 ring-1 ring-white/20">{{ rankBadge(rankOf(selected.uid)) }} место в рейтинге</span>
+                                <span class="rounded-full bg-white/10 px-2 py-0.5 font-semibold text-emerald-300 ring-1 ring-white/20">маржа {{ selected.margin }}%</span>
+                                <span class="rounded-full bg-white/10 px-2 py-0.5 font-semibold text-white/80 ring-1 ring-white/20">успешных: {{ selected.closed }}</span>
+                            </div>
+                        </div>
+                        <div class="hidden text-right sm:block">
+                            <div class="text-[10px] font-semibold uppercase tracking-wide text-white/50">ЗП (бонус)</div>
+                            <div class="text-xl font-bold tabular-nums text-emerald-300">{{ money(selected.bonus) }}</div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <!-- Плитки-показатели: каждая в своей мягкой гамме -->
+                    <div class="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3">
                         <div v-for="k in [
-                                { l: 'Доход', v: money(selected.income), c: 'text-emerald-600' },
-                                { l: 'Расход', v: money(selected.expense), c: 'text-rose-600' },
-                                { l: 'Чистая прибыль', v: money(selected.net), c: 'text-slate-900' },
-                                { l: 'Налог', v: money(selected.tax), c: 'text-rose-500' },
-                                { l: 'Маржа', v: selected.margin + '%', c: 'text-slate-900' },
-                                { l: 'ЗП', v: money(selected.bonus), c: 'text-emerald-600' },
-                            ]" :key="k.l" class="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                            <div class="text-[11px] uppercase tracking-wide text-slate-400">{{ k.l }}</div>
+                                { l: 'Доход', v: money(selected.income), c: 'text-emerald-700', g: 'from-emerald-50 to-teal-50/60 border-emerald-100', i: '💰' },
+                                { l: 'Расход', v: money(selected.expense), c: 'text-rose-600', g: 'from-rose-50 to-orange-50/60 border-rose-100', i: '📉' },
+                                { l: 'Чистая прибыль', v: money(selected.net), c: 'text-indigo-700', g: 'from-indigo-50 to-violet-50/60 border-indigo-100', i: '💎' },
+                                { l: 'Налог', v: money(selected.tax), c: 'text-amber-700', g: 'from-amber-50 to-yellow-50/60 border-amber-100', i: '🧾' },
+                                { l: 'Маржа', v: selected.margin + '%', c: 'text-sky-700', g: 'from-sky-50 to-cyan-50/60 border-sky-100', i: '📊' },
+                                { l: 'ЗП', v: money(selected.bonus), c: 'text-emerald-700', g: 'from-emerald-50 to-lime-50/60 border-emerald-100', i: '💵' },
+                            ]" :key="k.l" class="rounded-xl border bg-gradient-to-br p-3 transition hover:shadow-sm" :class="k.g">
+                            <div class="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-500">{{ k.l }} <span>{{ k.i }}</span></div>
                             <div class="mt-1 font-semibold tabular-nums" :class="k.c">{{ k.v }}</div>
                         </div>
                     </div>
@@ -488,11 +518,12 @@ const donut = computed(() => {
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div v-for="col in [
-                            { t: 'Оплата успешно', items: selected.won_deals, dot: 'bg-emerald-500' },
-                            { t: 'Акт утверждение', items: selected.act_deals, dot: 'bg-amber-500' },
-                            { t: 'Просроченные', items: selected.overdue_deals, dot: 'bg-rose-500' },
-                        ]" :key="col.t" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <h4 class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><span class="h-2 w-2 rounded-full" :class="col.dot"></span>{{ col.t }} <span class="text-slate-400">({{ col.items.length }})</span></h4>
+                            { t: 'Оплата успешно', items: selected.won_deals, dot: 'bg-emerald-500', top: 'border-t-emerald-400', head: 'bg-emerald-50 text-emerald-700' },
+                            { t: 'Акт утверждение', items: selected.act_deals, dot: 'bg-amber-500', top: 'border-t-amber-400', head: 'bg-amber-50 text-amber-700' },
+                            { t: 'Просроченные', items: selected.overdue_deals, dot: 'bg-rose-500', top: 'border-t-rose-400', head: 'bg-rose-50 text-rose-600' },
+                        ]" :key="col.t" class="rounded-2xl border border-slate-200 border-t-4 bg-white p-4 shadow-sm" :class="col.top">
+                        <h4 class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><span class="h-2 w-2 rounded-full" :class="col.dot"></span>{{ col.t }}
+                            <span class="ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums" :class="col.head">{{ col.items.length }}</span></h4>
                         <div class="space-y-1.5">
                             <Link v-for="d in col.items" :key="d.id" :href="route('deals.show', d.id)"
                                 class="block rounded-xl border border-slate-100 px-3 py-2 text-xs transition-all hover:border-indigo-300 hover:bg-indigo-50/40 hover:shadow-sm">
@@ -510,7 +541,10 @@ const donut = computed(() => {
                     </div>
                 </div>
             </div>
-            <div v-else class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm lg:col-span-2">Выберите сотрудника</div>
+            <div v-else class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-white p-10 text-center shadow-sm lg:col-span-2">
+                <div class="mb-2 text-3xl">👥</div>
+                <div class="text-sm text-slate-400">Выберите сотрудника слева — покажем его показатели и сделки</div>
+            </div>
         </div>
     </AppLayout>
 </template>
