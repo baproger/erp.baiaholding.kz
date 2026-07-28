@@ -206,8 +206,11 @@ const applyBinMatch = () => {
                             <!-- Кто и сколько -->
                             <div class="flex items-start justify-between gap-2">
                                 <div class="truncate text-sm font-bold text-slate-900">{{ deal.company_name || deal.name }}</div>
-                                <span v-if="deal.overdue_count" class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
-                                <span v-else class="shrink-0 text-[10px] text-slate-300">{{ deal.number }}</span>
+                                <!-- Номер сделки виден ВСЕГДА, «Просрочена» — дополнительным бейджем -->
+                                <span class="flex shrink-0 flex-col items-end gap-0.5">
+                                    <span class="text-[10px] text-slate-300">{{ deal.number }}</span>
+                                    <span v-if="deal.overdue_count" class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
+                                </span>
                             </div>
                             <div class="text-base font-bold leading-tight text-indigo-600">{{ money(deal.budget) }}</div>
                             <!-- Куда и что -->
