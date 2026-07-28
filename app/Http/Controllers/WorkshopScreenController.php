@@ -107,6 +107,19 @@ class WorkshopScreenController extends Controller
             ->get(['id', 'user_id', 'product', 'customer', 'margin', 'status', 'checks', 'created_at']);
         $checksDone = fn ($p) => count(array_filter($p->checks ?? []));
         $checksByUser = $monthLots->groupBy('user_id')->map(fn ($rows) => $rows->sum($checksDone));
+        // Персональная воронка менеджера: лоты → каждый пункт чек-листа → выиграл.
+        $funnelFor = function ($rows) use ($checkItemsList) {
+            return collect([['label' => 'Лоты', 'count' => $rows->count(), 'kind' => 'start']])
+                ->concat($checkItemsList->map(fn ($it) => [
+                    'label' => $it->label,
+                    'count' => $rows->filter(fn ($p) => ! empty(($p->checks ?? [])[(string) $it->id]))->count(),
+                    'kind' => 'step',
+                ]))
+                ->push(['label' => 'Выиграл', 'count' => $rows->where('status', 'confirmed')->count(), 'kind' => 'won'])
+                ->values();
+        };
+        $funnelByUser = $monthLots->groupBy('user_id')->map($funnelFor);
+        $emptyFunnel = $funnelFor(collect());
         // Список лотов на экран (последние 40): лот · менеджер · чек-лист · статус.
         $lotRows = $monthLots->take(40)->map(fn ($p) => [
             'manager' => $p->user?->name ?? '—',
@@ -118,7 +131,7 @@ class WorkshopScreenController extends Controller
         ])->values();
 
         $managers = \App\Models\User::role('manager')->where('is_active', true)->get(['id', 'name', 'avatar'])
-            ->map(function (\App\Models\User $u) use ($lots, $plan, $checksByUser, $checkItems) {
+            ->map(function (\App\Models\User $u) use ($lots, $plan, $checksByUser, $checkItems, $funnelByUser, $emptyFunnel) {
                 $m = $lots[$u->id] ?? null;
                 $total = (int) ($m->total ?? 0);
                 $won = (int) ($m->won ?? 0);
@@ -133,6 +146,8 @@ class WorkshopScreenController extends Controller
                     // Чек-лист: сделано галочек / всего возможных (лоты × пункты).
                     'checks_done' => (int) ($checksByUser[$u->id] ?? 0),
                     'checks_total' => $total * $checkItems,
+                    // Персональная воронка: лоты → КП/Звонок… → выиграл.
+                    'funnel' => $funnelByUser[$u->id] ?? $emptyFunnel,
                 ];
             })
             ->sortBy([['won', 'desc'], ['conversion', 'desc'], ['total', 'desc']])->values();

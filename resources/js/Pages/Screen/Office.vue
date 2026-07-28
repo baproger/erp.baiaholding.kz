@@ -94,6 +94,18 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                                 </div>
                                 <span class="flex-shrink-0 text-xs text-slate-400">план лотов: {{ m.total }}/{{ plan }}</span>
                             </div>
+                            <!-- Персональная воронка: Лоты → КП/Звонок… → Выиграл — эффективность менеджера -->
+                            <div class="mt-1.5 flex flex-wrap gap-1.5">
+                                <span v-for="f in m.funnel" :key="f.label"
+                                    class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset"
+                                    :class="f.kind === 'won'
+                                        ? (f.count > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-slate-50 text-slate-400 ring-slate-200')
+                                        : 'bg-slate-50 text-slate-500 ring-slate-200'"
+                                    :title="f.label">
+                                    <span class="max-w-36 truncate">{{ f.label }}</span>
+                                    <b class="text-base leading-none tabular-nums" :class="f.count > 0 ? (f.kind === 'won' ? 'text-emerald-600' : 'text-slate-900') : 'text-slate-300'">{{ f.count }}</b>
+                                </span>
+                            </div>
                         </div>
                         <div class="text-right">
                             <div class="text-4xl font-black leading-none tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</div>
