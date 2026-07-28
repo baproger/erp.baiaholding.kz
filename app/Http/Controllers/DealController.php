@@ -18,6 +18,32 @@ use Inertia\Response;
 
 class DealController extends Controller
 {
+    /**
+     * Видимость сделок в списках по роли: руководство — все; дизайнер —
+     * только сделки на этапе «Дизайн и расчет», снабженец — на «Закупе»
+     * (их гейт-этапы, чтобы не путались в чужих сделках); менеджер — свои.
+     * Прямые ссылки (из уведомлений/задач) шире — их решает DealPolicy.
+     */
+    private function scopeForViewer($query, User $user): void
+    {
+        if ($user->hasAnyRole(['admin', 'director', 'financist'])) {
+            return;
+        }
+        $gateTypes = [];
+        if ($user->hasRole('designer')) {
+            $gateTypes[] = 'design';
+        }
+        if ($user->hasRole('supplier')) {
+            $gateTypes[] = 'shop_gate';
+        }
+        if ($gateTypes) {
+            $query->whereHas('stage', fn ($s) => $s->whereIn('stage_type', $gateTypes));
+
+            return;
+        }
+        $query->where('responsible_user_id', $user->id);
+    }
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Deal::class);
@@ -35,7 +61,7 @@ class DealController extends Controller
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             ->where('status', '!=', 'closed')
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where('company_id', $c))
-            ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
+            ->tap(fn ($q) => $this->scopeForViewer($q, $request->user()))
             ->when($request->string('search')->toString(), fn ($q, $s) => $q->where(fn ($w) => $w
                 ->where('name', 'like', "%{$s}%")
                 ->orWhere('number', 'like', "%{$s}%")
@@ -425,7 +451,7 @@ class DealController extends Controller
             // ЭСФ и «Оплата успешно» — не просрочка; на «Акт утверждение»
             // просроченная сделка ПОКАЗЫВАЕТСЯ (по stage_type, имя ненадёжно).
             ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf'))
-            ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
+            ->tap(fn ($q) => $this->scopeForViewer($q, $request->user()))
             ->orderBy('deadline')
             ->get()
             ->map(function ($d) use ($today) {
@@ -442,7 +468,7 @@ class DealController extends Controller
             ->whereNotNull('deadline')
             ->whereDate('deadline', '<', $today)
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
-            ->when(! $request->user()->hasAnyRole(['admin', 'director', 'financist']), fn ($q) => $q->where('responsible_user_id', $request->user()->id))
+            ->tap(fn ($q) => $this->scopeForViewer($q, $request->user()))
             ->orderBy('deadline')
             ->get()
             ->map(function ($p) use ($today) {
