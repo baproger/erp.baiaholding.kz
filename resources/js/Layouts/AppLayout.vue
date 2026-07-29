@@ -6,8 +6,13 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import ConfirmModal from '@/Components/ConfirmModal.vue';
 import SkeletonScreen from '@/Components/SkeletonScreen.vue';
 import { useT } from '@/composables/useTranslations';
+import { useChatAlerts } from '@/composables/useChatAlerts';
 
 const t = useT();
+
+// Глобальные оповещения чата: звук + браузерное уведомление на любой странице ERP,
+// счётчик непрочитанных — бейдж на пункте «Чат» в меню.
+const { chatUnread } = useChatAlerts();
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -165,6 +170,10 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                         v-html="navIcons[item.route]"></svg>
                     <span v-else class="text-lg leading-none transition-colors duration-200" :class="isActive(item.route) ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'">{{ item.icon }}</span>
                     <span v-if="!collapsed || mobileOpen" class="truncate">{{ t(item.key, item.name) }}</span>
+                    <span v-if="item.route === 'chat.index' && chatUnread > 0 && (!collapsed || mobileOpen)"
+                        class="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{{ chatUnread > 99 ? '99+' : chatUnread }}</span>
+                    <span v-else-if="item.route === 'chat.index' && chatUnread > 0"
+                        class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-slate-900"></span>
                 </Link>
             </nav>
             <!-- User block -->

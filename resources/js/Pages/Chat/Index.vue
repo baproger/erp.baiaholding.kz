@@ -7,6 +7,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { confirmDialog } from '@/composables/useConfirm';
+import { syncChatState } from '@/composables/useChatAlerts';
 
 const props = defineProps({
     chats: Array, users: Array, canCreateGroup: Boolean,
@@ -110,6 +111,7 @@ const pollState = async () => {
             live[id] = s;
         }
         statePrev = st;
+        syncChatState(st); // бейдж «Чат» в меню + защита от повторного «дзыня» после ухода со страницы
         if (alerts.length) {
             ding();
             if (document.hidden) {
