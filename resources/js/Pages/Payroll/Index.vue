@@ -224,16 +224,17 @@ const delAdj = async (a) => {
                 </div>
             </div>
 
-            <!-- 2 ряда по 4 плитки: суммам хватает места, без переносов -->
+            <!-- Ведомость — только про ЗП: 4 плитки. Деньги сделок — на Финансах и в Сводном
+                 отчёте; здесь по сотруднику они видны при раскрытии строки. -->
             <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Сумма договоров</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-900 xl:text-xl">{{ money(totals.budget) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-rose-600 xl:text-xl">−{{ money(totals.tax) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Расходы</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-rose-600 xl:text-xl">−{{ money(totals.expense) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонусы (по марже)</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 xl:text-xl">{{ money(totals.bonus) }}</div></div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Оклады (начислено)</div>
-                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-700 xl:text-xl">{{ money(totals.base) }}</div>
-                    <div v-if="totals.base !== totals.salary" class="truncate text-[10px] text-slate-400">по карточкам {{ money(totals.salary) }} · норма {{ normHours }} ч</div>
+                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-800 xl:text-xl">{{ money(totals.base) }}</div>
+                    <div v-if="totals.base !== totals.salary" class="truncate text-[10px] text-slate-400">по карточкам {{ money(totals.salary) }}</div>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонусы (по марже)</div>
+                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 xl:text-xl">{{ money(totals.bonus) }}</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Удержания / премии</div>
@@ -243,8 +244,10 @@ const delAdj = async (a) => {
                         <span v-if="totals.additions > 0" class="text-sm text-emerald-600"> +{{ money(totals.additions) }}</span>
                     </div>
                 </div>
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-emerald-600/70">К выплате · {{ monthLabel }}</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-700 xl:text-xl">{{ money(totals.final) }}</div></div>
-                <div class="rounded-xl p-4 text-white shadow-md" style="background-color: #1A3B5C"><div class="truncate text-[11px] uppercase tracking-wide text-white/60">Чистая прибыль компании</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums xl:text-xl">{{ money(totals.company) }}</div></div>
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-emerald-600/70">К выплате · {{ monthLabel }}</div>
+                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-700 xl:text-xl">{{ money(totals.final) }}</div>
+                </div>
             </div>
 
             <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -252,24 +255,18 @@ const delAdj = async (a) => {
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                         <tr>
                             <th class="px-4 py-3">Сотрудник</th>
-                            <th class="px-4 py-3">Сделок</th>
-                            <th class="px-4 py-3">Успешных</th>
-                            <th class="px-4 py-3 text-right">Сумма договоров</th>
-                            <th class="px-4 py-3 text-right text-rose-600">Налог {{ taxRate }}%</th>
-                            <th class="px-4 py-3 text-right text-rose-600">Расходы</th>
-                            <th class="px-4 py-3 text-right text-emerald-600">Бонус</th>
                             <th class="px-4 py-3 text-right" title="Отработанные часы за месяц. Пусто — полный оклад.">Часы</th>
-                            <th class="px-4 py-3 text-right">Оклад</th>
-                            <th class="px-4 py-3 text-right text-rose-600">Удержания</th>
-                            <th class="px-4 py-3 text-right text-emerald-600">К выплате</th>
-                            <th class="px-4 py-3 text-right">Чистая прибыль</th>
+                            <th class="px-4 py-3 text-right">Оклад (начислено)</th>
+                            <th class="px-4 py-3 text-right">Бонус</th>
+                            <th class="px-4 py-3 text-right">Удержания / премии</th>
+                            <th class="px-4 py-3 text-right">К выплате</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <template v-for="g in groups" :key="g.name">
                         <!-- Секция отдела: название, число сотрудников, Σ к выплате; клик — свернуть/развернуть -->
                         <tr class="cursor-pointer select-none bg-slate-100/80 hover:bg-slate-200/70" @click="toggleDept(g.name)">
-                            <td colspan="12" class="px-4 py-2">
+                            <td colspan="6" class="px-4 py-2">
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
                                         <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="collapsed.has(g.name) ? '' : 'rotate-90'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
@@ -304,15 +301,12 @@ const delAdj = async (a) => {
                                     <div class="flex items-center gap-2.5">
                                         <svg class="h-4 w-4 shrink-0 text-slate-400 transition-transform" :class="open.has(r.uid) ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                         <Avatar :name="r.user" :src="r.avatar" :size="32" />
-                                        <span class="font-medium text-slate-900">{{ r.user }}</span>
+                                        <div class="min-w-0 leading-tight">
+                                            <div class="truncate font-medium text-slate-900">{{ r.user }}</div>
+                                            <div v-if="r.deals > 0" class="text-[11px] text-slate-400">{{ r.deals }} сделок · {{ r.closed }} успешных</div>
+                                        </div>
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 text-slate-500">{{ r.deals }}</td>
-                                <td class="px-4 py-3 text-slate-500">{{ r.closed }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-700">{{ money(r.budget) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-rose-600">{{ money(r.tax) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-rose-600">{{ money(r.expense) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}</td>
                                 <!-- Часы за месяц: инлайн-правка бухгалтером/админом; пусто — полный оклад -->
                                 <td class="px-4 py-3 text-right tabular-nums" @click.stop>
                                     <div v-if="editingHours === r.uid" class="flex items-center justify-end gap-1">
@@ -327,8 +321,8 @@ const delAdj = async (a) => {
                                     </button>
                                     <span v-else :class="r.hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">{{ r.hours != null ? r.hours + ' ч' : '—' }}</span>
                                 </td>
-                                <!-- Оклад: инлайн-правка бухгалтером/админом; при часах — начислено = часы × ставка -->
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-700" @click.stop>
+                                <!-- Оклад: крупно — начислено; подписью — оклад по карточке и формула часов -->
+                                <td class="px-4 py-3 text-right tabular-nums" @click.stop>
                                     <div v-if="editingSalary === r.uid" class="flex items-center justify-end gap-1">
                                         <input v-model="salaryVal" type="number" min="0" class="w-28 rounded-md border-slate-300 py-1 text-right text-xs"
                                             @keydown.enter="saveSalary(r)" @keydown.escape="editingSalary = null" />
@@ -336,23 +330,31 @@ const delAdj = async (a) => {
                                     </div>
                                     <template v-else>
                                         <button v-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600" title="Изменить оклад" @click="editSalary(r)">
-                                            {{ money(r.salary) }}
+                                            <span :class="r.base > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base > 0 ? money(r.base) : '—' }}</span>
                                             <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                         </button>
-                                        <span v-else>{{ money(r.salary) }}</span>
-                                        <div v-if="r.hours != null" class="text-[10px] text-slate-400" :title="r.hours + ' ч × ' + money(r.hourly_rate ?? 0) + '/ч'">начислено {{ money(r.base) }}</div>
+                                        <span v-else :class="r.base > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base > 0 ? money(r.base) : '—' }}</span>
+                                        <div v-if="r.hours != null" class="text-[10px] text-slate-400">оклад {{ money(r.salary) }} · {{ r.hours }} ч × {{ money(r.hourly_rate ?? 0) }}</div>
                                     </template>
                                 </td>
+                                <td class="px-4 py-3 text-right tabular-nums" :class="r.bonus > 0 ? 'font-medium text-emerald-600' : 'text-slate-300'">{{ r.bonus > 0 ? money(r.bonus) : '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums" :class="r.deductions > 0 ? 'text-rose-600 font-medium' : 'text-slate-300'">
                                     <template v-if="r.deductions > 0">− {{ money(r.deductions) }}</template>
                                     <template v-else>—</template>
                                     <span v-if="r.additions > 0" class="text-emerald-600"> +{{ money(r.additions) }}</span>
                                 </td>
-                                <td class="px-4 py-3 text-right font-bold tabular-nums text-emerald-600">{{ money(r.final) }}</td>
-                                <td class="px-4 py-3 text-right font-medium tabular-nums" :class="r.company >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(r.company) }}</td>
+                                <td class="px-4 py-3 text-right font-bold tabular-nums" :class="r.final > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ r.final > 0 ? money(r.final) : '—' }}</td>
                             </tr>
                             <tr v-if="open.has(r.uid)" class="bg-slate-50/60">
-                                <td colspan="12" class="px-4 py-3">
+                                <td colspan="6" class="px-4 py-3">
+                                    <!-- Финансы сделок сотрудника (из колонок убраны — здесь по требованию) -->
+                                    <div v-if="r.budget > 0" class="mb-3 flex flex-wrap gap-2 text-[11px]">
+                                        <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Сумма договоров <span class="font-semibold tabular-nums text-slate-700">{{ money(r.budget) }}</span></span>
+                                        <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Налог {{ taxRate }}% <span class="font-semibold tabular-nums text-rose-600">− {{ money(r.tax) }}</span></span>
+                                        <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Расходы <span class="font-semibold tabular-nums text-rose-600">− {{ money(r.expense) }}</span></span>
+                                        <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Остаток <span class="font-semibold tabular-nums text-slate-700">{{ money(r.remainder) }}</span></span>
+                                        <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Чистая прибыль <span class="font-semibold tabular-nums" :class="r.company >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(r.company) }}</span></span>
+                                    </div>
                                     <!-- Корректировки сотрудника за месяц -->
                                     <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
                                         <div class="mb-1 flex items-center justify-between">
@@ -414,7 +416,7 @@ const delAdj = async (a) => {
                         </template>
                         </template>
                         </template>
-                        <tr v-if="!rows.length"><td colspan="12" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
+                        <tr v-if="!rows.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
                     </tbody>
                 </table>
             </div>
