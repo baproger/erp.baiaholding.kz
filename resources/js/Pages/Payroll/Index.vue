@@ -9,7 +9,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { money, formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, taxRate: Number, totals: Object });
+const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, taxRate: Number, totals: Object });
 const me = props.rows[0] ?? null;
 
 // Шкала бонусов — коммерческая информация: видят только отдел продаж
@@ -45,6 +45,20 @@ const saveSalary = (r) => router.patch(route('payroll.salary', r.uid), { salary:
     preserveScroll: true, onSuccess: () => (editingSalary.value = null),
 });
 
+// Почасовой оклад: норма часов месяца (одна на всех) + отработанные часы сотрудника.
+// Ставка/час = оклад ÷ норма; начислено = часы × ставка; без часов — полный оклад.
+const normVal = ref(props.normHours || '');
+const saveNorm = () => {
+    const n = Number(normVal.value);
+    if (n > 0 && n !== props.normHours) router.patch(route('payroll.norm'), { month: props.month, norm: n }, { preserveScroll: true });
+};
+const editingHours = ref(null);
+const hoursVal = ref('');
+const editHours = (r) => { editingHours.value = r.uid; hoursVal.value = r.hours ?? ''; };
+const saveHours = (r) => router.patch(route('payroll.hours', r.uid), {
+    month: props.month, hours: hoursVal.value === '' ? null : Number(hoursVal.value),
+}, { preserveScroll: true, onSuccess: () => (editingHours.value = null) });
+
 // Корректировка: отгул/больничный — днями (сумма авто = оклад/22 × дни) или суммой.
 const showAdj = ref(false);
 const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '', payment_method: 'cash' });
@@ -67,6 +81,9 @@ const delAdj = async (a) => {
                     <label class="flex items-center gap-1 text-xs font-normal text-slate-400">месяц
                         <input v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
                     </label>
+                    <label v-if="canManage" class="flex items-center gap-1 text-xs font-normal text-slate-400" title="Норма часов за месяц: ставка за час = оклад ÷ норма. Начислено = отработанные часы × ставка.">норма, ч
+                        <input v-model="normVal" @change="saveNorm" type="number" min="1" max="744" class="w-16 rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
+                    </label>
                     <button v-if="canManage" @click="openAdj()"
                         class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700">+ Корректировка</button>
                 </div>
@@ -80,7 +97,10 @@ const delAdj = async (a) => {
                 <div class="text-xs uppercase text-slate-400">К выплате · {{ monthLabel }}</div>
                 <div class="mt-1 text-3xl font-bold text-green-600">{{ money(me?.final ?? me?.payout ?? 0) }}</div>
                 <div class="mt-4 space-y-2 text-sm">
-                    <div class="flex justify-between"><span class="text-slate-500">Оклад</span><span class="font-medium tabular-nums">{{ money(me?.salary ?? 0) }}</span></div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Оклад<template v-if="me?.hours != null"> · {{ me.hours }} ч × {{ money(me.hourly_rate) }}/ч</template></span>
+                        <span class="font-medium tabular-nums">{{ money(me?.base ?? me?.salary ?? 0) }}</span>
+                    </div>
                     <div class="flex justify-between"><span class="text-slate-500">Бонус по марже сделок</span><span class="font-medium tabular-nums text-emerald-600">{{ money(me?.bonus ?? 0) }}</span></div>
                     <div v-if="me?.deductions" class="flex justify-between"><span class="text-slate-500">Удержания (отгул/больничный/штраф/аванс)</span><span class="font-medium tabular-nums text-rose-600">− {{ money(me.deductions) }}</span></div>
                     <div v-if="me?.additions" class="flex justify-between"><span class="text-slate-500">Премии</span><span class="font-medium tabular-nums text-emerald-600">+ {{ money(me.additions) }}</span></div>
@@ -145,7 +165,11 @@ const delAdj = async (a) => {
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-rose-600 xl:text-xl">−{{ money(totals.tax) }}</div></div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Расходы</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-rose-600 xl:text-xl">−{{ money(totals.expense) }}</div></div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонусы (по марже)</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 xl:text-xl">{{ money(totals.bonus) }}</div></div>
-                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Оклады</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-700 xl:text-xl">{{ money(totals.salary) }}</div></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Оклады (начислено)</div>
+                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-700 xl:text-xl">{{ money(totals.base) }}</div>
+                    <div v-if="totals.base !== totals.salary" class="truncate text-[10px] text-slate-400">по карточкам {{ money(totals.salary) }} · норма {{ normHours }} ч</div>
+                </div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Удержания / премии</div>
                     <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums xl:text-xl" :class="totals.deductions > 0 ? 'text-rose-600' : 'text-slate-300'">
@@ -169,6 +193,7 @@ const delAdj = async (a) => {
                             <th class="px-4 py-3 text-right text-rose-600">Налог {{ taxRate }}%</th>
                             <th class="px-4 py-3 text-right text-rose-600">Расходы</th>
                             <th class="px-4 py-3 text-right text-emerald-600">Бонус</th>
+                            <th class="px-4 py-3 text-right" title="Отработанные часы за месяц. Пусто — полный оклад.">Часы</th>
                             <th class="px-4 py-3 text-right">Оклад</th>
                             <th class="px-4 py-3 text-right text-rose-600">Удержания</th>
                             <th class="px-4 py-3 text-right text-emerald-600">К выплате</th>
@@ -191,18 +216,35 @@ const delAdj = async (a) => {
                                 <td class="px-4 py-3 text-right tabular-nums text-rose-600">{{ money(r.tax) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-rose-600">{{ money(r.expense) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}</td>
-                                <!-- Оклад: инлайн-правка бухгалтером/админом -->
+                                <!-- Часы за месяц: инлайн-правка бухгалтером/админом; пусто — полный оклад -->
+                                <td class="px-4 py-3 text-right tabular-nums" @click.stop>
+                                    <div v-if="editingHours === r.uid" class="flex items-center justify-end gap-1">
+                                        <input v-model="hoursVal" type="number" min="0" step="0.5" class="w-20 rounded-md border-slate-300 py-1 text-right text-xs"
+                                            @keydown.enter="saveHours(r)" @keydown.escape="editingHours = null" />
+                                        <button class="rounded bg-emerald-600 px-1.5 py-1 text-[10px] font-bold text-white" @click="saveHours(r)">✓</button>
+                                    </div>
+                                    <button v-else-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600"
+                                        :title="'Отработанные часы за ' + monthLabel + ' (пусто — полный оклад). Ставка: ' + money(r.hourly_rate ?? 0) + '/ч'" @click="editHours(r)">
+                                        <span :class="r.hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">{{ r.hours != null ? r.hours + ' ч' : '—' }}</span>
+                                        <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                    </button>
+                                    <span v-else :class="r.hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">{{ r.hours != null ? r.hours + ' ч' : '—' }}</span>
+                                </td>
+                                <!-- Оклад: инлайн-правка бухгалтером/админом; при часах — начислено = часы × ставка -->
                                 <td class="px-4 py-3 text-right tabular-nums text-slate-700" @click.stop>
                                     <div v-if="editingSalary === r.uid" class="flex items-center justify-end gap-1">
                                         <input v-model="salaryVal" type="number" min="0" class="w-28 rounded-md border-slate-300 py-1 text-right text-xs"
                                             @keydown.enter="saveSalary(r)" @keydown.escape="editingSalary = null" />
                                         <button class="rounded bg-emerald-600 px-1.5 py-1 text-[10px] font-bold text-white" @click="saveSalary(r)">✓</button>
                                     </div>
-                                    <button v-else-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600" title="Изменить оклад" @click="editSalary(r)">
-                                        {{ money(r.salary) }}
-                                        <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                                    </button>
-                                    <span v-else>{{ money(r.salary) }}</span>
+                                    <template v-else>
+                                        <button v-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600" title="Изменить оклад" @click="editSalary(r)">
+                                            {{ money(r.salary) }}
+                                            <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                        </button>
+                                        <span v-else>{{ money(r.salary) }}</span>
+                                        <div v-if="r.hours != null" class="text-[10px] text-slate-400" :title="r.hours + ' ч × ' + money(r.hourly_rate ?? 0) + '/ч'">начислено {{ money(r.base) }}</div>
+                                    </template>
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums" :class="r.deductions > 0 ? 'text-rose-600 font-medium' : 'text-slate-300'">
                                     <template v-if="r.deductions > 0">− {{ money(r.deductions) }}</template>
@@ -213,7 +255,7 @@ const delAdj = async (a) => {
                                 <td class="px-4 py-3 text-right font-medium tabular-nums" :class="r.company >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(r.company) }}</td>
                             </tr>
                             <tr v-if="open.has(r.uid)" class="bg-slate-50/60">
-                                <td colspan="11" class="px-4 py-3">
+                                <td colspan="12" class="px-4 py-3">
                                     <!-- Корректировки сотрудника за месяц -->
                                     <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
                                         <div class="mb-1 flex items-center justify-between">
@@ -273,12 +315,12 @@ const delAdj = async (a) => {
                                 </td>
                             </tr>
                         </template>
-                        <tr v-if="!rows.length"><td colspan="11" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
+                        <tr v-if="!rows.length"><td colspan="12" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
                     </tbody>
                 </table>
             </div>
             <!-- Шкала бонусов — только отдел продаж/финансист/админ -->
-            <p v-if="seesBonusScale" class="mt-3 text-xs text-slate-400">К выплате = оклад + бонус − удержания (отгул/больничный/штраф/аванс) + премии за выбранный месяц. Отгул/больничный днями: удержание = оклад / 22 × дни. Остаток = сумма договора − налог {{ taxRate }}% − расходы. Бонус по марже сделки (остаток/сумма), выплачивается пропорционально оплаченной доле (оплачено/сумма): до 10% — нет; 11–15% — 5%; 16–20% — 7%; 21–30% — 10%; 31–40% — 13%; от 41% — 15% от остатка. Чистая прибыль компании = остаток − бонус.</p>
+            <p v-if="seesBonusScale" class="mt-3 text-xs text-slate-400">К выплате = оклад + бонус − удержания (отгул/больничный/штраф/аванс) + премии за выбранный месяц. Почасовой оклад: если сотруднику введены отработанные часы за месяц, оклад начисляется как часы × ставка за час (ставка = оклад ÷ норма часов месяца, норма — в шапке страницы); часы не введены — полный оклад. Отгул/больничный днями: удержание = оклад / 22 × дни. Остаток = сумма договора − налог {{ taxRate }}% − расходы. Бонус по марже сделки (остаток/сумма), выплачивается пропорционально оплаченной доле (оплачено/сумма): до 10% — нет; 11–15% — 5%; 16–20% — 7%; 21–30% — 10%; 31–40% — 13%; от 41% — 15% от остатка. Чистая прибыль компании = остаток − бонус.</p>
         </template>
 
         <!-- Модалка корректировки -->

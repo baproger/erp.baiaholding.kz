@@ -138,6 +138,8 @@ Route::middleware('auth')->group(function () {
     Route::post('payroll/adjustments', [PayrollController::class, 'storeAdjustment'])->name('payroll.adjustments.store');
     Route::delete('payroll/adjustments/{adjustment}', [PayrollController::class, 'destroyAdjustment'])->name('payroll.adjustments.destroy');
     Route::patch('payroll/salary/{user}', [PayrollController::class, 'updateSalary'])->name('payroll.salary');
+    Route::patch('payroll/hours/{user}', [PayrollController::class, 'updateHours'])->name('payroll.hours');
+    Route::patch('payroll/norm', [PayrollController::class, 'updateNorm'])->name('payroll.norm');
     Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
     Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');

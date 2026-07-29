@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PayrollAdjustment;
 use App\Models\Setting;
 use App\Models\User;
+use App\Models\WorkHour;
 use App\Services\PayrollService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,12 @@ class PayrollController extends Controller
             ->whereDate('date', '>=', $monthStart)->whereDate('date', '<=', $monthEnd)
             ->orderBy('date')->get()->groupBy('user_id');
 
+        // Почасовой расчёт (Excel владельца): ставка/час = оклад ÷ норма часов месяца,
+        // начислено = часы × ставка. Норма — одна на месяц для всех (Setting),
+        // fallback — последняя использованная норма (work_norm_default).
+        $normHours = (float) Setting::get('work_norm_'.$month, Setting::get('work_norm_default', 176));
+        $hoursByUser = WorkHour::where('month', $month)->pluck('hours', 'user_id');
+
         // Single source of truth for the payroll math (shared with Analytics & Finance).
         $rows = $payroll->perUser(true)->sortByDesc('bonus')->values();
         if (! $leadership) {
@@ -47,7 +54,7 @@ class PayrollController extends Controller
         // Per-deal breakdown so a row can expand into the employee's «Оплата успешно»
         // and «Акт утверждение» deals — the raw data the financist needs to check ЗП.
         $breakdown = $payroll->dealBreakdown();
-        $rows = $rows->map(function ($r) use ($breakdown, $adjustments) {
+        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours) {
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
             $adj = $adjustments->get($r['uid']) ?? collect();
             $deductions = round((float) $adj->whereIn('type', PayrollAdjustment::DEDUCTIONS)->sum('amount'), 2);
@@ -60,7 +67,15 @@ class PayrollController extends Controller
             ])->values();
             $r['deductions'] = $deductions;
             $r['additions'] = $additions;
-            // К выплате = оклад + бонус − удержания + премии.
+
+            // Почасовая база: часы введены → часы × (оклад ÷ норма); нет — полный оклад.
+            $hours = isset($hoursByUser[$r['uid']]) ? (float) $hoursByUser[$r['uid']] : null;
+            $rate = $normHours > 0 ? $r['salary'] / $normHours : 0.0;
+            $r['hours'] = $hours;
+            $r['hourly_rate'] = $normHours > 0 ? round($rate, 2) : null;
+            $r['base'] = $hours !== null && $normHours > 0 ? round($hours * $rate, 2) : $r['salary'];
+            // К выплате = почасовая база (или оклад) + бонус − удержания + премии.
+            $r['payout'] = round($r['base'] + $r['bonus'], 2);
             $r['final'] = round($r['payout'] - $deductions + $additions, 2);
 
             return $r;
@@ -71,6 +86,7 @@ class PayrollController extends Controller
             'leadership' => $leadership,
             'canManage' => $this->canManage($request),
             'month' => $month,
+            'normHours' => $normHours,
             'taxRate' => $taxRate * 100,
             'totals' => [
                 'budget' => (float) $rows->sum('budget'),
@@ -78,6 +94,7 @@ class PayrollController extends Controller
                 'expense' => (float) $rows->sum('expense'),
                 'bonus' => (float) $rows->sum('bonus'),
                 'salary' => (float) $rows->sum('salary'),
+                'base' => (float) $rows->sum('base'),
                 'payout' => (float) $rows->sum('payout'),
                 'deductions' => (float) $rows->sum('deductions'),
                 'additions' => (float) $rows->sum('additions'),
@@ -175,5 +192,49 @@ class PayrollController extends Controller
         $user->update(['salary' => $data['salary']]);
 
         return back()->with('success', 'Оклад обновлён.');
+    }
+
+    /**
+     * Отработанные часы сотрудника за месяц (почасовой оклад). Пустое значение —
+     * удаляет запись, сотрудник возвращается на полный оклад.
+     */
+    public function updateHours(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403, 'Часы вводит бухгалтер или админ.');
+
+        $data = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'hours' => ['nullable', 'numeric', 'min:0', 'max:744'],
+        ]);
+
+        if ($data['hours'] === null || $data['hours'] === '') {
+            WorkHour::where('user_id', $user->id)->where('month', $data['month'])->delete();
+
+            return back()->with('success', 'Часы удалены — начисляется полный оклад.');
+        }
+
+        WorkHour::updateOrCreate(
+            ['user_id' => $user->id, 'month' => $data['month']],
+            ['hours' => $data['hours'], 'created_by' => $request->user()->id]
+        );
+
+        return back()->with('success', 'Отработанные часы сохранены.');
+    }
+
+    /** Норма часов месяца (знаменатель ставки за час) — одна на всех сотрудников. */
+    public function updateNorm(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403, 'Норму часов вводит бухгалтер или админ.');
+
+        $data = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'norm' => ['required', 'numeric', 'min:1', 'max:744'],
+        ]);
+
+        Setting::set('work_norm_'.$data['month'], $data['norm']);
+        // Запоминаем как значение по умолчанию — следующие месяцы предзаполнятся им.
+        Setting::set('work_norm_default', $data['norm']);
+
+        return back()->with('success', 'Норма часов на месяц сохранена.');
     }
 }
