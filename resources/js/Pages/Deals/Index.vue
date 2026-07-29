@@ -115,7 +115,7 @@ const bulkDelete = async () => {
 };
 
 const showModal = ref(false);
-const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, deadline: '', description: '', note: '' });
+const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, partner_pct: '', deadline: '', description: '', note: '' });
 const openCreate = () => { form.reset(); form.company_id = props.currentCompanyId || props.companies[0]?.id || ''; binMatch.value = null; showBinModal.value = false; showModal.value = true; };
 const submit = () => form.post(route('deals.store'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
 
@@ -335,6 +335,11 @@ const applyBinMatch = () => {
                         </select>
                     </div>
                     <div><InputLabel value="Сумма договора *" /><TextInput v-model="form.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="form.errors.budget" class="mt-1" /></div>
+                    <div>
+                        <InputLabel value="Доля партнёра, %" /><TextInput v-model="form.partner_pct" type="number" min="0" max="100" step="0.01" class="mt-1 w-full" placeholder="0" />
+                        <p v-if="Number(form.partner_pct) > 0 && Number(form.budget) > 0" class="mt-1 text-[11px] text-slate-400">= {{ money(Number(form.budget) * Number(form.partner_pct) / 100) }} партнёру (вычитается из остатка)</p>
+                        <InputError :message="form.errors.partner_pct" class="mt-1" />
+                    </div>
                     <div><InputLabel value="Срок" /><TextInput v-model="form.deadline" type="date" class="mt-1 w-full" /></div>
                     <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="form.description" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm"></textarea></div>
                     <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm" placeholder="Коротко и чётко по сделке"></textarea></div>

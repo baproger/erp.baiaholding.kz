@@ -41,6 +41,8 @@ class DealRequest extends FormRequest
             'responsible_user_id' => ['nullable', 'exists:users,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'budget' => ['required', 'numeric', 'min:0'],
+            // Доля партнёра — только %; сумма считается от суммы договора.
+            'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'deadline' => ['nullable', 'date'],
             'description' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],

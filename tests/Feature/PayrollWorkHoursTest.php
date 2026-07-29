@@ -91,6 +91,34 @@ class PayrollWorkHoursTest extends TestCase
         $this->actingAs($mgr)->patch(route('payroll.norm'), ['month' => $month, 'norm' => 200])->assertForbidden();
     }
 
+    // Своя норма отдела: цех 200 ч — ставка его сотрудников считается по 200,
+    // сотрудники без своей нормы отдела остаются на общей норме месяца.
+    public function test_department_norm_overrides_month_norm(): void
+    {
+        $admin = $this->user('admin');
+        $dept = \App\Models\Department::create(['name' => 'Цех']);
+        $worker = User::factory()->create(['salary' => 200000, 'department_id' => $dept->id]);
+        $worker->assignRole('employee');
+        $other = $this->user('employee', 200000); // без отдела — общая норма
+        $month = now()->format('Y-m');
+
+        $this->actingAs($admin)->patch(route('payroll.norm'), ['month' => $month, 'norm' => 220])->assertRedirect();
+        $this->actingAs($admin)->patch(route('payroll.norm'), ['month' => $month, 'norm' => 200, 'department_id' => $dept->id])->assertRedirect();
+        foreach ([$worker, $other] as $u) {
+            $this->actingAs($admin)->patch(route('payroll.hours', $u), ['month' => $month, 'hours' => 100])->assertRedirect();
+        }
+
+        // 200000/200×100 = 100000 (норма отдела); 200000/220×100 = 90909.09 (общая).
+        $this->actingAs($admin)->get(route('payroll.index', ['month' => $month]))
+            ->assertInertia(fn (Assert $p) => $p->component('Payroll/Index')
+                ->where('rows', fn ($rows) => collect($rows)->contains(fn ($r) => $r['uid'] === $worker->id && $r['base'] == 100000.0)
+                    && collect($rows)->contains(fn ($r) => $r['uid'] === $other->id && $r['base'] == 90909.09)));
+
+        // Сброс нормы отдела (пустое значение) — возвращается общая норма.
+        $this->actingAs($admin)->patch(route('payroll.norm'), ['month' => $month, 'department_id' => $dept->id, 'norm' => null])->assertRedirect();
+        $this->assertNull(Setting::get('work_norm_'.$month.':dept:'.$dept->id));
+    }
+
     public function test_norm_is_remembered_as_default_for_next_months(): void
     {
         $admin = $this->user('admin');

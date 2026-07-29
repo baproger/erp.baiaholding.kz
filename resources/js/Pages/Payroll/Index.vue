@@ -9,7 +9,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { money, formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, taxRate: Number, totals: Object });
+const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number, totals: Object });
 const me = props.rows[0] ?? null;
 
 // Шкала бонусов — коммерческая информация: видят только отдел продаж
@@ -38,9 +38,26 @@ const groups = computed(() => {
         map.get(k).push(r);
     }
     return [...map.entries()]
-        .map(([name, list]) => ({ name, list, final: list.reduce((s, r) => s + (r.final || 0), 0) }))
+        .map(([name, list]) => {
+            const id = list[0]?.department_id ?? null;
+            const own = id != null ? props.deptNorms?.[id] : null; // своя норма отдела
+            return {
+                name, list, id,
+                norm: own ?? props.normHours,
+                override: own != null,
+                final: list.reduce((s, r) => s + (r.final || 0), 0),
+            };
+        })
         .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
 });
+// Своя норма часов отдела: правка в заголовке секции; пусто — сброс на общую.
+const editingDeptNorm = ref(null);
+const deptNormVal = ref('');
+const editDeptNorm = (g) => { editingDeptNorm.value = g.name; deptNormVal.value = g.override ? g.norm : ''; };
+const saveDeptNorm = (g) => router.patch(route('payroll.norm'), {
+    month: props.month, department_id: g.id,
+    norm: deptNormVal.value === '' ? null : Number(deptNormVal.value),
+}, { preserveScroll: true, onSuccess: () => (editingDeptNorm.value = null) });
 // Свернуть/развернуть секцию отдела кликом по её заголовку (по умолчанию все раскрыты).
 const collapsed = ref(new Set());
 const toggleDept = (name) => { const s = new Set(collapsed.value); s.has(name) ? s.delete(name) : s.add(name); collapsed.value = s; };
@@ -65,9 +82,13 @@ const saveSalary = (r) => router.patch(route('payroll.salary', r.uid), { salary:
 // Почасовой оклад: норма часов месяца (одна на всех) + отработанные часы сотрудника.
 // Ставка/час = оклад ÷ норма; начислено = часы × ставка; без часов — полный оклад.
 const normVal = ref(props.normHours || '');
+const editingNorm = ref(false);
+const editNorm = () => { normVal.value = props.normHours || ''; editingNorm.value = true; };
 const saveNorm = () => {
     const n = Number(normVal.value);
-    if (n > 0 && n !== props.normHours) router.patch(route('payroll.norm'), { month: props.month, norm: n }, { preserveScroll: true });
+    if (!(n > 0)) return;
+    if (n === props.normHours) { editingNorm.value = false; return; }
+    router.patch(route('payroll.norm'), { month: props.month, norm: n }, { preserveScroll: true, onSuccess: () => (editingNorm.value = false) });
 };
 const editingHours = ref(null);
 const hoursVal = ref('');
@@ -97,9 +118,6 @@ const delAdj = async (a) => {
                 <div class="flex items-center gap-2">
                     <label class="flex items-center gap-1 text-xs font-normal text-slate-400">месяц
                         <input v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
-                    </label>
-                    <label v-if="canManage" class="flex items-center gap-1 text-xs font-normal text-slate-400" title="Норма часов за месяц: ставка за час = оклад ÷ норма. Начислено = отработанные часы × ставка.">норма, ч
-                        <input v-model="normVal" @change="saveNorm" type="number" min="1" max="744" class="w-16 rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
                     </label>
                     <button v-if="canManage" @click="openAdj()"
                         class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700">+ Корректировка</button>
@@ -176,6 +194,36 @@ const delAdj = async (a) => {
 
         <!-- Leadership: everyone -->
         <template v-else>
+            <!-- Норма часов месяца — на виду у финансиста: ставка/час = оклад ÷ норма -->
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-white px-5 py-4 shadow-sm">
+                <div class="flex items-center gap-3.5">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    </span>
+                    <div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Норма часов · {{ monthLabel }}</div>
+                        <div class="mt-0.5 flex items-baseline gap-2">
+                            <template v-if="editingNorm">
+                                <input v-model="normVal" type="number" min="1" max="744" class="w-24 rounded-lg border-indigo-300 py-1 text-lg font-bold tabular-nums text-slate-900 focus:border-indigo-500 focus:ring-indigo-500"
+                                    @keydown.enter="saveNorm" @keydown.escape="editingNorm = false" />
+                                <button class="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-indigo-700" @click="saveNorm">✓</button>
+                                <button class="rounded-lg px-2 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-600" @click="editingNorm = false">отмена</button>
+                            </template>
+                            <button v-else-if="canManage" class="group flex items-baseline gap-1.5" title="Изменить норму часов месяца" @click="editNorm">
+                                <span class="text-2xl font-bold tabular-nums leading-none text-slate-900">{{ normHours }}</span>
+                                <span class="text-sm text-slate-400">ч / мес</span>
+                                <svg class="h-3.5 w-3.5 self-center text-slate-300 transition-colors group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </button>
+                            <span v-else class="text-2xl font-bold tabular-nums leading-none text-slate-900">{{ normHours }} <span class="text-sm font-normal text-slate-400">ч / мес</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right text-[11px] leading-relaxed text-slate-400">
+                    <div>ставка за час = оклад ÷ <span class="font-semibold text-slate-600">{{ normHours }} ч</span> · начислено = часы × ставка</div>
+                    <div>часы не введены — полный оклад · у отдела своя норма — в заголовке его секции</div>
+                </div>
+            </div>
+
             <!-- 2 ряда по 4 плитки: суммам хватает места, без переносов -->
             <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Сумма договоров</div><div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-slate-900 xl:text-xl">{{ money(totals.budget) }}</div></div>
@@ -227,6 +275,23 @@ const delAdj = async (a) => {
                                         <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="collapsed.has(g.name) ? '' : 'rotate-90'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                         ⌂ {{ g.name }}
                                         <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }} сотр.</span>
+                                        <!-- Своя норма часов отдела; пусто при правке — сброс на общую -->
+                                        <span v-if="g.id != null" class="normal-case tracking-normal" @click.stop>
+                                            <span v-if="editingDeptNorm === g.name" class="flex items-center gap-1">
+                                                <input v-model="deptNormVal" type="number" min="1" max="744" :placeholder="normHours"
+                                                    class="w-16 rounded-md border-indigo-300 py-0.5 text-right text-xs font-semibold tabular-nums"
+                                                    @keydown.enter="saveDeptNorm(g)" @keydown.escape="editingDeptNorm = null" />
+                                                <button class="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white" @click="saveDeptNorm(g)">✓</button>
+                                            </span>
+                                            <button v-else-if="canManage" class="group/norm inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums transition-colors"
+                                                :class="g.override ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-slate-200/70 text-slate-500 hover:bg-slate-300/70'"
+                                                :title="g.override ? 'Своя норма отдела (пусто — сброс на общую ' + normHours + ' ч)' : 'Общая норма ' + normHours + ' ч — нажмите, чтобы задать свою для отдела'"
+                                                @click="editDeptNorm(g)">
+                                                норма {{ g.norm }} ч
+                                                <svg class="h-2.5 w-2.5 opacity-40 group-hover/norm:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                            </button>
+                                            <span v-else class="rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums" :class="g.override ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200/70 text-slate-500'">норма {{ g.norm }} ч</span>
+                                        </span>
                                     </span>
                                     <span class="text-xs font-semibold tabular-nums text-emerald-700">к выплате {{ money(g.final) }}</span>
                                 </div>

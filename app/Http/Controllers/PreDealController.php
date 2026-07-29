@@ -169,6 +169,9 @@ class PreDealController extends Controller
             'client_name' => $preDeal->client_name ?: ($preDeal->customer ?: '—'),
             'bin' => $preDeal->bin,
             'budget' => $preDeal->contract_sum,
+            // Доля партнёра лота переносится в сделку (только %, сумма — от суммы договора).
+            'partner_pct' => $preDeal->partner_pct !== null && (float) $preDeal->partner_pct > 0
+                ? $preDeal->partner_pct : null,
             'status' => 'active',
             'company_id' => $companyId,
             'deal_stage_id' => DealStage::funnel($companyId)->first()?->id,

@@ -33,6 +33,12 @@ class PayrollService
         };
     }
 
+    /** Доля партнёра сделки: только % (deals.partner_pct), сумма = % × сумма договора. */
+    public static function partnerSum(float $budget, mixed $pct): float
+    {
+        return $pct !== null ? round($budget * (float) $pct / 100, 2) : 0.0;
+    }
+
     /**
      * Маржа сделки для выбора ступени — ДО налога, как на карточке сделки:
      * (сумма − расходы) / сумма = (остаток + налог) / сумма.
@@ -94,7 +100,10 @@ class PayrollService
         $expense = (float) Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
             ->whereIn('expenseable_id', Deal::forCurrentCompany()->select('id'))->sum('amount');
         $tax = round($budget * $taxRate, 2);
-        $remainder = round($budget - $tax - $expense, 2);
+        // Доля партнёра (% × сумма договора) — деньги партнёру, вычитается из остатка.
+        $partner = round((float) Deal::whereIn('id', $wonIds)
+            ->selectRaw('COALESCE(SUM(ROUND(budget * COALESCE(partner_pct, 0) / 100, 2)), 0) s')->value('s'), 2);
+        $remainder = round($budget - $tax - $expense - $partner, 2);
         $bonus = round($this->perUser()->sum('bonus'), 2);
         $company = round($remainder - $bonus, 2);
 
@@ -129,7 +138,7 @@ class PayrollService
             ->whereIn('deal_stage_id', $stageFilter)
             ->where('status', '!=', 'cancelled')
             ->orderByDesc('budget')
-            ->get(['id', 'number', 'company_name', 'budget', 'bonus_rate_override', 'deal_stage_id', 'responsible_user_id', 'status']);
+            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'deal_stage_id', 'responsible_user_id', 'status']);
 
         $ids = $deals->pluck('id');
         $paidByDeal = Payment::query()
@@ -147,7 +156,8 @@ class PayrollService
             $paid = (float) ($paidByDeal[$d->id] ?? 0);
             $expense = (float) ($expenseByDeal[$d->id] ?? 0);
             $tax = round($budget * $taxRate, 2);
-            $remainder = round($budget - $tax - $expense, 2);
+            $partner = self::partnerSum($budget, $d->partner_pct);
+            $remainder = round($budget - $tax - $expense - $partner, 2);
             // Пропорционально оплаченному — как в perUser, строки сходятся с итогом.
             $payRatio = $budget > 0 ? min(1, $paid / $budget) : 0;
             $override = $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null;
@@ -164,6 +174,7 @@ class PayrollService
                 'budget' => $budget,
                 'paid' => $paid,
                 'expense' => $expense,
+                'partner' => $partner,
                 'tax' => $tax,
                 'margin_pct' => $marginPct,
                 'bonus_rate' => round(self::effectiveBonusRate($marginPct, $override) * 100, 2),
@@ -184,7 +195,7 @@ class PayrollService
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
         $deals = Deal::won()->forCurrentCompany()->whereNotNull('responsible_user_id')
-            ->get(['id', 'budget', 'bonus_rate_override', 'responsible_user_id']);
+            ->get(['id', 'budget', 'partner_pct', 'bonus_rate_override', 'responsible_user_id']);
         $ids = $deals->pluck('id');
 
         $paidByDeal = Payment::query()
@@ -204,7 +215,7 @@ class PayrollService
             $budget = (float) $d->budget;
             $expense = (float) ($expenseByDeal[$d->id] ?? 0);
             $tax = round($budget * $taxRate, 2);
-            $remainder = round($budget - $tax - $expense, 2);
+            $remainder = round($budget - $tax - $expense - self::partnerSum($budget, $d->partner_pct), 2);
 
             // Бонус к ВЫПЛАТЕ — пропорционально фактически оплаченной доле
             // сделки (won без полной оплаты не даёт полный бонус авансом).

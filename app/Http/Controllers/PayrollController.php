@@ -57,7 +57,12 @@ class PayrollController extends Controller
         // Отдел сотрудника — ведомость показывается раздельными секциями по отделам.
         $deptByUser = User::whereIn('id', $rows->pluck('uid'))
             ->with('department:id,name')->get(['id', 'department_id'])->keyBy('id');
-        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser) {
+        // Своя норма часов у отдела (цех 200 ч, менеджеры 220 ч…): work_norm_{месяц}:dept:{id};
+        // нет своей — действует общая норма месяца.
+        $deptNorms = $deptByUser->pluck('department_id')->filter()->unique()
+            ->mapWithKeys(fn ($id) => [$id => Setting::get('work_norm_'.$month.':dept:'.$id)])
+            ->filter(fn ($v) => $v !== null)->map(fn ($v) => (float) $v);
+        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms) {
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
             $adj = $adjustments->get($r['uid']) ?? collect();
             $deductions = round((float) $adj->whereIn('type', PayrollAdjustment::DEDUCTIONS)->sum('amount'), 2);
@@ -71,16 +76,19 @@ class PayrollController extends Controller
             $r['deductions'] = $deductions;
             $r['additions'] = $additions;
 
-            // Почасовая база: часы введены → часы × (оклад ÷ норма); нет — полный оклад.
+            // Почасовая база: часы введены → часы × (оклад ÷ норма отдела или общая); нет — полный оклад.
+            $deptId = $deptByUser[$r['uid']]?->department_id;
+            $norm = (float) ($deptNorms[$deptId] ?? $normHours);
             $hours = isset($hoursByUser[$r['uid']]) ? (float) $hoursByUser[$r['uid']] : null;
-            $rate = $normHours > 0 ? $r['salary'] / $normHours : 0.0;
+            $rate = $norm > 0 ? $r['salary'] / $norm : 0.0;
             $r['hours'] = $hours;
-            $r['hourly_rate'] = $normHours > 0 ? round($rate, 2) : null;
-            $r['base'] = $hours !== null && $normHours > 0 ? round($hours * $rate, 2) : $r['salary'];
+            $r['hourly_rate'] = $norm > 0 ? round($rate, 2) : null;
+            $r['base'] = $hours !== null && $norm > 0 ? round($hours * $rate, 2) : $r['salary'];
             // К выплате = почасовая база (или оклад) + бонус − удержания + премии.
             $r['payout'] = round($r['base'] + $r['bonus'], 2);
             $r['final'] = round($r['payout'] - $deductions + $additions, 2);
             $r['department'] = $deptByUser[$r['uid']]?->department?->name;
+            $r['department_id'] = $deptId;
 
             return $r;
         });
@@ -91,6 +99,7 @@ class PayrollController extends Controller
             'canManage' => $this->canManage($request),
             'month' => $month,
             'normHours' => $normHours,
+            'deptNorms' => $deptNorms,
             'taxRate' => $taxRate * 100,
             'totals' => [
                 'budget' => (float) $rows->sum('budget'),
@@ -225,15 +234,33 @@ class PayrollController extends Controller
         return back()->with('success', 'Отработанные часы сохранены.');
     }
 
-    /** Норма часов месяца (знаменатель ставки за час) — одна на всех сотрудников. */
+    /**
+     * Норма часов месяца (знаменатель ставки за час). Без department_id — общая
+     * для всех; с department_id — своя норма отдела (цех 200 ч, менеджеры 220 ч…),
+     * пустая norm сбрасывает отдел на общую норму.
+     */
     public function updateNorm(Request $request): RedirectResponse
     {
         abort_unless($this->canManage($request), 403, 'Норму часов вводит бухгалтер или админ.');
 
         $data = $request->validate([
             'month' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
-            'norm' => ['required', 'numeric', 'min:1', 'max:744'],
+            'norm' => ['nullable', 'required_without:department_id', 'numeric', 'min:1', 'max:744'],
+            'department_id' => ['nullable', 'exists:departments,id'],
         ]);
+
+        if (! empty($data['department_id'])) {
+            $key = 'work_norm_'.$data['month'].':dept:'.$data['department_id'];
+            if ($data['norm'] === null) {
+                // first()?->delete() — событием модели сбрасывается кэш settings.all.
+                Setting::where('key', $key)->first()?->delete();
+
+                return back()->with('success', 'Норма отдела сброшена — действует общая норма месяца.');
+            }
+            Setting::set($key, $data['norm']);
+
+            return back()->with('success', 'Норма часов отдела сохранена.');
+        }
 
         Setting::set('work_norm_'.$data['month'], $data['norm']);
         // Запоминаем как значение по умолчанию — следующие месяцы предзаполнятся им.

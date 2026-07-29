@@ -108,7 +108,7 @@ const editFields = () => ({
     company_name: props.deal.company_name ?? '', bin: props.deal.bin ?? '', client_name: props.deal.client_name ?? '',
     address: props.deal.address ?? '',
     contract_date: dateOnly(props.deal.contract_date), source: props.deal.source ?? '',
-    lot_number: props.deal.lot_number ?? '', unit: props.deal.unit ?? '', budget: props.deal.budget, deadline: dateOnly(props.deal.deadline),
+    lot_number: props.deal.lot_number ?? '', unit: props.deal.unit ?? '', budget: props.deal.budget, partner_pct: props.deal.partner_pct ?? '', deadline: dateOnly(props.deal.deadline),
     description: props.deal.description ?? '', note: props.deal.note ?? '',
 });
 const editForm = useForm(editFields());
@@ -334,6 +334,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <div class="mt-2 border-t border-slate-100 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Расчёт прибыли</div>
                         <div class="flex justify-between"><span class="text-slate-500">Налог {{ profit.taxRate }}%</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.tax) }}</span></div>
                         <div class="flex justify-between"><span class="text-slate-500">Прочие расходы</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.expense) }}</span></div>
+                        <div v-if="profit.partnerPct != null" class="flex justify-between"><span class="text-slate-500">Доля партнёра {{ profit.partnerPct }}%</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.partner) }}</span></div>
                         <div class="flex justify-between border-t border-slate-100 pt-2"><span class="text-slate-500">Остаток</span><span class="font-semibold tabular-nums text-slate-800">{{ money(profit.remainder) }}</span></div>
                         <!-- Бонус менеджера: авто-ступень от маржи или ручной % финансиста -->
                         <div class="flex items-center justify-between">
@@ -403,6 +404,11 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <InputError :message="editForm.errors.unit || editForm.errors.lot_number" class="mt-1" />
                     </div>
                     <div><InputLabel value="Сумма договора *" /><TextInput v-model="editForm.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="editForm.errors.budget" class="mt-1" /></div>
+                    <div>
+                        <InputLabel value="Доля партнёра, %" /><TextInput v-model="editForm.partner_pct" type="number" min="0" max="100" step="0.01" class="mt-1 w-full" placeholder="0" />
+                        <p v-if="Number(editForm.partner_pct) > 0 && Number(editForm.budget) > 0" class="mt-1 text-[11px] text-slate-400">= {{ money(Number(editForm.budget) * Number(editForm.partner_pct) / 100) }} партнёру (вычитается из остатка)</p>
+                        <InputError :message="editForm.errors.partner_pct" class="mt-1" />
+                    </div>
                     <div><InputLabel value="Срок" /><TextInput v-model="editForm.deadline" type="date" class="mt-1 w-full" /></div>
                     <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
                     <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>

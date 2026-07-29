@@ -51,7 +51,7 @@ class ReportController extends Controller
                     ->when($to, fn ($q2, $d) => $q2->whereDate('created_at', '<=', $d)))))
             ->latest()
             ->get(['id', 'number', 'bin', 'company_name', 'address', 'client_name', 'lot_number', 'unit',
-                'budget', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at', 'contract_date']);
+                'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at', 'contract_date']);
 
         // Оплачено по сделке — платежи по её счетам (одним запросом на всех).
         $paidByDeal = Payment::join('invoices', 'payments.invoice_id', '=', 'invoices.id')
@@ -89,7 +89,8 @@ class ReportController extends Controller
             $other = (float) ($expByDeal[$d->id]->other ?? 0);
             $expense = $material + $delivery + $purchase + $other;
             $tax = round($budget * $taxRate, 2);
-            $remainder = round($budget - $tax - $expense, 2);
+            $partner = PayrollService::partnerSum($budget, $d->partner_pct);
+            $remainder = round($budget - $tax - $expense - $partner, 2);
             // Та же формула бонуса, что на карточке сделки и в ЗП (с ручным % финансиста).
             $bonus = PayrollService::marginBonus($budget, $remainder, $tax,
                 $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
@@ -109,6 +110,8 @@ class ReportController extends Controller
                 'delivery' => $delivery,
                 'purchase' => $purchase,
                 'other' => $other,
+                'partner' => $partner,
+                'partner_pct' => $d->partner_pct !== null ? (float) $d->partner_pct : null,
                 'tax' => $tax,
                 'remainder' => $remainder,
                 'margin' => PayrollService::marginPct($budget, $remainder, $tax),
@@ -139,6 +142,7 @@ class ReportController extends Controller
             'delivery' => $rows->sum('delivery'),
             'purchase' => $rows->sum('purchase'),
             'other' => $rows->sum('other'),
+            'partner' => $rows->sum('partner'),
             'tax' => $rows->sum('tax'),
             'remainder' => $rows->sum('remainder'),
             'bonus' => $rows->sum('bonus'),

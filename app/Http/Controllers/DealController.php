@@ -175,7 +175,9 @@ class DealController extends Controller
         $confirmedExpense = (float) $deal->expenses->where('status', 'confirmed')->sum('amount');
         $dealBudget = (float) $deal->budget;
         $dealTax = round($dealBudget * $taxRate, 2);
-        $dealRemainder = round($dealBudget - $dealTax - $confirmedExpense, 2);
+        // Доля партнёра: только % (partner_pct), сумма = % × сумма договора, минусуется из остатка.
+        $dealPartner = \App\Services\PayrollService::partnerSum($dealBudget, $deal->partner_pct);
+        $dealRemainder = round($dealBudget - $dealTax - $confirmedExpense - $dealPartner, 2);
         // Ступенчатый бонус: ступень по марже ДО налога (как «Маржа» на карточке),
         // сам бонус — % от остатка (после налога). Та же формула в ЗП/аналитике.
         $dealMarginPct = \App\Services\PayrollService::marginPct($dealBudget, $dealRemainder, $dealTax);
@@ -227,6 +229,8 @@ class DealController extends Controller
                 'budget' => $dealBudget,
                 'tax' => $dealTax, 'taxRate' => $taxRate * 100,
                 'expense' => $confirmedExpense,
+                'partner' => $dealPartner,
+                'partnerPct' => $deal->partner_pct !== null ? (float) $deal->partner_pct : null,
                 'remainder' => $dealRemainder,
                 'bonus' => $dealBonus, 'bonusRate' => round($dealBonusRate * 100, 1),
                 'bonusManual' => $bonusOverride !== null,

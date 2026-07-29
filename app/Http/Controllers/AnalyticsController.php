@@ -158,7 +158,7 @@ class AnalyticsController extends Controller
                         ->whereNotIn('status', ['closed', 'cancelled'])
                         ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf')));
             })
-            ->get(['id', 'number', 'company_name', 'budget', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status']);
+            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status']);
 
         // Confirmed expenses per deal → per-deal margin (same formula as the deal card).
         $dealExpense = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
@@ -172,7 +172,7 @@ class AnalyticsController extends Controller
             $budget = (float) $d->budget;
             $tax = round($budget * $taxRate, 2);
             $expense = (float) ($dealExpense[$d->id] ?? 0);
-            $remainder = round($budget - $tax - $expense, 2);
+            $remainder = round($budget - $tax - $expense - PayrollService::partnerSum($budget, $d->partner_pct), 2);
             // Бонус: ручной % финансиста по сделке (bonus_rate_override) или авто-ступень.
             $bonus = PayrollService::marginBonus($budget, $remainder, $tax,
                 $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
