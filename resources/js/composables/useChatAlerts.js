@@ -74,7 +74,10 @@ const poll = async () => {
                 ? `${a.last.author ?? ''}: ${a.last.text}`
                 : 'Есть непрочитанные сообщения');
         }
-    } catch (e) { /* transient poll errors */ }
+    } catch (e) {
+        // Сессия истекла/разлогинен — останавливаем поллинг до следующей загрузки страницы.
+        if ([401, 419].includes(e?.response?.status)) stop();
+    }
 };
 
 const start = () => {

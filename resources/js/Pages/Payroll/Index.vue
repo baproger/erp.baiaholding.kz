@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
@@ -27,6 +27,23 @@ const BONUS_TIERS = [
 
 const open = ref(new Set());
 const toggle = (uid) => { const s = new Set(open.value); s.has(uid) ? s.delete(uid) : s.add(uid); open.value = s; };
+
+// Ведомость — раздельными секциями по отделам: отделы с большей выплатой сверху,
+// «Без отдела» — как обычная секция; внутри порядок строк серверный (по бонусу).
+const groups = computed(() => {
+    const map = new Map();
+    for (const r of props.rows) {
+        const k = r.department || 'Без отдела';
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(r);
+    }
+    return [...map.entries()]
+        .map(([name, list]) => ({ name, list, final: list.reduce((s, r) => s + (r.final || 0), 0) }))
+        .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
+});
+// Свернуть/развернуть секцию отдела кликом по её заголовку (по умолчанию все раскрыты).
+const collapsed = ref(new Set());
+const toggleDept = (name) => { const s = new Set(collapsed.value); s.has(name) ? s.delete(name) : s.add(name); collapsed.value = s; };
 
 // Месяц корректировок (отгулы/больничные/штрафы) — серверный фильтр.
 const monthSel = ref(props.month);
@@ -201,7 +218,22 @@ const delAdj = async (a) => {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <template v-for="r in rows" :key="r.uid">
+                        <template v-for="g in groups" :key="g.name">
+                        <!-- Секция отдела: название, число сотрудников, Σ к выплате; клик — свернуть/развернуть -->
+                        <tr class="cursor-pointer select-none bg-slate-100/80 hover:bg-slate-200/70" @click="toggleDept(g.name)">
+                            <td colspan="12" class="px-4 py-2">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
+                                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="collapsed.has(g.name) ? '' : 'rotate-90'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                                        ⌂ {{ g.name }}
+                                        <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }} сотр.</span>
+                                    </span>
+                                    <span class="text-xs font-semibold tabular-nums text-emerald-700">к выплате {{ money(g.final) }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <template v-if="!collapsed.has(g.name)">
+                        <template v-for="r in g.list" :key="r.uid">
                             <tr class="cursor-pointer hover:bg-slate-50" @click="toggle(r.uid)">
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2.5">
@@ -315,6 +347,8 @@ const delAdj = async (a) => {
                                 </td>
                             </tr>
                         </template>
+                        </template>
+                        </template>
                         <tr v-if="!rows.length"><td colspan="12" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
                     </tbody>
                 </table>
@@ -332,7 +366,9 @@ const delAdj = async (a) => {
                         <label class="mb-1 block text-xs font-medium text-slate-500">Сотрудник *</label>
                         <select v-model="adjForm.user_id" class="w-full rounded-md border-slate-300 text-sm shadow-sm">
                             <option value="">— выберите —</option>
-                            <option v-for="r in rows" :key="r.uid" :value="r.uid">{{ r.user }}</option>
+                            <optgroup v-for="g in groups" :key="g.name" :label="g.name">
+                                <option v-for="r in g.list" :key="r.uid" :value="r.uid">{{ r.user }}</option>
+                            </optgroup>
                         </select>
                         <div v-if="adjForm.errors.user_id" class="mt-1 text-xs text-red-600">{{ adjForm.errors.user_id }}</div>
                     </div>

@@ -54,7 +54,10 @@ class PayrollController extends Controller
         // Per-deal breakdown so a row can expand into the employee's «Оплата успешно»
         // and «Акт утверждение» deals — the raw data the financist needs to check ЗП.
         $breakdown = $payroll->dealBreakdown();
-        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours) {
+        // Отдел сотрудника — ведомость показывается раздельными секциями по отделам.
+        $deptByUser = User::whereIn('id', $rows->pluck('uid'))
+            ->with('department:id,name')->get(['id', 'department_id'])->keyBy('id');
+        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser) {
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
             $adj = $adjustments->get($r['uid']) ?? collect();
             $deductions = round((float) $adj->whereIn('type', PayrollAdjustment::DEDUCTIONS)->sum('amount'), 2);
@@ -77,6 +80,7 @@ class PayrollController extends Controller
             // К выплате = почасовая база (или оклад) + бонус − удержания + премии.
             $r['payout'] = round($r['base'] + $r['bonus'], 2);
             $r['final'] = round($r['payout'] - $deductions + $additions, 2);
+            $r['department'] = $deptByUser[$r['uid']]?->department?->name;
 
             return $r;
         });
@@ -203,11 +207,11 @@ class PayrollController extends Controller
         abort_unless($this->canManage($request), 403, 'Часы вводит бухгалтер или админ.');
 
         $data = $request->validate([
-            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'month' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'hours' => ['nullable', 'numeric', 'min:0', 'max:744'],
         ]);
 
-        if ($data['hours'] === null || $data['hours'] === '') {
+        if ($data['hours'] === null) {
             WorkHour::where('user_id', $user->id)->where('month', $data['month'])->delete();
 
             return back()->with('success', 'Часы удалены — начисляется полный оклад.');
@@ -227,7 +231,7 @@ class PayrollController extends Controller
         abort_unless($this->canManage($request), 403, 'Норму часов вводит бухгалтер или админ.');
 
         $data = $request->validate([
-            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'month' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'norm' => ['required', 'numeric', 'min:1', 'max:744'],
         ]);
 
