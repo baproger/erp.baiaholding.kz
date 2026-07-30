@@ -20,7 +20,7 @@
 - **Права:** spatie/laravel-permission (RBAC). **Admin — глобальный суперпользователь** (Gate::before, worksInCompany=true везде). Роль admin назначает только admin; последний активный админ защищён от разжалования/деактивации; админа редактирует/деактивирует только админ.
 - **Таймзона:** Asia/Almaty (+05:00); **Локализация:** ru / kk
 - **Тесты:** PHPUnit — 240+, все зелёные. Перед каждым push: `npm run build` + `php artisan test`.
-- **Продакшн (Plesk):** сессии/кэш — файлы, очередь — sync; `vendor/` и `public/build/` закоммичены (на сервере нет composer/node); деплой — `DEPLOY.md` (Git Pull → `php artisan migrate --force` → `php artisan optimize`). CLI PHP на сервере без pdo_mysql — миграции гнать через Laravel Toolkit или веб-скрипт под FPM.
+- **Продакшн (Plesk):** сессии/кэш — файлы, очередь — sync; `public/build/` закоммичен, а `vendor/` — НЕТ (в .gitignore): его пересобирает деплой командой `php composer.phar install --no-dev` (composer.phar лежит в репозитории, см. DEPLOY.md); деплой — `DEPLOY.md` (Git Pull → composer.phar install → `php artisan migrate --force` → `php artisan optimize`). CLI PHP на сервере без pdo_mysql — миграции гнать через Laravel Toolkit или веб-скрипт под FPM.
 
 ## 2. Роли и доступы
 | Роль | Что видит / может |
