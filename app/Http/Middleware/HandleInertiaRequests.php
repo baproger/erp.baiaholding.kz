@@ -53,6 +53,8 @@ class HandleInertiaRequests extends Middleware
             ],
             'locale' => app()->getLocale(),
             'translations' => fn () => \App\Models\UiTranslation::map(app()->getLocale()),
+            // Публичный VAPID-ключ Web Push: фронт подписывает браузер на пуши чата.
+            'vapidPublicKey' => (string) config('services.webpush.public_key', ''),
         ];
     }
 }

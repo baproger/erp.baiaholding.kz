@@ -185,6 +185,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('settings/custom-fields/{customField}', [CustomFieldController::class, 'destroy'])->name('custom-fields.destroy');
     Route::post('custom-field-values', [CustomFieldValueController::class, 'sync'])->name('custom-field-values.sync');
 
+    // Web Push подписка браузера (уведомления чата при закрытой вкладке)
+    Route::post('push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'store'])->middleware('throttle:20,1')->name('push.subscribe');
+    Route::post('push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'destroy'])->middleware('throttle:20,1')->name('push.unsubscribe');
+
     // Chat
     Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
     // Лёгкий поллинг бейджей/звука — до chat/{chat}-маршрутов.

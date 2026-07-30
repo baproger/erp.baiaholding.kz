@@ -81,7 +81,9 @@ class FinanceService
             // Период (фильтр «Месяц» на Финансах): сделки по дате договора,
             // без даты договора — по дате создания.
             ->when($from && $to, fn ($q) => $q->where(fn ($w) => $w
-                ->whereBetween('contract_date', [$from, $to])
+                // whereDate, не whereBetween: дата хранится с временем 00:00:00,
+                // и строгий whereBetween терял сделки последнего дня месяца.
+                ->where(fn ($c) => $c->whereDate('contract_date', '>=', $from)->whereDate('contract_date', '<=', $to))
                 ->orWhere(fn ($n) => $n->whereNull('contract_date')->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to))))
             ->get(['id', 'budget', 'partner_pct', 'bonus_rate_override']);
 

@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    // Web Push (уведомления чата при закрытой вкладке): пара VAPID-ключей.
+    // Одна и та же пара на локали и проде — подписки браузеров привязаны к ключу.
+    'webpush' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+    ],
+
 ];

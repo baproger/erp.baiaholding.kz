@@ -251,6 +251,21 @@ class ChatController extends Controller
                 ->each(fn ($u) => $u->notify(new \App\Notifications\ChatMention($chat, $request->user(), $msg)));
         }
 
+        // Web Push всем участникам, кроме автора — приходит как WhatsApp даже при
+        // свёрнутом браузере/закрытой вкладке. Шлём ПОСЛЕ ответа (terminating),
+        // чтобы не задерживать отправку сообщения.
+        $recipientIds = ($chat->type === 'global'
+            ? User::where('is_active', true)->pluck('id')
+            : $chat->participants()->pluck('users.id'))
+            ->reject(fn ($id) => (int) $id === $request->user()->id)->values()->all();
+        if ($recipientIds !== []) {
+            $author = $request->user()->name;
+            $chatName = $chat->name ?: 'Чат';
+            $text = Str::limit((string) $msg->message, 80) ?: '📎 вложение';
+            app()->terminating(fn () => app(\App\Services\PushService::class)
+                ->sendToUsers($recipientIds, '💬 '.$chatName, $author.': '.$text, route('chat.index', absolute: false)));
+        }
+
         return back();
     }
 

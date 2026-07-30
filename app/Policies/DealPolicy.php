@@ -15,6 +15,23 @@ class DealPolicy
     public function delete(User $user, Deal $d): bool { return $user->hasRole('admin') && $this->ownsOrLeads($user, $d); }
 
     /**
+     * «Далее →» (следующий этап). Всем, кто может править сделку, — как обычно;
+     * плюс ДИЗАЙНЕРУ, но только когда сделка стоит на ЕГО гейт-этапе
+     * «Дизайн и расчет» (stage_type=design): выполнил работу — сам отправил
+     * дальше, не дожидаясь менеджера. Гейт-галочка всё равно проверяется.
+     */
+    public function advance(User $user, Deal $d): bool
+    {
+        if ($this->update($user, $d)) {
+            return true;
+        }
+
+        return $user->hasRole('designer')
+            && $this->ownsOrLeads($user, $d)
+            && $d->stage?->stage_type === 'design';
+    }
+
+    /**
      * Leadership sees everything WITHIN ITS COMPANIES; a manager is limited to
      * deals they are responsible for. Сделка чужой фирмы (BAIA/ASU) недоступна
      * по прямой ссылке даже руководству, не привязанному к той компании.

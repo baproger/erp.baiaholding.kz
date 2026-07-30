@@ -248,6 +248,7 @@ class DealController extends Controller
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             'can' => [
                 'update' => request()->user()->can('update', $deal),
+                'advance' => request()->user()->can('advance', $deal),
                 'delete' => request()->user()->can('delete', $deal),
             ],
         ]);
@@ -382,7 +383,8 @@ class DealController extends Controller
 
     public function advance(Deal $deal, StageTransitionService $transitions): \Illuminate\Http\RedirectResponse
     {
-        $this->authorize('update', $deal);
+        // Не 'update': у дизайнера есть право «Далее» со своего этапа (DealPolicy::advance).
+        $this->authorize('advance', $deal);
         // Следующий этап — по ПОЗИЦИИ в воронке (не по order > current): при
         // задвоенном order переход не перескакивает соседний этап.
         $funnel = DealStage::funnel($deal->company_id ? (int) $deal->company_id : null)->values();

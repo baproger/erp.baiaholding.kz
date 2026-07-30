@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 
 // ---- Глобальные оповещения чата (AppLayout): каждый сотрудник получает «дзынь» + браузерное
 // уведомление о новом сообщении на ЛЮБОЙ странице ERP, а не только внутри чата.
@@ -48,7 +49,32 @@ const notifyBrowser = (title, body) => {
 const askPermissionOnce = () => {
     window.removeEventListener('pointerdown', askPermissionOnce);
     if ('Notification' in window && Notification.permission === 'default') {
-        try { Notification.requestPermission(); } catch (e) { /* старые браузеры */ }
+        try { Notification.requestPermission().then(() => ensurePush()); } catch (e) { /* старые браузеры */ }
+    }
+};
+
+// ---- Web Push (как WhatsApp): работает при свёрнутом браузере и закрытой вкладке ----
+// Регистрируем Service Worker и подписываем браузер на пуши; подписка уходит на
+// сервер и там используется при каждом новом сообщении чата.
+let vapidKey = '';
+let pushEnsured = false;
+const urlB64ToUint8 = (b64) => {
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+};
+const ensurePush = async () => {
+    if (pushEnsured || !vapidKey) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    pushEnsured = true;
+    try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const sub = (await reg.pushManager.getSubscription())
+            ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(vapidKey) }));
+        await window.axios.post(route('push.subscribe'), sub.toJSON());
+    } catch (e) {
+        pushEnsured = false; // повторим при следующем заходе
     }
 };
 
@@ -95,7 +121,12 @@ const stop = () => {
 };
 
 export function useChatAlerts() {
-    onMounted(() => { if (++mounts === 1) start(); });
+    const page = usePage();
+    onMounted(() => {
+        vapidKey = page.props.vapidPublicKey || vapidKey;
+        if (++mounts === 1) start();
+        ensurePush(); // разрешение уже дано ранее — подписываем без ожидания клика
+    });
     onUnmounted(() => { if (--mounts === 0) stop(); });
     return { chatUnread: unreadTotal };
 }
