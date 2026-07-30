@@ -11,7 +11,7 @@
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
-        "minishlink/web-push": "^8.0",
+        "minishlink/web-push": "^9.0",
         "spatie/laravel-permission": "^8.1",
         "tightenco/ziggy": "^2.0"
     },
@@ -80,7 +80,8 @@
     },
     "config": {
         "platform": {
-            "php": "8.3.30"
+            "php": "8.3.30",
+            "ext-gmp": false
         },
         "optimize-autoloader": true,
         "preferred-install": "dist",
