@@ -56,14 +56,14 @@ const lotGroups = computed(() => {
 
 const showForm = ref(false);
 const editingId = ref(null);
-const form = useForm({ lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', commission: '' });
+const form = useForm({ lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', assembly: '', commission: '' });
 // Срок окончания тендера: сегодня/прошёл у невыигранного лота — подсветка.
 const tenderUrgent = (p) => p.tender_deadline && p.status === 'new' && new Date(p.tender_deadline) <= new Date(new Date().toDateString());
 const calc = computed(() => {
     const sum = Number(form.contract_sum || 0);
     const partner = Math.round(sum * Number(form.partner_pct || 0)) / 100;
     const tax = Math.round(sum * (props.taxPercent ?? 3)) / 100;
-    const remainder = Math.round((sum - Number(form.purchase_price || 0) - partner - Number(form.delivery || 0) - Number(form.commission || 0) - tax) * 100) / 100;
+    const remainder = Math.round((sum - Number(form.purchase_price || 0) - partner - Number(form.delivery || 0) - Number(form.assembly || 0) - Number(form.commission || 0) - tax) * 100) / 100;
     const margin = sum > 0 ? Math.round(remainder / sum * 10000) / 100 : 0;
     return { partner, tax, remainder, margin, pass: margin >= (props.minMargin ?? 15) };
 });
@@ -91,7 +91,7 @@ const openEdit = (p) => {
         lot_number: p.lot_number ?? '', tender_deadline: p.tender_deadline ? p.tender_deadline.slice(0, 10) : '', bin: p.bin ?? '', customer: p.customer ?? '',
         client_name: p.client_name ?? '', client_phone: p.client_phone ?? '', product: p.product,
         contract_sum: Number(p.contract_sum), purchase_price: Number(p.purchase_price),
-        partner_pct: Number(p.partner_pct), delivery: Number(p.delivery), commission: Number(p.commission),
+        partner_pct: Number(p.partner_pct), delivery: Number(p.delivery), assembly: Number(p.assembly), commission: Number(p.commission),
     });
     showForm.value = true;
 };
@@ -200,6 +200,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                             <th class="px-4 py-2.5 text-right">Закуп</th>
                             <th class="px-4 py-2.5 text-right">Партнёр</th>
                             <th class="px-4 py-2.5 text-right">Доставка</th>
+                            <th class="px-4 py-2.5 text-right">Сборка</th>
                             <th class="px-4 py-2.5 text-right">Комиссия</th>
                             <th class="px-4 py-2.5 text-right">Налог</th>
                             <th class="px-4 py-2.5 text-right">Остаток</th>
@@ -214,14 +215,14 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         <!-- Секция «Сегодня» / «Прошлые» (аккордеон) -->
                         <tr v-if="g.list.length || g.toggle" class="bg-slate-100/70" :class="g.toggle ? 'cursor-pointer select-none hover:bg-slate-200/60' : ''"
                             @click="g.toggle && (showPast = !showPast)">
-                            <td :colspan="leadership ? 14 : 13" class="px-4 py-2">
+                            <td :colspan="leadership ? 15 : 14" class="px-4 py-2">
                                 <span class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                                     <svg v-if="g.toggle" class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="showPast ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                     {{ g.label }} <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }}</span>
                                 </span>
                             </td>
                         </tr>
-                        <tr v-if="g.key === 'today' && !g.list.length"><td :colspan="leadership ? 14 : 13" class="px-6 py-4 text-center text-xs text-slate-300">Сегодня лотов ещё нет</td></tr>
+                        <tr v-if="g.key === 'today' && !g.list.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-4 text-center text-xs text-slate-300">Сегодня лотов ещё нет</td></tr>
                         <template v-if="g.open">
                         <template v-for="p in g.list" :key="p.id">
                             <tr class="hover:bg-slate-50">
@@ -237,6 +238,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.purchase_price) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.partner_sum) }}<span class="block text-[10px] text-slate-400">{{ Number(p.partner_pct) }}%</span></td>
                                 <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.delivery) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.assembly) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.commission) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.tax) }}</td>
                                 <td class="px-4 py-3 text-right font-semibold tabular-nums" :class="Number(p.remainder) >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(p.remainder) }}</td>
@@ -268,7 +270,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                             </tr>
                             <!-- Чек-лист + контакт клиента -->
                             <tr v-if="expanded === p.id" class="bg-slate-50/60">
-                                <td :colspan="leadership ? 14 : 13" class="px-6 py-3">
+                                <td :colspan="leadership ? 15 : 14" class="px-6 py-3">
                                     <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
                                         <label v-for="i in items" :key="i.id" class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                                             <input type="checkbox" :checked="checked(p, i)" @change="toggleCheck(p, i)"
@@ -285,7 +287,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         </template>
                         </template>
                         </template>
-                        <tr v-if="!preDeals.length"><td :colspan="leadership ? 14 : 13" class="px-6 py-10 text-center text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
+                        <tr v-if="!preDeals.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-10 text-center text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -326,6 +328,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <div><InputLabel value="Закуп цена" /><TextInput v-model="form.purchase_price" type="number" min="0" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Доля партнёра, %" /><TextInput v-model="form.partner_pct" type="number" min="0" max="100" step="0.1" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Доставка, грузчики" /><TextInput v-model="form.delivery" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div><InputLabel value="Сборка" /><TextInput v-model="form.assembly" type="number" min="0" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Комиссия (ГЗ, Омаркет, Самрук)" /><TextInput v-model="form.commission" type="number" min="0" class="mt-1 w-full" /></div>
                 </div>
 

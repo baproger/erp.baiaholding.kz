@@ -31,6 +31,35 @@ class PreDealTest extends TestCase
         return $u;
     }
 
+    // «Выиграл ✓»: доставка и сборка лота автоматически становятся расходами
+    // сделки (🚚/🔧, confirmed, БЕЗ нал/банк — кассу не трогают); маржа лота
+    // учитывает сборку; откат ↩ удаляет авто-расходы и проходит.
+    public function test_confirm_creates_delivery_and_assembly_expenses(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'product' => 'Шкаф', 'customer' => 'Школа', 'contract_sum' => 1600000,
+            'purchase_price' => 700000, 'delivery' => 100000, 'assembly' => 50000,
+        ])->assertSessionHasNoErrors();
+        $lot = PreDeal::firstOrFail();
+        // 1600000 − 700000 − 100000 − 50000 − налог 48000 = 702000 → 43.88%.
+        $this->assertEquals(702000.0, (float) $lot->remainder);
+
+        $this->actingAs($mgr)->post(route('preDeals.confirm', $lot->id))->assertSessionHas('success');
+        $deal = $lot->fresh()->deal;
+        $exp = $deal->expenses()->get()->keyBy('type');
+        $this->assertCount(2, $exp);
+        $this->assertEquals(100000.0, (float) $exp['delivery']->amount);
+        $this->assertEquals(50000.0, (float) $exp['assembly']->amount);
+        $this->assertSame('confirmed', $exp['assembly']->status);
+        $this->assertNull($exp['assembly']->payment_method); // касса/банк не тронуты
+
+        // Откат ↩: авто-расходы лота не блокируют и удаляются вместе со сделкой.
+        $this->actingAs($mgr)->post(route('preDeals.revert', $lot->id))->assertSessionHas('success');
+        $this->assertSame('new', $lot->fresh()->status);
+        $this->assertSame(0, \App\Models\Expense::count());
+    }
+
     // Откат случайного «Выиграл ✓»: сделка удаляется, лот снова «В работе»;
     // при движении по сделке (счёт) откат запрещён.
     public function test_revert_confirmed_lot_back_to_predeal(): void

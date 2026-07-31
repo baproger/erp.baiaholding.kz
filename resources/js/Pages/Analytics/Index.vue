@@ -228,6 +228,7 @@ const donut = computed(() => {
                             <div class="flex justify-between"><span class="text-slate-400">— склад (материалы)</span><span class="tabular-nums text-slate-500">{{ money(companyMoney.dealSplit.material) }}</span></div>
                             <div class="flex justify-between"><span class="text-slate-400">— 🚚 доставка</span><span class="tabular-nums text-sky-600">{{ money(companyMoney.dealSplit.delivery) }}</span></div>
                             <div class="flex justify-between"><span class="text-slate-400">— 📦 закуп</span><span class="tabular-nums text-amber-600">{{ money(companyMoney.dealSplit.purchase) }}</span></div>
+                            <div class="flex justify-between"><span class="text-slate-400">— 🔧 сборка</span><span class="tabular-nums text-teal-600">{{ money(companyMoney.dealSplit.assembly) }}</span></div>
                             <div class="flex justify-between"><span class="text-slate-400">— прочие</span><span class="tabular-nums text-slate-500">{{ money(companyMoney.dealSplit.other) }}</span></div>
                         </div>
                         <div v-for="c in companyMoney.categories" :key="c.name" class="flex justify-between">

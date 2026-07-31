@@ -239,12 +239,14 @@ class AnalyticsController extends Controller
             ->selectRaw("
                 sum(case when material_id is not null then amount else 0 end) as material,
                 sum(case when material_id is null and type = 'delivery' then amount else 0 end) as delivery,
+                sum(case when material_id is null and type = 'assembly' then amount else 0 end) as assembly,
                 sum(case when material_id is null and type = 'purchase' then amount else 0 end) as purchase,
-                sum(case when material_id is null and (type is null or type not in ('delivery','purchase')) then amount else 0 end) as other")
+                sum(case when material_id is null and (type is null or type not in ('delivery','purchase','assembly')) then amount else 0 end) as other")
             ->first();
         $dealSplit = [
             'material' => (float) ($dealSplitRow->material ?? 0),
             'delivery' => (float) ($dealSplitRow->delivery ?? 0),
+            'assembly' => (float) ($dealSplitRow->assembly ?? 0),
             'purchase' => (float) ($dealSplitRow->purchase ?? 0),
             'other' => (float) ($dealSplitRow->other ?? 0),
         ];

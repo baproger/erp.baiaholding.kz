@@ -43,9 +43,9 @@ const showExpense = ref(false);
 const receiptInput = ref(null);
 // Тип расхода: прочий (чек) / доставка / закуп / по материалам (со склада).
 // Виды идут в Сводный отчёт и Аналитику отдельными колонками.
-const expenseMode = ref('other'); // other | delivery | purchase | material
-const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase' };
-const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп' };
+const expenseMode = ref('other'); // other | delivery | purchase | assembly | material
+const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly' };
+const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 Сборка' };
 const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
@@ -199,6 +199,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             { k: 'other', l: 'Прочий расход (чек)' },
                             { k: 'delivery', l: '🚚 Доставка' },
                             { k: 'purchase', l: '📦 Закуп' },
+                            { k: 'assembly', l: '🔧 Сборка' },
                         ]" :key="m.k" type="button" @click="expenseMode = m.k"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">

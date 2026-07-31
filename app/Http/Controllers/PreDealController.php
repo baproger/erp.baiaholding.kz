@@ -112,6 +112,7 @@ class PreDealController extends Controller
             'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'delivery' => ['nullable', 'numeric', 'min:0'],
+            'assembly' => ['nullable', 'numeric', 'min:0'],
             'commission' => ['nullable', 'numeric', 'min:0'],
         ], [
             'lot_number.unique' => 'Такой № лота уже существует — этот лот уже внесён.',
@@ -135,10 +136,19 @@ class PreDealController extends Controller
         if ($preDeal->status !== 'confirmed' || ! $deal) {
             return back()->with('error', 'Лот не подтверждён — возвращать нечего.');
         }
-        if ($deal->invoices()->exists() || $deal->expenses()->exists() || $deal->project()->exists()) {
+        // Авто-расходы, созданные из самого лота (🚚/🔧, «Из лота…», без нал/банк),
+        // откату не мешают — удаляются вместе со сделкой. Блокируют только
+        // РУЧНЫЕ расходы, счета и заказ цеха.
+        $manualExpenses = $deal->expenses()
+            ->where(fn ($q) => $q->whereNotIn('type', ['delivery', 'assembly'])
+                ->orWhereNotNull('payment_method')
+                ->orWhere('description', 'not like', 'Из лота%'))
+            ->exists();
+        if ($deal->invoices()->exists() || $manualExpenses || $deal->project()->exists()) {
             return back()->with('error', 'По сделке '.$deal->number.' уже есть счета/расходы/заказ цеха — откат невозможен, обратитесь к администратору.');
         }
 
+        $deal->expenses()->where('description', 'like', 'Из лота%')->delete();
         $preDeal->update(['status' => 'new', 'deal_id' => null]);
         $deal->delete();
 
@@ -241,6 +251,29 @@ class PreDealController extends Controller
                 .'; закуп '.number_format((float) $preDeal->purchase_price, 0, '.', ' ')
                 .'; расчётная маржа '.$preDeal->margin.'%',
         ]);
+        // Доставка и сборка из лота → сразу расходы сделки (🚚/🔧, confirmed),
+        // чтобы не вносить их в сделку второй раз. БЕЗ нал/банк (payment_method
+        // null): остаток/маржу сделки уменьшают, кассу и банк — нет (деньги
+        // физически ещё не потрачены; бухгалтер проставит способ по факту).
+        foreach ([['delivery', '🚚 Доставка'], ['assembly', '🔧 Сборка']] as [$type, $label]) {
+            $amount = (float) $preDeal->{$type};
+            if ($amount > 0) {
+                \App\Models\Expense::create([
+                    'company_id' => $companyId,
+                    'expenseable_type' => 'deal',
+                    'expenseable_id' => $deal->id,
+                    'type' => $type,
+                    'amount' => $amount,
+                    'date' => now()->toDateString(),
+                    'description' => 'Из лота'.($preDeal->lot_number ? ' №'.$preDeal->lot_number : '').': '.$label,
+                    'responsible_user_id' => $preDeal->user_id,
+                    'status' => 'confirmed',
+                    'confirmed_by' => $request->user()->id,
+                    'confirmed_at' => now(),
+                ]);
+            }
+        }
+
         $preDeal->update(['status' => 'confirmed', 'deal_id' => $deal->id]);
 
         // «Выиграл» → сразу на страницу Сделки, где появилась новая сделка.

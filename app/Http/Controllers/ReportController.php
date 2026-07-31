@@ -70,7 +70,8 @@ class ReportController extends Controller
                 sum(case when material_id is not null then amount else 0 end) as material,
                 sum(case when material_id is null and type = 'delivery' then amount else 0 end) as delivery,
                 sum(case when material_id is null and type = 'purchase' then amount else 0 end) as purchase,
-                sum(case when material_id is null and (type is null or type not in ('delivery','purchase')) then amount else 0 end) as other")
+                sum(case when material_id is null and type = 'assembly' then amount else 0 end) as assembly,
+                sum(case when material_id is null and (type is null or type not in ('delivery','purchase','assembly')) then amount else 0 end) as other")
             ->get()->keyBy('deal_id');
 
         // Активный заказ цеха по сделке: этап цеха показывается прямо в общей
@@ -86,8 +87,9 @@ class ReportController extends Controller
             $material = (float) ($expByDeal[$d->id]->material ?? 0);
             $delivery = (float) ($expByDeal[$d->id]->delivery ?? 0);
             $purchase = (float) ($expByDeal[$d->id]->purchase ?? 0);
+            $assembly = (float) ($expByDeal[$d->id]->assembly ?? 0);
             $other = (float) ($expByDeal[$d->id]->other ?? 0);
-            $expense = $material + $delivery + $purchase + $other;
+            $expense = $material + $delivery + $purchase + $assembly + $other;
             $tax = round($budget * $taxRate, 2);
             $partner = PayrollService::partnerSum($budget, $d->partner_pct);
             $remainder = round($budget - $tax - $expense - $partner, 2);
@@ -109,6 +111,7 @@ class ReportController extends Controller
                 'material' => $material,
                 'delivery' => $delivery,
                 'purchase' => $purchase,
+                'assembly' => $assembly,
                 'other' => $other,
                 'partner' => $partner,
                 'partner_pct' => $d->partner_pct !== null ? (float) $d->partner_pct : null,
@@ -141,6 +144,7 @@ class ReportController extends Controller
             'material' => $rows->sum('material'),
             'delivery' => $rows->sum('delivery'),
             'purchase' => $rows->sum('purchase'),
+            'assembly' => $rows->sum('assembly'),
             'other' => $rows->sum('other'),
             'partner' => $rows->sum('partner'),
             'tax' => $rows->sum('tax'),

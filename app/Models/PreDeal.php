@@ -11,7 +11,7 @@ class PreDeal extends Model
     protected $fillable = [
         'company_id', 'user_id', 'lot_number', 'tender_deadline', 'bin', 'customer', 'client_name', 'client_phone',
         'product', 'contract_sum', 'purchase_price', 'partner_pct', 'partner_sum',
-        'delivery', 'commission', 'tax', 'remainder', 'margin', 'checks', 'status', 'deal_id',
+        'delivery', 'assembly', 'commission', 'tax', 'remainder', 'margin', 'checks', 'status', 'deal_id',
     ];
 
     protected $casts = ['checks' => 'array', 'tender_deadline' => 'date'];
@@ -44,7 +44,8 @@ class PreDeal extends Model
         $partner = round($sum * ((float) ($d['partner_pct'] ?? 0)) / 100, 2);
         $tax = round($sum * $taxRate, 2);
         $remainder = round($sum - (float) ($d['purchase_price'] ?? 0) - $partner
-            - (float) ($d['delivery'] ?? 0) - (float) ($d['commission'] ?? 0) - $tax, 2);
+            - (float) ($d['delivery'] ?? 0) - (float) ($d['assembly'] ?? 0)
+            - (float) ($d['commission'] ?? 0) - $tax, 2);
 
         return array_merge($d, [
             'partner_sum' => $partner,
