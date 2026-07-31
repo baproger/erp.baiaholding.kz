@@ -75,6 +75,8 @@ Route::middleware('auth')->group(function () {
     Route::put('pre-deals/{preDeal}', [\App\Http\Controllers\PreDealController::class, 'update'])->name('preDeals.update');
     Route::delete('pre-deals/{preDeal}', [\App\Http\Controllers\PreDealController::class, 'destroy'])->name('preDeals.destroy');
     Route::post('pre-deals/{preDeal}/confirm', [\App\Http\Controllers\PreDealController::class, 'confirm'])->name('preDeals.confirm');
+    // Откат случайного «Выиграл ✓»: сделка удаляется, лот снова «В работе».
+    Route::post('pre-deals/{preDeal}/revert', [\App\Http\Controllers\PreDealController::class, 'revert'])->name('preDeals.revert');
     Route::post('pre-deals/{preDeal}/check/{item}', [\App\Http\Controllers\PreDealController::class, 'check'])->name('preDeals.check');
     Route::post('pre-deal-items', [\App\Http\Controllers\PreDealController::class, 'storeItem'])->name('preDealItems.store');
     Route::put('pre-deal-items/{item}', [\App\Http\Controllers\PreDealController::class, 'updateItem'])->name('preDealItems.update');

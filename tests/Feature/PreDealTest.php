@@ -31,6 +31,48 @@ class PreDealTest extends TestCase
         return $u;
     }
 
+    // Откат случайного «Выиграл ✓»: сделка удаляется, лот снова «В работе»;
+    // при движении по сделке (счёт) откат запрещён.
+    public function test_revert_confirmed_lot_back_to_predeal(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'product' => 'Парта', 'customer' => 'Школа', 'contract_sum' => 1600000, 'purchase_price' => 700000,
+        ]);
+        $lot = PreDeal::firstOrFail();
+        $this->actingAs($mgr)->post(route('preDeals.confirm', $lot->id))->assertSessionHas('success');
+        $deal = $lot->fresh()->deal;
+
+        $this->actingAs($mgr)->post(route('preDeals.revert', $lot->id))->assertSessionHas('success');
+        $lot->refresh();
+        $this->assertSame('new', $lot->status);
+        $this->assertNull($lot->deal_id);
+        $this->assertNotNull($deal->fresh()?->deleted_at ?? 'deleted'); // сделка удалена (soft)
+        $this->assertSame(0, \App\Models\Deal::count());
+
+        // Повторное «Выиграл» → сделка с движением (счёт) — откат запрещён.
+        $this->actingAs($mgr)->post(route('preDeals.confirm', $lot->id));
+        $deal2 = $lot->fresh()->deal;
+        \App\Models\Invoice::create(['number' => 'I-'.uniqid(), 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal2->id, 'amount' => 100, 'status' => 'sent']);
+        $this->actingAs($mgr)->post(route('preDeals.revert', $lot->id))->assertSessionHas('error');
+        $this->assertSame('confirmed', $lot->fresh()->status);
+    }
+
+    // Фильтр «месяц»: показываются только лоты, ВНЕСЁННЫЕ в выбранном месяце.
+    public function test_month_filter_scopes_lots_by_created_date(): void
+    {
+        $mgr = $this->user('manager');
+        PreDeal::create(PreDeal::calculate(['product' => 'Свежий', 'contract_sum' => 100]) + ['user_id' => $mgr->id]);
+        $old = PreDeal::create(PreDeal::calculate(['product' => 'Старый', 'contract_sum' => 100]) + ['user_id' => $mgr->id]);
+        $past = now()->subMonthNoOverflow();
+        $old->timestamps = false;
+        $old->forceFill(['created_at' => $past])->save();
+
+        $this->actingAs($mgr)->get(route('preDeals.index', ['month' => $past->format('Y-m')]))
+            ->assertInertia(fn ($p) => $p->component('PreDeals/Index')
+                ->where('preDeals', fn ($lots) => collect($lots)->pluck('product')->all() === ['Старый']));
+    }
+
     // Сегодня заканчивается тендер → уведомление менеджеру лота (только new-лоты).
     public function test_tender_deadline_today_notifies_manager(): void
     {

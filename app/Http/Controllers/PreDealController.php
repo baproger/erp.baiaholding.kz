@@ -56,6 +56,12 @@ class PreDealController extends Controller
         if ($st = $request->string('status')->toString()) {
             $q->where('status', $st);
         }
+        // Фильтр по месяцу ВНЕСЕНИЯ лота (YYYY-MM): какие лоты в какой день вводили.
+        if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m = $request->string('month')->toString())) {
+            $start = $m.'-01';
+            $q->whereDate('created_at', '>=', $start)
+                ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
+        }
 
         // Рейтинг менеджеров (руководству): подтверждено лотов / на какую сумму.
         $stats = null;
@@ -83,7 +89,7 @@ class PreDealController extends Controller
             'leadership' => $lead,
             'stats' => $stats,
             'managers' => $lead ? User::role('manager')->where('is_active', true)->orderBy('name')->get(['id', 'name']) : [],
-            'filters' => $request->only('manager', 'status'),
+            'filters' => $request->only('manager', 'status', 'month'),
             'canManageChecklist' => $request->user()->hasAnyRole(['admin', 'financist']),
         ]);
     }
@@ -117,6 +123,28 @@ class PreDealController extends Controller
      * менеджер не тратит время на ввод остальных полей. ignore — id правящегося
      * лота (свой номер при правке не считается занятым).
      */
+    /**
+     * Откат случайного «Выиграл ✓»: созданная сделка удаляется (soft, номер
+     * освобождается хуками Deal), лот возвращается в «В работе». Разрешён
+     * ТОЛЬКО пока по сделке нет движения — счетов/расходов/заказа цеха.
+     */
+    public function revert(Request $request, PreDeal $preDeal): RedirectResponse
+    {
+        $this->guardOwner($request, $preDeal);
+        $deal = $preDeal->deal;
+        if ($preDeal->status !== 'confirmed' || ! $deal) {
+            return back()->with('error', 'Лот не подтверждён — возвращать нечего.');
+        }
+        if ($deal->invoices()->exists() || $deal->expenses()->exists() || $deal->project()->exists()) {
+            return back()->with('error', 'По сделке '.$deal->number.' уже есть счета/расходы/заказ цеха — откат невозможен, обратитесь к администратору.');
+        }
+
+        $preDeal->update(['status' => 'new', 'deal_id' => null]);
+        $deal->delete();
+
+        return back()->with('success', 'Возвращено: сделка '.$deal->number.' удалена, лот снова «В работе».');
+    }
+
     public function checkLot(Request $request): \Illuminate\Http\JsonResponse
     {
         $this->guardAccess($request);

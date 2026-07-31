@@ -19,11 +19,13 @@ const props = defineProps({
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
 
-// Фильтры (руководству): менеджер и статус.
+// Фильтры: менеджер, статус и месяц внесения (какие лоты в какой день вводили).
 const managerF = ref(props.filters?.manager ?? '');
 const statusF = ref(props.filters?.status ?? '');
+const monthF = ref(props.filters?.month ?? '');
 const applyFilters = () => router.get(route('preDeals.index'), {
     manager: managerF.value || undefined, status: statusF.value || undefined,
+    month: monthF.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 
 // Форма лота: живой расчёт как в Excel (партнёр/налог/остаток/маржа).
@@ -32,6 +34,18 @@ const applyFilters = () => router.get(route('preDeals.index'), {
 const isToday = (d) => d && new Date(d).toDateString() === new Date().toDateString();
 const showPast = ref(false);
 const lotGroups = computed(() => {
+    // Выбран месяц — секция на КАЖДУЮ дату внесения (свежие сверху), все раскрыты.
+    if (monthF.value) {
+        const byDate = new Map();
+        for (const p of props.preDeals) {
+            const k = (p.created_at || '').slice(0, 10);
+            if (!byDate.has(k)) byDate.set(k, []);
+            byDate.get(k).push(p);
+        }
+        return [...byDate.entries()]
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([d, list]) => ({ key: d, label: formatDate(d), list, open: true, toggle: false }));
+    }
     const today = props.preDeals.filter((p) => isToday(p.created_at));
     const past = props.preDeals.filter((p) => !isToday(p.created_at));
     return [
@@ -84,6 +98,12 @@ const openEdit = (p) => {
 const submit = () => (editingId.value
     ? form.put(route('preDeals.update', editingId.value), { preserveScroll: true, onSuccess: () => (showForm.value = false) })
     : form.post(route('preDeals.store'), { preserveScroll: true, onSuccess: () => (showForm.value = false) }));
+
+// Откат случайного «Выиграл ✓»: сделка удалится, лот вернётся «В работе».
+const revertDeal = async (p) => {
+    if (!(await confirmDialog({ title: 'Вернуть в предварительные?', message: `Сделка ${p.deal?.number ?? ''} будет удалена, лот снова станет «В работе». Возможно, только пока по сделке нет счетов, расходов и заказа цеха.`, confirmText: '↩ Вернуть', danger: true }))) return;
+    router.post(route('preDeals.revert', p.id), {}, { preserveScroll: true });
+};
 
 const confirmDeal = async (p) => {
     if (!(await confirmDialog({ title: 'Выиграл — создать сделку?', message: `«${p.product}» на ${money(p.contract_sum)} (маржа ${p.margin}%): лот отметится выигранным, сделка появится на странице «Сделки».`, confirmText: 'Выиграл ✓' }))) return;
@@ -159,6 +179,10 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <option value="new">В работе</option>
                     <option value="confirmed">Подтверждённые</option>
                 </select>
+                <label class="flex items-center gap-1 text-xs text-slate-400" title="Показать лоты, внесённые в выбранном месяце — по датам">месяц
+                    <input v-model="monthF" @change="applyFilters" type="month" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm" />
+                </label>
+                <button v-if="monthF" @click="monthF = ''; applyFilters()" class="text-xs font-medium text-indigo-600 hover:underline">сбросить</button>
                 <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">порог маржи: <b>{{ minMargin }}%</b></span>
             </div>
         </div>
@@ -229,6 +253,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
                                     <template v-if="p.status === 'confirmed'">
                                         <span class="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">→ {{ p.deal?.number ?? 'сделка' }}</span>
+                                        <button class="ml-1 rounded p-1 text-slate-300 transition hover:text-amber-600" title="Вернуть в предварительные (нажали «Выиграл» случайно)" @click="revertDeal(p)">↩</button>
                                     </template>
                                     <template v-else>
                                         <button v-if="Number(p.margin) >= minMargin" @click="confirmDeal(p)"
