@@ -27,9 +27,24 @@ const applyFilters = () => router.get(route('preDeals.index'), {
 }, { preserveState: true, preserveScroll: true, replace: true });
 
 // Форма лота: живой расчёт как в Excel (партнёр/налог/остаток/маржа).
+// «Сегодня + прошлые» как блок «Расходы» на Финансах: сегодняшние лоты сверху,
+// прошлые — аккордеоном (свёрнуты, раскрываются кликом по заголовку).
+const isToday = (d) => d && new Date(d).toDateString() === new Date().toDateString();
+const showPast = ref(false);
+const lotGroups = computed(() => {
+    const today = props.preDeals.filter((p) => isToday(p.created_at));
+    const past = props.preDeals.filter((p) => !isToday(p.created_at));
+    return [
+        { key: 'today', label: 'Сегодня', list: today, open: true, toggle: false },
+        { key: 'past', label: 'Прошлые', list: past, open: showPast.value, toggle: true },
+    ];
+});
+
 const showForm = ref(false);
 const editingId = ref(null);
-const form = useForm({ lot_number: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', commission: '' });
+const form = useForm({ lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', commission: '' });
+// Срок окончания тендера: сегодня/прошёл у невыигранного лота — подсветка.
+const tenderUrgent = (p) => p.tender_deadline && p.status === 'new' && new Date(p.tender_deadline) <= new Date(new Date().toDateString());
 const calc = computed(() => {
     const sum = Number(form.contract_sum || 0);
     const partner = Math.round(sum * Number(form.partner_pct || 0)) / 100;
@@ -38,12 +53,28 @@ const calc = computed(() => {
     const margin = sum > 0 ? Math.round(remainder / sum * 10000) / 100 : 0;
     return { partner, tax, remainder, margin, pass: margin >= (props.minMargin ?? 15) };
 });
-const openCreate = () => { editingId.value = null; form.reset(); form.clearErrors(); showForm.value = true; };
+// Кнопка «Проверить» у № лота: занят ли номер — ДО заполнения остальных полей.
+const lotCheck = ref(null);      // null | {exists, manager, date, status}
+const lotChecking = ref(false);
+const checkLot = async () => {
+    if (!form.lot_number || lotChecking.value) return;
+    lotChecking.value = true;
+    try {
+        const { data } = await window.axios.get(route('preDeals.checkLot'), {
+            params: { lot_number: form.lot_number, ignore: editingId.value || undefined },
+        });
+        lotCheck.value = data;
+    } catch (e) { lotCheck.value = null; }
+    lotChecking.value = false;
+};
+
+const openCreate = () => { editingId.value = null; form.reset(); form.clearErrors(); lotCheck.value = null; showForm.value = true; };
 const openEdit = (p) => {
     editingId.value = p.id;
     form.clearErrors();
+    lotCheck.value = null;
     Object.assign(form, {
-        lot_number: p.lot_number ?? '', bin: p.bin ?? '', customer: p.customer ?? '',
+        lot_number: p.lot_number ?? '', tender_deadline: p.tender_deadline ? p.tender_deadline.slice(0, 10) : '', bin: p.bin ?? '', customer: p.customer ?? '',
         client_name: p.client_name ?? '', client_phone: p.client_phone ?? '', product: p.product,
         contract_sum: Number(p.contract_sum), purchase_price: Number(p.purchase_price),
         partner_pct: Number(p.partner_pct), delivery: Number(p.delivery), commission: Number(p.commission),
@@ -155,9 +186,24 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <template v-for="p in preDeals" :key="p.id">
+                        <template v-for="g in lotGroups" :key="g.key">
+                        <!-- Секция «Сегодня» / «Прошлые» (аккордеон) -->
+                        <tr v-if="g.list.length || g.toggle" class="bg-slate-100/70" :class="g.toggle ? 'cursor-pointer select-none hover:bg-slate-200/60' : ''"
+                            @click="g.toggle && (showPast = !showPast)">
+                            <td :colspan="leadership ? 14 : 13" class="px-4 py-2">
+                                <span class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                    <svg v-if="g.toggle" class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="showPast ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                                    {{ g.label }} <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }}</span>
+                                </span>
+                            </td>
+                        </tr>
+                        <tr v-if="g.key === 'today' && !g.list.length"><td :colspan="leadership ? 14 : 13" class="px-6 py-4 text-center text-xs text-slate-300">Сегодня лотов ещё нет</td></tr>
+                        <template v-if="g.open">
+                        <template v-for="p in g.list" :key="p.id">
                             <tr class="hover:bg-slate-50">
-                                <td class="px-4 py-3 text-slate-500">{{ p.lot_number || '—' }}<span class="block text-[10px] text-slate-300">{{ formatDate(p.created_at) }}</span></td>
+                                <td class="px-4 py-3 text-slate-500">{{ p.lot_number || '—' }}<span class="block text-[10px] text-slate-300">{{ formatDate(p.created_at) }}</span>
+                                    <span v-if="p.tender_deadline" class="block text-[10px] font-semibold" :class="tenderUrgent(p) ? 'text-rose-600' : 'text-slate-400'">⏳ тендер до {{ formatDate(p.tender_deadline) }}</span>
+                                </td>
                                 <td class="max-w-56 px-4 py-3">
                                     <div class="truncate font-medium text-slate-800" :title="p.customer">{{ p.customer || '—' }}<span v-if="p.bin" class="text-xs text-slate-400"> · {{ p.bin }}</span></div>
                                     <div class="truncate text-xs text-slate-500" :title="p.product">{{ p.product }}</div>
@@ -212,6 +258,8 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 </td>
                             </tr>
                         </template>
+                        </template>
+                        </template>
                         <tr v-if="!preDeals.length"><td :colspan="leadership ? 14 : 13" class="px-6 py-10 text-center text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
                     </tbody>
                 </table>
@@ -224,8 +272,25 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 <h3 class="mb-4 text-base font-semibold text-slate-900">{{ editingId ? 'Изменить предварительную сделку' : 'Новая предварительная сделка' }}</h3>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <InputLabel value="№ лота" /><TextInput v-model="form.lot_number" class="mt-1 w-full" />
+                        <InputLabel value="№ лота" />
+                        <div class="mt-1 flex gap-2">
+                            <TextInput v-model="form.lot_number" class="w-full" @input="lotCheck = null" @keydown.enter.prevent="checkLot" />
+                            <button type="button" @click="checkLot" :disabled="!form.lot_number || lotChecking"
+                                class="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 disabled:opacity-40">
+                                {{ lotChecking ? '…' : 'Проверить' }}
+                            </button>
+                        </div>
+                        <p v-if="lotCheck?.exists" class="mt-1 text-xs font-semibold text-rose-600">
+                            ✗ Такой лот уже внесён<template v-if="lotCheck.manager"> — {{ lotCheck.manager }}</template><template v-if="lotCheck.date"> ({{ formatDate(lotCheck.date) }})</template><template v-if="lotCheck.status === 'confirmed'"> · уже выигран</template>
+                        </p>
+                        <p v-else-if="lotCheck" class="mt-1 text-xs font-semibold text-emerald-600">✓ Свободен — можно заполнять</p>
                         <InputError :message="form.errors.lot_number" class="mt-1" />
+                    </div>
+                    <div>
+                        <InputLabel value="Срок окончания тендера" />
+                        <TextInput v-model="form.tender_deadline" type="date" class="mt-1 w-full" />
+                        <p class="mt-1 text-[11px] text-slate-400">В день окончания менеджеру придёт уведомление</p>
+                        <InputError :message="form.errors.tender_deadline" class="mt-1" />
                     </div>
                     <div><InputLabel value="БИН заказчика" /><TextInput v-model="form.bin" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Заказчик (компания)" /><TextInput v-model="form.customer" class="mt-1 w-full" /></div>

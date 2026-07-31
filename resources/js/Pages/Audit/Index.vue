@@ -62,6 +62,7 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
                     <tr>
                         <th class="px-4 py-3">Время</th><th class="px-4 py-3">Пользователь</th>
                         <th class="px-4 py-3">Раздел</th><th class="px-4 py-3">Запись</th>
+                        <th class="px-4 py-3">Сделка</th>
                         <th class="px-4 py-3">Действие</th><th class="px-4 py-3">Что изменили</th>
                         <th class="px-4 py-3">Было → Стало</th>
                     </tr>
@@ -78,6 +79,12 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
                             <Link v-if="log.link" :href="log.link" class="text-indigo-600 hover:underline">#{{ log.record_id }}</Link>
                             <span v-else class="text-slate-400">#{{ log.record_id }}</span>
                         </td>
+                        <!-- По какой сделке действие; у удалённой — номер серым без ссылки -->
+                        <td class="px-4 py-3">
+                            <Link v-if="log.deal && !log.deal.deleted" :href="route('deals.show', log.deal.id)" class="font-medium text-indigo-600 hover:underline">{{ log.deal.number }}</Link>
+                            <span v-else-if="log.deal" class="text-slate-400" title="Сделка удалена">{{ log.deal.number }}</span>
+                            <span v-else class="text-slate-300">—</span>
+                        </td>
                         <td class="px-4 py-3 font-medium" :class="actionColor[log.action]">{{ actionLabel[log.action] ?? log.action }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ log.field ?? '—' }}</td>
                         <td class="px-4 py-3 text-xs text-slate-500">
@@ -86,7 +93,7 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
                             <span v-else>—</span>
                         </td>
                     </tr>
-                    <tr v-if="!logs.data.length"><td colspan="7" class="px-4 py-8 text-center text-slate-400">Записей нет — измените фильтры</td></tr>
+                    <tr v-if="!logs.data.length"><td colspan="8" class="px-4 py-8 text-center text-slate-400">Записей нет — измените фильтры</td></tr>
                 </tbody>
             </table>
             </div>

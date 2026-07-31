@@ -31,6 +31,40 @@ class PreDealTest extends TestCase
         return $u;
     }
 
+    // Сегодня заканчивается тендер → уведомление менеджеру лота (только new-лоты).
+    public function test_tender_deadline_today_notifies_manager(): void
+    {
+        $mgr = $this->user('manager');
+        $other = $this->user('manager');
+        PreDeal::create(PreDeal::calculate(['product' => 'A', 'contract_sum' => 100, 'tender_deadline' => now()->toDateString()]) + ['user_id' => $mgr->id]);
+        PreDeal::create(PreDeal::calculate(['product' => 'B', 'contract_sum' => 100, 'tender_deadline' => now()->addDay()->toDateString()]) + ['user_id' => $other->id]);
+        PreDeal::create(PreDeal::calculate(['product' => 'C', 'contract_sum' => 100, 'tender_deadline' => now()->toDateString()]) + ['user_id' => $other->id, 'status' => 'confirmed']);
+
+        $this->artisan('pre-deals:notify-tender-deadline')->assertSuccessful();
+
+        $this->assertSame(1, $mgr->notifications()->count());
+        $this->assertSame('tender_deadline', $mgr->notifications()->first()->data['type']);
+        $this->assertSame(0, $other->notifications()->count()); // завтра/выигран — не беспокоим
+    }
+
+    // Кнопка «Проверить №» до заполнения формы: занят/свободен + кто внёс;
+    // при правке свой номер не считается занятым (ignore).
+    public function test_check_lot_endpoint(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'product' => 'Стол', 'contract_sum' => 100000, 'lot_number' => 'LOT-1',
+        ]);
+        $lot = PreDeal::firstOrFail();
+
+        $this->actingAs($mgr)->getJson(route('preDeals.checkLot', ['lot_number' => 'LOT-1']))
+            ->assertOk()->assertJson(['exists' => true, 'manager' => $mgr->name]);
+        $this->actingAs($mgr)->getJson(route('preDeals.checkLot', ['lot_number' => 'LOT-9']))
+            ->assertOk()->assertJson(['exists' => false]);
+        $this->actingAs($mgr)->getJson(route('preDeals.checkLot', ['lot_number' => 'LOT-1', 'ignore' => $lot->id]))
+            ->assertOk()->assertJson(['exists' => false]);
+    }
+
     // Дубль № лота запрещён: второй ввод того же лота — ошибка валидации;
     // правка самого лота без смены номера ложно не срабатывает.
     public function test_duplicate_lot_number_rejected(): void

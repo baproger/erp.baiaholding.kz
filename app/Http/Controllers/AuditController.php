@@ -110,8 +110,37 @@ class AuditController extends Controller
             'company_id' => \App\Models\Company::pluck('name', 'id'),
         ]));
 
+        // Связанная СДЕЛКА каждой строки: расход/счёт/платёж/заказ цеха/лот/задача →
+        // ссылка «BAIA-088», чтобы видно было, по какой сделке действие (батчем, без N+1).
+        $col = $logs->getCollection();
+        $ids = fn (string $t) => $col->where('table_name', $t)->pluck('record_id')->filter()->unique()->values();
+        $dealByRecord = [
+            'deals' => $ids('deals')->mapWithKeys(fn ($id) => [$id => $id]),
+            'expenses' => \App\Models\Expense::whereIn('id', $ids('expenses'))->where('expenseable_type', 'deal')->pluck('expenseable_id', 'id'),
+            'invoices' => \App\Models\Invoice::whereIn('id', $ids('invoices'))->where('invoiceable_type', 'deal')->pluck('invoiceable_id', 'id'),
+            'payments' => \App\Models\Payment::whereIn('payments.id', $ids('payments'))
+                ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')->where('invoices.invoiceable_type', 'deal')
+                ->pluck('invoices.invoiceable_id', 'payments.id'),
+            'projects' => \App\Models\Project::whereIn('id', $ids('projects'))->whereNotNull('deal_id')->pluck('deal_id', 'id'),
+            'pre_deals' => \App\Models\PreDeal::whereIn('id', $ids('pre_deals'))->whereNotNull('deal_id')->pluck('deal_id', 'id'),
+            'tasks' => \App\Models\Task::whereIn('id', $ids('tasks'))->where('taskable_type', 'deal')->pluck('taskable_id', 'id'),
+        ];
+        // withTrashed: у удалённой сделки номер показываем, но серым (без ссылки).
+        $dealInfo = \App\Models\Deal::withTrashed()
+            ->whereIn('id', collect($dealByRecord)->flatMap(fn ($m) => $m->values())->unique()->values())
+            ->get(['id', 'number', 'deleted_at'])->keyBy('id');
+
         // Всё остальное — по-русски: таблица, поле, значения, даты, деньги.
-        $logs->setCollection($logs->getCollection()->map(fn ($log) => [
+        $logs->setCollection($logs->getCollection()->map(function ($log) use ($dealByRecord, $dealInfo) {
+            $dealId = $dealByRecord[$log->table_name][$log->record_id] ?? null;
+            $deal = $dealId ? $dealInfo[$dealId] ?? null : null;
+
+            return [
+            'deal' => $deal ? [
+                'id' => $deal->id,
+                'number' => $deal->number,
+                'deleted' => $deal->deleted_at !== null,
+            ] : null,
             'id' => $log->id,
             'created_at' => $log->created_at?->toIso8601String(),
             'user' => $log->user?->name,
@@ -129,7 +158,8 @@ class AuditController extends Controller
             'field' => $log->field_name ? (self::FIELD_LABELS[$log->field_name] ?? $log->field_name) : null,
             'old' => $this->formatValue($log->field_name, $log->old_value),
             'new' => $this->formatValue($log->field_name, $log->new_value),
-        ]));
+            ];
+        }));
 
         return Inertia::render('Audit/Index', [
             'logs' => $logs,

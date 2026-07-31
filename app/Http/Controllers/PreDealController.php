@@ -96,6 +96,7 @@ class PreDealController extends Controller
             // (при правке — без ложного срабатывания на самого себя).
             'lot_number' => ['nullable', 'string', 'max:100',
                 \Illuminate\Validation\Rule::unique('pre_deals', 'lot_number')->ignore($ignore?->id)],
+            'tender_deadline' => ['nullable', 'date'],
             'bin' => ['nullable', 'string', 'max:40'],
             'customer' => ['nullable', 'string', 'max:255'],
             'client_name' => ['nullable', 'string', 'max:255'],
@@ -108,6 +109,31 @@ class PreDealController extends Controller
             'commission' => ['nullable', 'numeric', 'min:0'],
         ], [
             'lot_number.unique' => 'Такой № лота уже существует — этот лот уже внесён.',
+        ]);
+    }
+
+    /**
+     * Быстрая проверка № лота ДО заполнения формы: занят ли номер, кем и когда —
+     * менеджер не тратит время на ввод остальных полей. ignore — id правящегося
+     * лота (свой номер при правке не считается занятым).
+     */
+    public function checkLot(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $this->guardAccess($request);
+        $data = $request->validate([
+            'lot_number' => ['required', 'string', 'max:100'],
+            'ignore' => ['nullable', 'integer'],
+        ]);
+
+        $existing = PreDeal::where('lot_number', trim($data['lot_number']))
+            ->when($data['ignore'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
+            ->with('user:id,name')->latest()->first();
+
+        return response()->json([
+            'exists' => (bool) $existing,
+            'manager' => $existing?->user?->name,
+            'date' => $existing?->created_at?->toDateString(),
+            'status' => $existing?->status,
         ]);
     }
 

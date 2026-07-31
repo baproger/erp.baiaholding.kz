@@ -9,12 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PreDeal extends Model
 {
     protected $fillable = [
-        'company_id', 'user_id', 'lot_number', 'bin', 'customer', 'client_name', 'client_phone',
+        'company_id', 'user_id', 'lot_number', 'tender_deadline', 'bin', 'customer', 'client_name', 'client_phone',
         'product', 'contract_sum', 'purchase_price', 'partner_pct', 'partner_sum',
         'delivery', 'commission', 'tax', 'remainder', 'margin', 'checks', 'status', 'deal_id',
     ];
 
-    protected $casts = ['checks' => 'array'];
+    protected $casts = ['checks' => 'array', 'tender_deadline' => 'date'];
 
     public function user(): BelongsTo
     {
