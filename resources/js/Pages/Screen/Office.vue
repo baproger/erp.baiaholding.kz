@@ -5,34 +5,21 @@ import Avatar from '@/Components/Avatar.vue';
 
 const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] }, funnel: { type: Array, default: () => [] } });
 
-// Воронка отдела: факт/план и % — цифры крупные, чтобы читались с экрана.
-const funnelPct = (f) => Math.min(100, Math.round((f.count || 0) / Math.max(1, f.plan) * 100));
 // Чек-лист: доля закрытых галочек — видно, работает менеджер по лотам или нет.
 const checksPct = (m) => m.checks_total > 0 ? Math.round(m.checks_done / m.checks_total * 100) : 0;
 const checksClass = (p) => p >= 70 ? 'bg-emerald-100 text-emerald-700' : p >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600';
 
-// ТВ-режим: часы + автообновление раз в 10 секунд + автопрокрутка страницы,
-// чтобы при большом списке менеджеров экран сам показывал всех (вниз-вверх).
+// ТВ-режим: часы + автообновление раз в 10 секунд. Без автопрокрутки —
+// список статичен, весь во всю ширину (просьба владельца 31.07.2026).
 const clock = ref('');
-const ratingScroller = ref(null); // контейнер списка менеджеров (автопрокрутка)
-let clockTimer = null, refreshTimer = null, scrollTimer = null;
+let clockTimer = null, refreshTimer = null;
 const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
     refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 10000);
-    // Автопрокрутка ТОЛЬКО списка менеджеров: если все влезают — стоит на месте.
-    scrollTimer = setInterval(() => {
-        const el = ratingScroller.value;
-        if (!el || el.scrollHeight <= el.clientHeight + 10) return;
-        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
-            el.scrollTo({ top: 0, behavior: 'smooth' }); // дошли до низа — наверх
-        } else {
-            el.scrollTop += 2;
-        }
-    }, 60);
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); clearInterval(scrollTimer); });
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
 
 const title = computed(() => ['Офис', props.screen?.company].filter(Boolean).join(' · '));
 const leave = () => router.post(route('screen.leave'));
@@ -66,33 +53,14 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
             </div>
         </div>
 
-        <!-- Воронка отдела КРУПНО: Участвовал → этапы чек-листа (Звонок, КП…) → Выигранные.
-             У каждого этапа свой факт/план — видно с другого конца комнаты. -->
-        <div class="mb-4 flex flex-wrap gap-3">
-            <div v-for="f in funnel" :key="f.label" class="min-w-44 flex-1 rounded-2xl border p-4 text-center shadow-sm lg:p-5"
-                :class="f.kind === 'won' ? 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white' : 'border-slate-200 bg-white'">
-                <div class="truncate text-sm font-bold uppercase tracking-wide lg:text-base" :class="f.kind === 'won' ? 'text-emerald-700' : 'text-slate-500'" :title="f.label">{{ f.label }}</div>
-                <div class="mt-2 text-5xl font-black leading-none tabular-nums lg:text-6xl" :class="f.kind === 'won' ? 'text-emerald-600' : 'text-slate-900'">
-                    {{ f.count }}<span class="text-2xl font-bold text-slate-300 lg:text-3xl">/{{ f.plan }}</span>
-                </div>
-                <div class="mx-auto mt-3 h-2.5 max-w-56 overflow-hidden rounded-full bg-slate-100">
-                    <div class="h-2.5 rounded-full transition-all duration-700"
-                        :class="f.kind === 'won' ? 'bg-emerald-500' : 'bg-indigo-500'"
-                        :style="{ width: Math.max(2, funnelPct(f)) + '%' }"></div>
-                </div>
-                <div class="mt-1 text-base font-bold tabular-nums lg:text-lg" :class="funnelPct(f) >= 100 ? 'text-emerald-600' : 'text-slate-400'">{{ funnelPct(f) }}%</div>
-            </div>
-        </div>
-
-        <div class="flex flex-col gap-4 xl:flex-row">
-            <!-- Слева: рейтинг эффективности отдела продаж -->
-            <div class="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <!-- ГЛАВНОЕ и единственное: рейтинг отдела продаж во всю ширину,
+             без воронки-плиток, без карточки лидера, без автопрокрутки. -->
+        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex items-baseline justify-between border-b border-slate-100 px-5 py-3.5">
                     <span class="text-base font-bold text-slate-900">Отдел продаж — лоты за месяц</span>
                     <span class="text-xs text-slate-400">добавил лотов · выиграл · конверсия %</span>
                 </div>
-                <!-- Автопрокрутка внутри блока: видно всех менеджеров, скроллбар скрыт -->
-                <div ref="ratingScroller" class="no-scrollbar max-h-[62vh] divide-y divide-slate-50 overflow-y-auto">
+                <div class="divide-y divide-slate-50">
                     <div v-for="(m, i) in managers" :key="m.name" class="flex items-center gap-4 px-5 py-3.5">
                         <span class="w-7 text-center text-lg font-bold" :class="i === 0 && m.won > 0 ? '' : 'text-slate-300'">{{ i === 0 && m.won > 0 ? '👑' : i + 1 }}</span>
                         <Avatar :name="m.name" :src="m.avatar" :size="40" />
@@ -134,43 +102,6 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                     </div>
                     <div v-if="!managers.length" class="px-5 py-10 text-center text-sm text-slate-400">В отделе продаж пока нет менеджеров</div>
                 </div>
-            </div>
-
-            <!-- Справа: лидер месяца по эффективности -->
-            <div class="w-full flex-shrink-0 xl:w-96">
-                <div v-if="leader && leader.won > 0" class="rounded-2xl border border-amber-200 bg-white shadow-sm">
-                    <div class="rounded-t-2xl bg-amber-50/70 px-5 py-4 text-center">
-                        <div class="text-3xl">👑</div>
-                        <div class="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-600">Лидер — {{ monthLabel }}</div>
-                    </div>
-                    <div class="flex flex-col items-center px-5 py-5">
-                        <Avatar :name="leader.name" :src="leader.avatar" :size="72" />
-                        <div class="mt-3 text-xl font-bold text-slate-900">{{ leader.name }}</div>
-                        <div class="mt-1 text-sm text-slate-400">больше всех выигранных лотов</div>
-                        <div class="mt-4 grid w-full grid-cols-3 gap-2 text-center">
-                            <div class="rounded-xl bg-emerald-50 p-3">
-                                <div class="text-2xl font-bold tabular-nums text-emerald-600">{{ leader.won }}</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">выиграл</div>
-                            </div>
-                            <div class="rounded-xl bg-amber-50 p-3">
-                                <div class="text-2xl font-bold tabular-nums text-amber-600">{{ leader.conversion }}%</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">конверсия</div>
-                            </div>
-                            <div class="rounded-xl bg-indigo-50 p-3">
-                                <div class="text-2xl font-bold tabular-nums text-indigo-600">{{ leader.total }}</div>
-                                <div class="mt-0.5 text-[11px] text-slate-400">лотов добавил</div>
-                            </div>
-                        </div>
-                        <div class="mt-3 w-full rounded-xl bg-slate-50 p-3 text-center">
-                            <div class="text-xl font-bold tabular-nums text-slate-900">{{ leader.deals }}</div>
-                            <div class="mt-0.5 text-[11px] text-slate-400">лотов стало сделками</div>
-                        </div>
-                    </div>
-                </div>
-                <div v-else class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
-                    В {{ monthLabel }} ещё нет выигранных лотов —<br />лидер появится после первого «Выиграл»
-                </div>
-            </div>
         </div>
 
         <!-- Лоты месяца с чек-листами: видно, кто реально работает по лотам -->
@@ -203,8 +134,3 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
     </div>
 </template>
 
-<style scoped>
-/* Автопрокрутка списка менеджеров: колесо крутим программно, скроллбар прячем */
-.no-scrollbar { scrollbar-width: none; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-</style>
