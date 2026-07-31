@@ -6,6 +6,7 @@ import Avatar from '@/Components/Avatar.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
+import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { formatDate } from '@/utils/format';
@@ -222,7 +223,10 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
             <div class="p-6">
                 <h3 class="mb-4 text-base font-semibold text-slate-900">{{ editingId ? 'Изменить предварительную сделку' : 'Новая предварительная сделка' }}</h3>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div><InputLabel value="№ лота" /><TextInput v-model="form.lot_number" class="mt-1 w-full" /></div>
+                    <div>
+                        <InputLabel value="№ лота" /><TextInput v-model="form.lot_number" class="mt-1 w-full" />
+                        <InputError :message="form.errors.lot_number" class="mt-1" />
+                    </div>
                     <div><InputLabel value="БИН заказчика" /><TextInput v-model="form.bin" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Заказчик (компания)" /><TextInput v-model="form.customer" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Название товара *" /><TextInput v-model="form.product" class="mt-1 w-full" /><div v-if="form.errors.product" class="mt-1 text-xs text-rose-600">{{ form.errors.product }}</div></div>

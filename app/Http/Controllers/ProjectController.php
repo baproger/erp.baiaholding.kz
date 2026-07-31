@@ -59,7 +59,7 @@ class ProjectController extends Controller
             // Цех тоже разделён по фирмам: заказ принадлежит компании исходной сделки.
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
             // Цеху на карточке нужны срок, описание, заметка и адрес (город) из сделки.
-            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name,address,deadline,description,note'])
+            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name,client_name,address,deadline,description,note'])
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             // Тайминг: когда заказ вошёл на текущий этап (открытый лог).
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')

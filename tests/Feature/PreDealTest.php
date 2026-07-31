@@ -31,6 +31,27 @@ class PreDealTest extends TestCase
         return $u;
     }
 
+    // Дубль № лота запрещён: второй ввод того же лота — ошибка валидации;
+    // правка самого лота без смены номера ложно не срабатывает.
+    public function test_duplicate_lot_number_rejected(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'product' => 'Стол', 'contract_sum' => 100000, 'lot_number' => 'LOT-777',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'product' => 'Стул', 'contract_sum' => 50000, 'lot_number' => 'LOT-777',
+        ])->assertSessionHasErrors('lot_number');
+        $this->assertSame(1, PreDeal::count());
+
+        // Правка своего лота с тем же номером — проходит (ignore self).
+        $lot = PreDeal::firstOrFail();
+        $this->actingAs($mgr)->put(route('preDeals.update', $lot), [
+            'product' => 'Стол обновлённый', 'contract_sum' => 120000, 'lot_number' => 'LOT-777',
+        ])->assertSessionHasNoErrors();
+    }
+
     public function test_margin_calculated_like_excel(): void
     {
         // Строка из Excel: 633333 − закуп 270000 − партнёр 10% (63333.30)

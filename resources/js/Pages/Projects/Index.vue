@@ -4,9 +4,8 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
-import { deadlineClass } from '@/utils/deadline';
 import { onMounted, onUnmounted } from 'vue';
-import { formatDate, formatDuration } from '@/utils/format';
+import { formatDuration } from '@/utils/format';
 
 const props = defineProps({ projects: [Array, Object], stages: Array, view: String, filters: Object, canSeeMoney: Boolean });
 
@@ -44,6 +43,8 @@ let durTimer = null;
 onMounted(() => (durTimer = setInterval(() => (nowTs.value = Date.now()), 60000)));
 onUnmounted(() => clearInterval(durTimer));
 const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Date(p.stage_entered_at).getTime()) / 1000) : null;
+// Сколько заказ ВСЕГО находится в цехе (с момента отправки) — крупно на карточке.
+const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(p.created_at).getTime()) / 1000) : null;
 </script>
 
 <template>
@@ -74,18 +75,15 @@ const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Da
                 <div class="flex-1 space-y-2 px-2 pb-2">
                     <Link v-for="p in byStage(stage.id)" :key="p.id" :href="route('projects.show', p.id)" draggable="true" @dragstart="draggingId = p.id"
                         class="block cursor-move rounded-md bg-white p-3 shadow-sm border border-slate-200 hover:ring-indigo-300">
-                        <div class="text-sm font-bold text-slate-900">{{ p.deal?.company_name || p.name }}</div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] text-slate-300">{{ p.number }}</span>
-                            <span v-if="onStage(p)" class="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-indigo-600" title="Время на текущем этапе">⏱ {{ onStage(p) }}</span>
+                        <!-- Минимум для цеха: товар, номер сделки, адрес, КРУПНО время в цехе -->
+                        <div class="text-sm font-bold leading-snug text-slate-900">{{ p.deal?.client_name || p.deal?.company_name || p.name }}</div>
+                        <div class="mt-0.5 text-xs font-semibold tracking-wide text-indigo-500">{{ p.deal?.number || p.number }}</div>
+                        <div v-if="p.deal?.address" class="mt-1 text-xs leading-snug text-slate-500">📍 {{ p.deal.address }}</div>
+                        <div class="mt-2 flex items-center justify-between gap-2 rounded-lg bg-indigo-50 px-2.5 py-2" title="Сколько заказ находится в цехе">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-indigo-400">⏱ в цехе</span>
+                            <span class="text-xl font-bold leading-none tabular-nums text-indigo-700">{{ inWorkshop(p) ?? '—' }}</span>
                         </div>
-                        <div v-if="canSeeMoney" class="mt-1 text-sm font-semibold text-indigo-600">{{ money(p.budget) }}</div>
-                        <div class="mt-1 text-xs text-slate-400">{{ p.client?.name ?? '—' }}</div>
-                        <!-- Для цеха: город/адрес, срок, описание и заметка из сделки -->
-                        <div v-if="p.deal?.address" class="mt-1 text-xs text-slate-500">📍 {{ p.deal.address }}</div>
-                        <div v-if="p.deal?.deadline || p.deadline" class="mt-1 text-xs" :class="deadlineClass(p.deal?.deadline ?? p.deadline, p.status === 'completed') || 'text-slate-400'">⏰ {{ formatDate(p.deal?.deadline ?? p.deadline) }}</div>
-                        <div v-if="p.deal?.description" class="mt-1 whitespace-pre-line text-xs leading-snug text-slate-500">{{ p.deal.description }}</div>
-                        <div v-if="p.deal?.note" class="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800">📌 {{ p.deal.note }}</div>
+                        <div v-if="onStage(p)" class="mt-1 text-right text-[10px] tabular-nums text-slate-400">на этапе {{ onStage(p) }}</div>
                         <button v-if="p.project_stage_id === lastStageOf(g)" @click.prevent.stop="sendToAct(p)" class="mt-2 w-full rounded bg-teal-600 py-1 text-xs font-semibold text-white hover:bg-teal-700">🚚 Готово → Логистика</button>
                         <button v-else @click.prevent.stop="advance(p)" class="mt-2 w-full rounded bg-slate-100 py-1 text-xs text-slate-600 hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
                     </Link>

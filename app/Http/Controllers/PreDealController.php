@@ -89,10 +89,13 @@ class PreDealController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request): array
+    private function validated(Request $request, ?PreDeal $ignore = null): array
     {
         return $request->validate([
-            'lot_number' => ['nullable', 'string', 'max:100'],
+            // Уникальный № лота: менеджеры не заводят один лот дважды
+            // (при правке — без ложного срабатывания на самого себя).
+            'lot_number' => ['nullable', 'string', 'max:100',
+                \Illuminate\Validation\Rule::unique('pre_deals', 'lot_number')->ignore($ignore?->id)],
             'bin' => ['nullable', 'string', 'max:40'],
             'customer' => ['nullable', 'string', 'max:255'],
             'client_name' => ['nullable', 'string', 'max:255'],
@@ -103,6 +106,8 @@ class PreDealController extends Controller
             'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'delivery' => ['nullable', 'numeric', 'min:0'],
             'commission' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'lot_number.unique' => 'Такой № лота уже существует — этот лот уже внесён.',
         ]);
     }
 
@@ -123,7 +128,7 @@ class PreDealController extends Controller
         if ($preDeal->status === 'confirmed') {
             return back()->with('error', 'Лот уже подтверждён в сделку — правки только в самой сделке.');
         }
-        $preDeal->update(PreDeal::calculate($this->validated($request)));
+        $preDeal->update(PreDeal::calculate($this->validated($request, $preDeal)));
 
         return back()->with('success', 'Пересчитано.');
     }

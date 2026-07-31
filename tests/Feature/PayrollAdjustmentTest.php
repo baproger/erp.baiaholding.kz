@@ -76,7 +76,8 @@ class PayrollAdjustmentTest extends TestCase
     {
         $fin = $this->user('financist');
         $mgr = $this->user('manager', 100000);
-        PayrollAdjustment::create(['user_id' => $mgr->id, 'type' => 'fine', 'amount' => 10000, 'date' => now()->subMonth()->toDateString()]);
+        // NoOverflow: 31-е число минус месяц иначе переполняется в 1-е ТЕКУЩЕГО месяца.
+        PayrollAdjustment::create(['user_id' => $mgr->id, 'type' => 'fine', 'amount' => 10000, 'date' => now()->subMonthNoOverflow()->toDateString()]);
 
         $this->actingAs($fin)->get(route('payroll.index'))
             ->assertInertia(fn ($p) => $p->where('rows', fn ($rows) => collect($rows)
