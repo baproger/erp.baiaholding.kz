@@ -333,4 +333,32 @@ class EmployeeDebtTest extends TestCase
         $this->actingAs($this->manager)
             ->get(route('users.show', $other->id))->assertForbidden();
     }
+
+    public function test_employee_sees_only_own_debt_on_payroll_page(): void
+    {
+        // Сотрудник заходит на Зарплату и видит СВОЙ долг — и ничей больше.
+        $other = User::factory()->create(['salary' => 200000]);
+        $other->assignRole('manager');
+        $other->companies()->attach($this->company->id);
+
+        $this->giveDebt(300000, 50000);                       // долг Бахытжана
+        $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->post(route('payroll.debts.store'), [
+                'user_id' => $other->id, 'amount' => 700000, 'monthly_amount' => 70000,
+                'date' => now()->toDateString(), 'payment_method' => 'bank',
+            ])->assertSessionHasNoErrors();                   // долг коллеги
+
+        $props = $this->actingAs($this->manager)->withSession(['company_id' => $this->company->id])
+            ->get(route('payroll.index'))->assertOk()->viewData('page')['props'];
+
+        $this->assertFalse($props['leadership']);
+        $this->assertCount(1, $props['rows'], 'В ведомости только он сам.');
+        $row = $props['rows'][0];
+        $this->assertSame($this->manager->id, $row['uid']);
+        $this->assertCount(1, $row['debts']);
+        $this->assertEqualsWithDelta(300000, $row['debts'][0]['amount'], 0.01, 'Свой долг, не коллеги.');
+
+        // Чужие суммы не должны просочиться в выдачу вообще.
+        $this->assertStringNotContainsString('700000', json_encode($props['rows']));
+    }
 }

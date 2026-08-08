@@ -31,6 +31,20 @@ const toggle = (uid) => { const s = new Set(open.value); s.has(uid) ? s.delete(u
 
 const companyNames = computed(() => Object.fromEntries((props.companies ?? []).map((c) => [c.id, c.name])));
 
+// Свой долг одной сводкой — для личной карточки сотрудника.
+const myDebt = computed(() => {
+    const list = me?.debts ?? [];
+    const total = list.reduce((s, d) => s + (d.amount || 0), 0);
+    const paid = list.reduce((s, d) => s + (d.paid || 0), 0);
+    return {
+        total,
+        paid,
+        remaining: list.reduce((s, d) => s + (d.remaining || 0), 0),
+        monthly: list.reduce((s, d) => s + (d.closed ? 0 : d.monthly_amount || 0), 0),
+        percent: total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0,
+    };
+});
+
 // Отдел фирмы по общему коду: «Отдел продаж» BAIA и ASU — разные отделы.
 const deptByCompanyCode = computed(() => {
     const map = new Map();
@@ -210,7 +224,56 @@ const delAdj = async (a) => {
                     <div class="flex justify-between"><span class="text-slate-500">Бонус по марже сделок</span><span class="font-medium tabular-nums text-emerald-600">{{ money(me?.bonus ?? 0) }}</span></div>
                     <div v-if="me?.deductions" class="flex justify-between"><span class="text-slate-500">Удержания (отгул/больничный/штраф/аванс)</span><span class="font-medium tabular-nums text-rose-600">− {{ money(me.deductions) }}</span></div>
                     <div v-if="me?.additions" class="flex justify-between"><span class="text-slate-500">Премии</span><span class="font-medium tabular-nums text-emerald-600">+ {{ money(me.additions) }}</span></div>
+                    <!-- Погашение долга вычитается из «К выплате» — без этой
+                         строки сумма сверху не сходилась бы с разбивкой. -->
+                    <div v-if="me?.debt_charge > 0" class="flex justify-between">
+                        <span class="text-slate-500">Погашение долга <span class="text-slate-400">(из бонуса)</span></span>
+                        <span class="font-medium tabular-nums text-amber-600">− {{ money(me.debt_charge) }}</span>
+                    </div>
                     <div class="flex justify-between"><span class="text-slate-500">Успешных сделок</span><span class="font-medium">{{ me?.closed ?? 0 }}</span></div>
+                </div>
+            </div>
+
+            <!-- Свой долг: сотруднику важно «сколько осталось и когда закрою»,
+                 а не бухгалтерская таблица — поэтому крупная сумма, полоса
+                 погашения и одна понятная строка про этот месяц. -->
+            <div v-if="me?.debts?.length" class="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+                <div class="bg-gradient-to-r from-amber-50 to-white px-5 pt-5 pb-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-amber-700">Долг перед компанией</div>
+                            <div class="mt-1 text-3xl font-bold tabular-nums text-amber-800">{{ money(myDebt.remaining) }}</div>
+                            <div class="mt-0.5 text-xs text-slate-400">осталось погасить</div>
+                        </div>
+                        <div class="shrink-0 rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-amber-100">
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">по плану</div>
+                            <div class="text-sm font-semibold tabular-nums text-slate-700">{{ money(myDebt.monthly) }}<span class="text-xs font-normal text-slate-400">/мес</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Полоса погашения: видно, сколько пути пройдено -->
+                    <div class="mt-4">
+                        <div class="h-2 overflow-hidden rounded-full bg-amber-100">
+                            <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
+                                :style="{ width: myDebt.percent + '%' }"></div>
+                        </div>
+                        <div class="mt-1.5 flex justify-between text-[11px] text-slate-400">
+                            <span>погашено <b class="tabular-nums text-emerald-600">{{ money(myDebt.paid) }}</b></span>
+                            <span class="tabular-nums">{{ myDebt.percent }}% из {{ money(myDebt.total) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-amber-100 px-5 py-3 text-sm">
+                    <template v-if="me.debt_charge > 0">
+                        <span class="text-slate-600">{{ me.debt_planned > 0 ? 'В ' + monthLabel + ' удержим' : 'За ' + monthLabel + ' удержано' }}</span>
+                        <b class="ml-1 tabular-nums text-amber-700">{{ money(me.debt_charge) }}</b>
+                        <span class="text-slate-400"> — останется {{ money(me.debt_after) }}</span>
+                    </template>
+                    <template v-else>
+                        <span class="text-slate-500">В {{ monthLabel }} бонуса нет — удержания не будет.</span>
+                    </template>
+                    <div class="mt-1 text-xs text-slate-400">Долг гасится только из бонуса. Оклад не удерживается.</div>
                 </div>
             </div>
 
