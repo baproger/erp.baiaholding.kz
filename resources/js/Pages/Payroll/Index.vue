@@ -11,7 +11,10 @@ import { confirmDialog } from '@/composables/useConfirm';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 
 const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number, totals: Object, companies: { type: Array, default: () => [] }, departments: { type: Array, default: () => [] } });
-const me = props.rows[0] ?? null;
+// ВАЖНО: computed, а не разовый захват props. Inertia переиспользует компонент
+// при переходе на ту же страницу (переключение фирмы, смена месяца) — обычная
+// константа осталась бы от прежней фирмы, и данные обновлялись бы только по F5.
+const me = computed(() => props.rows[0] ?? null);
 
 // Шкала бонусов — коммерческая информация: видят только отдел продаж
 // (менеджеры), финансисты и админ; цеху и прочим сотрудникам не показываем.
@@ -33,7 +36,7 @@ const companyNames = computed(() => Object.fromEntries((props.companies ?? []).m
 
 // Свой долг одной сводкой — для личной карточки сотрудника.
 const myDebt = computed(() => {
-    const list = me?.debts ?? [];
+    const list = me.value?.debts ?? [];
     const total = list.reduce((s, d) => s + (d.amount || 0), 0);
     const paid = list.reduce((s, d) => s + (d.paid || 0), 0);
     return {
@@ -148,10 +151,10 @@ const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 
 // же месяце; долг — переходящий остаток, гасится фиксированной суммой в месяц
 // и только из бонуса. Аванс остаётся типом корректировки.
 const newAdjTypes = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
-// «2026-07» → «июль 2026» для заголовков.
-const monthLabel = new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+// «2026-07» → «июль 2026» для заголовков (computed — месяц меняется без перезагрузки).
+const monthLabel = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
 // Короткий вариант для заголовка колонки — «август 2026 г.» её распирает.
-const monthShort = new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' });
+const monthShort = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' }));
 const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
 
 // Оклад: инлайн-правка (бухгалтер/админ).

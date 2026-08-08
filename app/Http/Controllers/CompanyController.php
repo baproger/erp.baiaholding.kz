@@ -43,7 +43,14 @@ class CompanyController extends Controller
      */
     private function backToSamePage(Request $request): RedirectResponse
     {
-        $path = (string) (parse_url((string) $request->headers->get('referer'), PHP_URL_PATH) ?? '');
+        $referer = (string) $request->headers->get('referer');
+        $path = (string) (parse_url($referer, PHP_URL_PATH) ?? '');
+        // Параметры страницы (месяц, период, поиск, менеджер) СОХРАНЯЕМ: без них
+        // после переключения фирмы фильтр молча слетал на значения по умолчанию —
+        // выглядело как «данные пропали, появляются только после F5».
+        // Берём только path+query, без схемы и хоста: referer подконтролен
+        // клиенту, редирект обязан остаться на своём сайте.
+        $query = (string) (parse_url($referer, PHP_URL_QUERY) ?? '');
 
         if (preg_match('#^/deals/\d+#', $path)) {
             return redirect()->route('deals.index');
@@ -52,6 +59,8 @@ class CompanyController extends Controller
             return redirect()->route('projects.index');
         }
 
-        return $path !== '' ? redirect($path) : redirect()->route('dashboard');
+        return $path !== ''
+            ? redirect($path.($query !== '' ? '?'.$query : ''))
+            : redirect()->route('dashboard');
     }
 }
