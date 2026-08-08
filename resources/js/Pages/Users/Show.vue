@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
+import { useStickyFilters } from '@/composables/useStickyFilters';
 
 const props = defineProps({
     person: Object,
@@ -11,8 +12,22 @@ const props = defineProps({
     tasks: { type: Array, default: () => [] },
     payrollRow: { type: Object, default: null },
     adjustments: { type: Array, default: () => [] },
+    month: { type: String, default: '' },
+    debts: { type: Array, default: () => [] },
+    debtPlan: { type: Object, default: null },
     can: { type: Object, default: () => ({ manage: false }) },
 });
+
+// Месяц денежных блоков (корректировки + долг) — как на стр. Зарплата.
+const monthSel = ref(props.month);
+const setMonth = () => router.get(route('users.show', props.person.id),
+    { month: monthSel.value || undefined },
+    { preserveState: true, preserveScroll: true, replace: true });
+useStickyFilters('user-card', { monthSel }, setMonth);
+
+const monthLabel = computed(() => props.month
+    ? new Date(props.month + '-01T00:00:00').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    : '');
 
 const roleLabels = { admin: 'СЕО (админ)', director: 'Директор', financist: 'Финансист-Бухгалтер', manager: 'Менеджер', employee: 'Сотрудник (цех)', lawyer: 'Юрист', cook: 'Повар', designer: 'Дизайнер', supplier: 'Снабженец' };
 const adjLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
@@ -103,15 +118,89 @@ const stats = computed(() => ({
 
         <!-- ЗП (только руководство и сам сотрудник) -->
         <div v-if="payrollRow" class="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 class="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Зарплата (текущий расчёт)</h3>
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Зарплата (текущий расчёт)</h3>
+                <!-- Фильтр месяца: корректировки и долг считаются за него,
+                     цифры сходятся со стр. Зарплата. -->
+                <label class="flex items-center gap-1.5 text-xs text-slate-400">месяц
+                    <input v-model="monthSel" @change="setMonth" type="month"
+                        class="rounded-lg border-slate-200 py-1 text-xs shadow-sm" />
+                </label>
+            </div>
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div><p class="text-lg font-bold text-slate-900">{{ fmt(payrollRow.salary) }}</p><p class="text-xs text-slate-500">Оклад</p></div>
                 <div><p class="text-lg font-bold text-emerald-600">{{ fmt(payrollRow.bonus) }}</p><p class="text-xs text-slate-500">Бонус от маржи</p></div>
                 <div><p class="text-lg font-bold text-indigo-600">{{ fmt(payrollRow.payout) }}</p><p class="text-xs text-slate-500">К выплате (без корректировок)</p></div>
                 <div><p class="text-lg font-bold text-slate-900">{{ payrollRow.closed }}</p><p class="text-xs text-slate-500">Закрытых сделок</p></div>
             </div>
-            <div v-if="adjustments.length" class="mt-4 overflow-x-auto">
-                <table class="min-w-full text-sm">
+            <!-- Долг перед компанией: тот же расчёт и та же таблица, что в
+                 ведомости ЗП — гасится фиксированной суммой в месяц и только
+                 из бонуса, оклад не трогается. -->
+            <div v-if="debts.length" class="mt-4">
+                <div class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                    Долг перед компанией
+                    <span v-if="debtPlan?.before > 0" class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-800">
+                        {{ fmt(debtPlan.before) }}
+                    </span>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-amber-200">
+                    <table class="min-w-full divide-y divide-amber-100 text-xs">
+                        <thead class="text-left uppercase tracking-wide text-amber-700/70">
+                            <tr class="bg-amber-50/60">
+                                <th class="px-3 py-2 font-semibold">Долг</th>
+                                <th class="px-3 py-2 text-right font-semibold">В месяц</th>
+                                <th class="px-3 py-2 text-right font-semibold">За {{ monthLabel }}</th>
+                                <th class="px-3 py-2 text-right font-semibold">Погашено</th>
+                                <th class="px-3 py-2 text-right font-semibold">Осталось</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-amber-50">
+                            <tr v-for="d in debts" :key="d.id" :class="d.closed ? 'opacity-60' : ''">
+                                <td class="px-3 py-2">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-semibold tabular-nums text-slate-800">{{ fmt(d.amount) }}</span>
+                                        <span v-if="d.closed" class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">закрыт</span>
+                                    </div>
+                                    <div class="mt-0.5 text-[11px] text-slate-400">
+                                        {{ fmtDate(d.date) }}<template v-if="d.note"> · {{ d.note }}</template>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2 text-right tabular-nums text-slate-500">{{ fmt(d.monthly_amount) }}</td>
+                                <td class="px-3 py-2 text-right tabular-nums" :class="d.paid_this_month > 0 ? 'font-semibold text-red-500' : 'text-slate-300'">
+                                    {{ d.paid_this_month > 0 ? '− ' + fmt(d.paid_this_month) : '—' }}
+                                </td>
+                                <td class="px-3 py-2 text-right tabular-nums text-emerald-600">{{ fmt(d.paid) }}</td>
+                                <td class="px-3 py-2 text-right font-semibold tabular-nums" :class="d.remaining > 0 ? 'text-amber-700' : 'text-slate-300'">{{ fmt(d.remaining) }}</td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="border-t-2 border-amber-200 bg-amber-50/80">
+                            <tr v-if="debtPlan?.charge > 0">
+                                <td colspan="2" class="px-3 py-2 font-semibold text-amber-800">
+                                    {{ debtPlan.planned > 0 ? 'Удержим' : 'Удержано' }} из бонуса за {{ monthLabel }}
+                                </td>
+                                <td class="px-3 py-2 text-right font-bold tabular-nums text-red-500">− {{ fmt(debtPlan.charge) }}</td>
+                                <td class="px-3 py-2 text-right text-[11px] uppercase tracking-wide text-slate-400">останется</td>
+                                <td class="px-3 py-2 text-right font-bold tabular-nums text-amber-800">{{ fmt(debtPlan.after) }}</td>
+                            </tr>
+                            <tr v-else>
+                                <td colspan="5" class="px-3 py-2 text-slate-500">
+                                    За {{ monthLabel }} бонуса нет — удержания не будет,
+                                    долг <b class="tabular-nums text-amber-800">{{ fmt(debtPlan?.before ?? 0) }}</b> переходит на следующий месяц.
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <p v-if="!debts.length" class="mt-4 rounded-lg border border-dashed border-amber-200 bg-amber-50/30 px-3 py-2 text-xs text-slate-400">
+                Долгов перед компанией нет
+            </p>
+
+            <div class="mt-4 overflow-x-auto">
+                <div class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Корректировки · {{ monthLabel }}</div>
+                <p v-if="!adjustments.length" class="text-xs text-slate-400">За этот месяц корректировок нет</p>
+                <table v-if="adjustments.length" class="min-w-full text-sm">
                     <thead class="text-left text-xs uppercase text-slate-400">
                         <tr><th class="py-1 pr-4">Корректировка</th><th class="py-1 pr-4">Дата</th><th class="py-1 pr-4 text-right">Сумма</th><th class="py-1">Заметка</th></tr>
                     </thead>

@@ -66,12 +66,21 @@ class UserController extends Controller
      * Видит руководство (user.view) или сам сотрудник; деньги (оклад/бонус) —
      * только admin/financist и сам сотрудник (директор — наблюдатель без ЗП-детали).
      */
-    public function show(Request $request, User $user, \App\Services\PayrollService $payroll): Response
-    {
+    public function show(
+        Request $request,
+        User $user,
+        \App\Services\PayrollService $payroll,
+        \App\Services\EmployeeDebtService $debts
+    ): Response {
         $viewer = $request->user();
         abort_unless($viewer->can('view', $user) || $viewer->id === $user->id, 403);
 
         $seesMoney = $viewer->hasAnyRole(['admin', 'financist', 'director']) || $viewer->id === $user->id;
+
+        // Месяц денежных блоков (корректировки, долг) — как на стр. Зарплата,
+        // чтобы цифры профиля и ведомости сходились.
+        $month = preg_match('/^\d{4}-\d{2}$/', $request->string('month')->toString())
+            ? $request->string('month')->toString() : now()->format('Y-m');
 
         $deals = \App\Models\Deal::forCurrentCompany()
             ->where('responsible_user_id', $user->id)
@@ -123,15 +132,27 @@ class UserController extends Controller
         $payrollRow = $seesMoney
             ? $payroll->perUser(true)->firstWhere('uid', $user->id)
             : null;
+        // Корректировки — за ВЫБРАННЫЙ месяц (раньше показывались последние 20
+        // вперемешку, и профиль не сходился с ведомостью).
+        $monthStart = $month.'-01';
+        $monthEnd = \Illuminate\Support\Carbon::parse($monthStart)->endOfMonth()->toDateString();
         $adjustments = $seesMoney
             ? \App\Models\PayrollAdjustment::where('user_id', $user->id)
-                ->orderByDesc('date')->limit(20)->get()
+                ->whereDate('date', '>=', $monthStart)->whereDate('date', '<=', $monthEnd)
+                ->orderByDesc('date')->get()
                 ->map(fn ($a) => [
                     'id' => $a->id, 'type' => $a->type, 'amount' => (float) $a->amount,
                     'days' => $a->days !== null ? (float) $a->days : null,
                     'date' => $a->date?->toDateString(), 'note' => $a->note,
                 ])
             : [];
+
+        // Долг перед компанией — тот же расчёт, что в ведомости ЗП: гасится
+        // фиксированной суммой в месяц и только из бонуса этого месяца.
+        $ofMonth = $seesMoney ? $debts->forMonth($user->id, $month) : collect();
+        $debtPlan = $ofMonth->isNotEmpty()
+            ? $debts->planFrom($ofMonth, $month, (float) ($payroll->bonusByUserForMonth($month)[$user->id] ?? 0))
+            : null;
 
         $headOf = Department::where('head_user_id', $user->id)->pluck('name');
 
@@ -157,6 +178,19 @@ class UserController extends Controller
             'tasks' => $tasks,
             'payrollRow' => $payrollRow,
             'adjustments' => $adjustments,
+            'month' => $month,
+            'debts' => $ofMonth->map(fn ($d) => [
+                'id' => $d->id,
+                'amount' => (float) $d->amount,
+                'monthly_amount' => (float) $d->monthly_amount,
+                'paid' => $d->paidSum(),
+                'remaining' => $d->remaining(),
+                'paid_this_month' => (float) ($d->payments->firstWhere('month', $month)?->amount ?? 0),
+                'closed' => $d->closed_at !== null,
+                'date' => optional($d->date)->toDateString(),
+                'note' => $d->note,
+            ])->values(),
+            'debtPlan' => $debtPlan,
             'can' => ['manage' => $viewer->can('update', $user)],
         ]);
     }

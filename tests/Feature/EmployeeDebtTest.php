@@ -274,4 +274,63 @@ class EmployeeDebtTest extends TestCase
         $this->assertCount(1, $row['debts'], 'Закрытый долг остаётся в списке своего месяца.');
         $this->assertTrue($row['debts'][0]['closed']);
     }
+
+    public function test_user_card_shows_the_same_debt_figures_as_payroll(): void
+    {
+        // Профиль сотрудника и ведомость обязаны показывать одно и то же —
+        // иначе бухгалтер видит две разные правды.
+        $month = now()->format('Y-m');
+        $this->wonDeal(5_000_000, now()->startOfMonth()->toDateString());
+        $this->giveDebt(300000, 50000);
+
+        $card = $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('users.show', ['user' => $this->manager->id, 'month' => $month]))
+            ->assertOk()->viewData('page')['props'];
+
+        $this->assertSame($month, $card['month']);
+        $this->assertCount(1, $card['debts']);
+        $this->assertEqualsWithDelta(50000, $card['debtPlan']['charge'], 0.01);
+        $this->assertEqualsWithDelta(300000, $card['debtPlan']['before'], 0.01);
+        $this->assertEqualsWithDelta(250000, $card['debtPlan']['after'], 0.01);
+
+        $payrollRow = collect($this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('payroll.index', ['month' => $month]))->viewData('page')['props']['rows'])
+            ->firstWhere('uid', $this->manager->id);
+
+        $this->assertEqualsWithDelta($payrollRow['debt_charge'], $card['debtPlan']['charge'], 0.01);
+        $this->assertEqualsWithDelta($payrollRow['debt_remaining'], $card['debtPlan']['before'], 0.01);
+    }
+
+    public function test_user_card_month_filter_switches_adjustments_and_debt(): void
+    {
+        $this->giveDebt(300000, 50000);
+
+        $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->post(route('payroll.adjustments.store'), [
+                'user_id' => $this->manager->id, 'type' => 'fine',
+                'amount' => 5000, 'date' => now()->toDateString(),
+            ])->assertSessionHasNoErrors();
+
+        $thisMonth = $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('users.show', ['user' => $this->manager->id, 'month' => now()->format('Y-m')]))
+            ->viewData('page')['props'];
+        $this->assertCount(1, $thisMonth['adjustments'], 'Штраф этого месяца виден.');
+
+        $otherMonth = $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('users.show', ['user' => $this->manager->id, 'month' => now()->subMonthNoOverflow()->format('Y-m')]))
+            ->viewData('page')['props'];
+        $this->assertCount(0, $otherMonth['adjustments'], 'В другом месяце его быть не должно.');
+        // Долг переходящий — он виден в любом месяце, пока не закрыт.
+        $this->assertCount(1, $otherMonth['debts']);
+    }
+
+    public function test_manager_does_not_see_another_employee_card_money(): void
+    {
+        $other = User::factory()->create();
+        $other->assignRole('manager');
+        $other->companies()->attach($this->company->id);
+
+        $this->actingAs($this->manager)
+            ->get(route('users.show', $other->id))->assertForbidden();
+    }
 }
