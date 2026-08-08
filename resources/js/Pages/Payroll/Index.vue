@@ -150,6 +150,8 @@ const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 
 const newAdjTypes = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
 // «2026-07» → «июль 2026» для заголовков.
 const monthLabel = new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+// Короткий вариант для заголовка колонки — «август 2026 г.» её распирает.
+const monthShort = new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' });
 const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
 
 // Оклад: инлайн-правка (бухгалтер/админ).
@@ -417,6 +419,9 @@ const delAdj = async (a) => {
                             <th class="px-4 py-3 text-right">Оклад (начислено)</th>
                             <th class="px-4 py-3 text-right">Бонус</th>
                             <th class="px-4 py-3 text-right">Удержания / премии</th>
+                            <!-- Долг отдельной колонкой: он не удержание и не премия,
+                                 гасится только из бонуса. -->
+                            <th class="px-4 py-3 text-right" title="Погашение долга за месяц — только из бонуса, оклад не трогается">Долг за {{ monthShort }}</th>
                             <th class="px-4 py-3 text-right">К выплате</th>
                         </tr>
                     </thead>
@@ -435,9 +440,11 @@ const delAdj = async (a) => {
                             <td></td>
                             <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums text-white/90">{{ money(s.totals.base) }}</td>
                             <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums text-emerald-300">{{ money(s.totals.bonus) }}</td>
-                            <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums" :class="s.totals.deductions > 0 || s.totals.debt > 0 ? 'text-rose-300' : 'text-white/30'">
-                                {{ s.totals.deductions > 0 ? '− ' + money(s.totals.deductions) : (s.totals.debt > 0 ? '' : '—') }}
-                                <span v-if="s.totals.debt > 0" class="text-amber-300" title="Погашение долга из бонуса">− {{ money(s.totals.debt) }} долг</span>
+                            <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums" :class="s.totals.deductions > 0 ? 'text-rose-300' : 'text-white/30'">
+                                {{ s.totals.deductions > 0 ? '− ' + money(s.totals.deductions) : '—' }}
+                            </td>
+                            <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums" :class="s.totals.debt > 0 ? 'text-amber-300' : 'text-white/30'">
+                                {{ s.totals.debt > 0 ? '− ' + money(s.totals.debt) : '—' }}
                             </td>
                             <td class="px-4 py-2.5 text-right text-base font-bold tabular-nums text-emerald-300">{{ money(s.totals.final) }}</td>
                         </tr>
@@ -473,10 +480,12 @@ const delAdj = async (a) => {
                             <td></td>
                             <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums text-slate-600">{{ money(g.base) }}</td>
                             <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums text-emerald-600">{{ money(g.bonus) }}</td>
-                            <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums" :class="g.deductions > 0 || g.debt > 0 ? 'text-rose-600' : 'text-slate-300'">
-                                {{ g.deductions > 0 ? '− ' + money(g.deductions) : (g.additions > 0 || g.debt > 0 ? '' : '—') }}
+                            <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums" :class="g.deductions > 0 ? 'text-rose-600' : 'text-slate-300'">
+                                {{ g.deductions > 0 ? '− ' + money(g.deductions) : (g.additions > 0 ? '' : '—') }}
                                 <span v-if="g.additions > 0" class="text-emerald-600"> + {{ money(g.additions) }}</span>
-                                <span v-if="g.debt > 0" class="text-amber-600" title="Погашение долга из бонуса"> − {{ money(g.debt) }} долг</span>
+                            </td>
+                            <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums" :class="g.debt > 0 ? 'text-amber-600' : 'text-slate-300'">
+                                {{ g.debt > 0 ? '− ' + money(g.debt) : '—' }}
                             </td>
                             <td class="px-4 py-2 text-right text-sm font-bold tabular-nums text-emerald-700">{{ money(g.final) }}</td>
                         </tr>
@@ -540,10 +549,16 @@ const delAdj = async (a) => {
                                     <template v-else>—</template>
                                     <span v-if="r.additions > 0" class="text-emerald-600"> +{{ money(r.additions) }}</span>
                                 </td>
+                                <!-- Долг: удержание месяца, гасится только из бонуса.
+                                     Подсказкой — сколько останется после него. -->
+                                <td class="px-4 py-3 text-right tabular-nums" :class="r.debt_charge > 0 ? 'font-medium text-amber-600' : 'text-slate-300'"
+                                    :title="r.debt_charge > 0 ? 'Останется долга: ' + money(r.debt_after) : ''">
+                                    {{ r.debt_charge > 0 ? '− ' + money(r.debt_charge) : '—' }}
+                                </td>
                                 <td class="px-4 py-3 text-right font-bold tabular-nums" :class="r.final > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ r.final > 0 ? money(r.final) : '—' }}</td>
                             </tr>
                             <tr v-if="open.has(r.uid)" class="bg-slate-50/60">
-                                <td colspan="6" class="px-4 py-3">
+                                <td colspan="7" class="px-4 py-3">
                                     <!-- Финансы сделок сотрудника (из колонок убраны — здесь по требованию) -->
                                     <div v-if="r.budget > 0" class="mb-3 flex flex-wrap gap-2 text-[11px]">
                                         <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Сумма договоров <span class="font-semibold tabular-nums text-slate-700">{{ money(r.budget) }}</span></span>
@@ -687,7 +702,7 @@ const delAdj = async (a) => {
                         </template>
                         </template>
                         </template>
-                        <tr v-if="!rows.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
+                        <tr v-if="!rows.length"><td colspan="7" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
                     </tbody>
                 </table>
             </div>
