@@ -14,3 +14,6 @@ Schedule::command('tasks:notify-overdue')->hourly();
 Schedule::command('users:notify-birthdays')->dailyAt('09:00');
 // Сегодня заканчивается тендер лота → уведомление его менеджеру.
 Schedule::command('pre-deals:notify-tender-deadline')->dailyAt('09:00');
+// Долги сотрудников: 1-го числа гасим за ПРОШЛЫЙ месяц (его бонусы уже
+// начислены целиком). Команда идемпотентна — повторный прогон не удвоит.
+Schedule::command('debts:charge')->monthlyOn(1, '03:00');

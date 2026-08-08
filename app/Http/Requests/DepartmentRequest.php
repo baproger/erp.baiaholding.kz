@@ -21,6 +21,9 @@ class DepartmentRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'head_user_id' => ['nullable', 'exists:users,id'],
             'is_active' => ['boolean'],
+            // Фирмы, в которых создаётся отдел (только при создании; пусто = текущая).
+            'company_ids' => ['sometimes', 'array'],
+            'company_ids.*' => ['integer', 'exists:companies,id'],
         ];
     }
 }

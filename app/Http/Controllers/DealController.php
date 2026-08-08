@@ -107,7 +107,10 @@ class DealController extends Controller
                     'department' => $u->department?->name,
                 ])->values(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
-            'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // Отделы своей фирмы: одноимённые отделы другой фирмы в фильтр не лезут.
+            'departments' => Department::where('is_active', true)
+                ->forCompany(\App\Support\CurrentCompany::id() ?: null)
+                ->orderBy('name')->get(['id', 'name', 'company_id']),
             'can' => [
                 'create' => $request->user()->can('create', Deal::class),
                 // Удаление (в т.ч. массовое) — только admin (DealPolicy::delete).

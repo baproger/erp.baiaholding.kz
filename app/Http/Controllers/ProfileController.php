@@ -29,7 +29,9 @@ class ProfileController extends Controller
             'employees' => $isAdmin
                 ? \App\Models\User::where('is_active', true)->orderBy('name')->get()->map(fn ($u) => $this->userData($u))->values()
                 : [],
-            'departments' => \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'departments' => \App\Models\Department::where('is_active', true)
+                ->forCompany(\App\Support\CurrentCompany::id() ?: null)
+                ->orderBy('name')->get(['id', 'name', 'company_id']),
             'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
         ]);

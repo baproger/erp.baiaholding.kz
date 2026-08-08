@@ -3,11 +3,15 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
+import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 
 const props = defineProps({
     byEmployee: Array, monthsFilter: Number, funnel: Array, byStatus: Object, monthly: Array,
     abc: Array, abcSummary: Object, conversion: Object, totals: Object,
     attention: Object, period: Object, topManagers: Array, filters: Object, managers: Array, stageOptions: Array, companyMoney: Object,
+    // Бухгалтеры: сделки на ИХ этапах (АКТ/ЭСФ) и просрочка по срокам их задач.
+    byAccountant: { type: Array, default: () => [] },
+    accountantTotals: { type: Object, default: () => ({ deals: 0, overdue_deals: 0, overdue_budget: 0, act: 0, esf: 0 }) },
 });
 
 const tab = ref('general');
@@ -32,7 +36,13 @@ const apply = (extra = {}) => router.get(route('analytics.index'), params(extra)
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(apply, 350); };
 const hasFilters = computed(() => search.value || manager.value || stageF.value);
-const resetFilters = () => { search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = ''; apply(); };
+const resetFilters = () => {
+    search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = '';
+    clearStickyFilters('analytics');
+    apply();
+};
+// Фильтр страницы (и выбранная вкладка) запоминается за страницей.
+useStickyFilters('analytics', { tab, search, from, to, manager, stageF }, apply);
 const selected = ref(props.byEmployee?.[0] ?? null);
 // Фильтр по сотрудникам: поиск по имени, список и выбор обновляются сразу.
 const empSearch = ref('');
@@ -138,6 +148,11 @@ const donut = computed(() => {
             <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
                 <button :class="tab==='general' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='general'">Обзор</button>
                 <button :class="tab==='employees' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='employees'">По сотрудникам</button>
+                <!-- Бухгалтеры: сделки, застрявшие на ИХ этапах (АКТ, ЭСФ) -->
+                <button :class="tab==='accountants' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='accountants'">
+                    По бухгалтерам
+                    <span v-if="accountantTotals?.overdue_deals" class="ml-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ accountantTotals.overdue_deals }}</span>
+                </button>
             </div>
             <!-- Реальное время: часы + автообновление данных раз в минуту -->
             <div class="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
@@ -552,6 +567,93 @@ const donut = computed(() => {
             <div v-else class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-white p-10 text-center shadow-sm lg:col-span-2">
                 <div class="mb-2 text-3xl">👥</div>
                 <div class="text-sm text-slate-400">Выберите сотрудника слева — покажем его показатели и сделки</div>
+            </div>
+        </div>
+
+        <!-- ============ ПО БУХГАЛТЕРАМ ============
+             Сделки, застрявшие на этапах бухгалтера (АКТ, ЭСФ). Меряем по ЕГО
+             задачам: ответственный по сделке остаётся менеджер, а гейт-задачу
+             система ставит бухгалтеру. Просрочка — по сроку его задачи. -->
+        <div v-show="tab==='accountants'" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Сделок на АКТ</div>
+                    <div class="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900">{{ accountantTotals.act }}</div>
+                </div>
+                <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 40ms">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Сделок на ЭСФ</div>
+                    <div class="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900">{{ accountantTotals.esf }}</div>
+                </div>
+                <div class="rise rounded-2xl border p-4 shadow-sm" style="animation-delay: 80ms"
+                    :class="accountantTotals.overdue_deals ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'">
+                    <div class="text-[11px] font-medium uppercase tracking-wide" :class="accountantTotals.overdue_deals ? 'text-rose-500' : 'text-slate-400'">Просрочено</div>
+                    <div class="mt-1.5 text-2xl font-semibold tabular-nums" :class="accountantTotals.overdue_deals ? 'text-rose-600' : 'text-slate-300'">{{ accountantTotals.overdue_deals }}</div>
+                    <div class="mt-0.5 text-[11px] text-slate-400">уникальных сделок</div>
+                </div>
+                <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 120ms">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Сумма просроченных</div>
+                    <div class="mt-1.5 text-xl font-semibold tabular-nums text-rose-600">{{ money(accountantTotals.overdue_budget) }}</div>
+                </div>
+            </div>
+
+            <div v-for="a in byAccountant" :key="a.uid" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                    <div class="flex items-center gap-2.5">
+                        <Avatar :name="a.user" :src="a.avatar" :size="34" />
+                        <div class="leading-tight">
+                            <div class="font-semibold text-slate-900">{{ a.user }}</div>
+                            <div class="text-[11px] text-slate-400">Акт {{ a.act }} · ЭСФ {{ a.esf }} · всего {{ a.total }}</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <span v-if="a.overdue" class="rounded-full bg-rose-100 px-2.5 py-1 font-semibold text-rose-700">
+                            просрочено {{ a.overdue }} · до {{ a.max_overdue_days }} дн.
+                        </span>
+                        <span v-else class="rounded-full bg-emerald-100 px-2.5 py-1 font-semibold text-emerald-700">без просрочек</span>
+                        <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">
+                            сумма <b class="tabular-nums text-slate-700">{{ money(a.budget) }}</b>
+                        </span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="text-[11px] uppercase tracking-wide text-slate-400">
+                            <tr class="border-b border-slate-100">
+                                <th class="px-4 py-2 text-left font-medium">Сделка</th>
+                                <th class="px-3 py-2 text-left font-medium">Этап</th>
+                                <th class="px-3 py-2 text-left font-medium">Менеджер</th>
+                                <th class="px-3 py-2 text-right font-medium">Сумма</th>
+                                <th class="px-3 py-2 text-center font-medium">Срок задачи</th>
+                                <th class="px-3 py-2 text-right font-medium">Просрочка</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="d in a.deals" :key="d.deal_id" class="hover:bg-slate-50"
+                                :class="d.overdue_days > 0 ? 'bg-rose-50/40' : ''">
+                                <td class="px-4 py-2.5">
+                                    <Link :href="route('deals.show', d.deal_id)" class="font-medium text-indigo-600 hover:underline">{{ d.company_name || d.number }}</Link>
+                                    <span class="ml-1 text-[11px] text-slate-400">{{ d.number }}</span>
+                                </td>
+                                <td class="px-3 py-2.5">
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                        :class="d.stage_type === 'esf' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'">{{ d.stage }}</span>
+                                </td>
+                                <td class="px-3 py-2.5 text-slate-500">{{ d.manager ?? '—' }}</td>
+                                <td class="px-3 py-2.5 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
+                                <td class="px-3 py-2.5 text-center tabular-nums text-slate-500">{{ d.due_date ?? '—' }}</td>
+                                <td class="px-3 py-2.5 text-right tabular-nums font-semibold"
+                                    :class="d.overdue_days > 0 ? 'text-rose-600' : 'text-slate-300'">
+                                    {{ d.overdue_days > 0 ? d.overdue_days + ' дн.' : '—' }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-if="!byAccountant.length" class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-14 text-center">
+                <div class="mb-2 text-3xl">🧾</div>
+                <div class="text-sm text-slate-400">На этапах АКТ и ЭСФ сейчас нет сделок с задачами бухгалтеров</div>
             </div>
         </div>
     </AppLayout>

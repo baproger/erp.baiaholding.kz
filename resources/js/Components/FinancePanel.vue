@@ -65,6 +65,10 @@ const canSubmitExpense = computed(() => expenseMode.value === 'material'
 
 // Подтверждение прочего расхода — только бухгалтер (financist) или админ.
 const canConfirm = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
+// Расход, подтверждённый бухгалтером (чек + нал/банк, деньги ушли из кассы),
+// автор больше не трогает — только бухгалтер. Смотрим на confirmed_by, а не на
+// статус: списание со склада система проводит сама, его удалять можно.
+const canManageExpense = (e) => !e.confirmed_by || canConfirm.value;
 const confirmFor = ref(null); // id расхода, открытого на подтверждение
 const confirmInput = ref(null);
 const confirmForm = useForm({ payment_method: 'bank', file: null });
@@ -296,7 +300,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             <button v-if="canConfirm && e.status !== 'confirmed' && confirmFor !== e.id"
                                 class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700"
                                 @click="openConfirm(e)">✓ Подтвердить</button>
-                            <button class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="delExpense(e)">
+                            <!-- Подтверждённый расход проведён по кассе — удалить его
+                                 может только бухгалтер (та же проверка в ExpensePolicy). -->
+                            <button v-if="canManageExpense(e)" class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="delExpense(e)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
                             </button>
                         </div>

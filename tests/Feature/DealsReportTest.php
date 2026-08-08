@@ -35,12 +35,97 @@ class DealsReportTest extends TestCase
         $this->actingAs($this->user('director'))->get(route('reports.deals'))->assertOk();
     }
 
-    public function test_report_forbidden_for_financist_manager_employee(): void
+    public function test_report_forbidden_for_financist_and_employee(): void
     {
-        // Отчёт показывает бонусы ВСЕХ менеджеров — только admin/director.
-        foreach (['financist', 'manager', 'employee'] as $role) {
+        // Полный отчёт показывает бонусы ВСЕХ менеджеров — только admin/director
+        // (у МОПа свой урезанный срез, см. тесты ниже).
+        foreach (['financist', 'employee'] as $role) {
             $this->actingAs($this->user($role))->get(route('reports.deals'))->assertForbidden();
         }
+    }
+
+    public function test_manager_sees_only_own_deals_and_cannot_spy_on_others(): void
+    {
+        $mine = $this->user('manager');
+        $other = $this->user('manager');
+        $stage = DealStage::orderBy('order')->first();
+
+        Deal::create(['number' => 'D-MINE', 'name' => 'Моя', 'company_name' => 'Моя',
+            'budget' => 1000, 'status' => 'active', 'deal_stage_id' => $stage->id,
+            'responsible_user_id' => $mine->id]);
+        Deal::create(['number' => 'D-OTHER', 'name' => 'Чужая', 'company_name' => 'Чужая',
+            'budget' => 9000, 'status' => 'active', 'deal_stage_id' => $stage->id,
+            'responsible_user_id' => $other->id]);
+
+        // Даже с чужим ?manager= в адресе МОП остаётся прибит к своим сделкам.
+        $page = $this->actingAs($mine)
+            ->get(route('reports.deals', ['manager' => $other->id]))
+            ->assertOk()->viewData('page');
+
+        $numbers = collect($page['props']['rows'])->pluck('number');
+        $this->assertTrue($numbers->contains('D-MINE'));
+        $this->assertFalse($numbers->contains('D-OTHER'), 'МОП не должен видеть чужие сделки.');
+        $this->assertFalse($page['props']['isLeadership']);
+        // Сводка по МОП у него — ровно одна строка, своя.
+        $this->assertCount(1, $page['props']['byManager']);
+        $this->assertSame($mine->id, $page['props']['byManager'][0]['manager_id']);
+    }
+
+    public function test_manager_never_receives_company_profit_or_margin(): void
+    {
+        $mine = $this->user('manager');
+        Deal::create(['number' => 'D-P', 'name' => 'Моя', 'company_name' => 'Моя',
+            'budget' => 1000, 'status' => 'active',
+            'deal_stage_id' => DealStage::orderBy('order')->first()->id,
+            'responsible_user_id' => $mine->id]);
+
+        $props = $this->actingAs($mine)->get(route('reports.deals'))->assertOk()
+            ->viewData('page')['props'];
+
+        // Прибыль фирмы не должна доехать даже в props — не только скрыться в вёрстке.
+        $this->assertArrayNotHasKey('company', $props['totals']);
+        $this->assertArrayNotHasKey('margin', $props['totals']);
+        $this->assertArrayNotHasKey('company', $props['rows'][0]);
+        $this->assertArrayNotHasKey('margin', $props['rows'][0]);
+        $this->assertArrayNotHasKey('company', $props['byManager'][0]);
+        // А свой бонус и оборот — на месте, ради них отчёт и открывается.
+        $this->assertArrayHasKey('bonus', $props['byManager'][0]);
+        $this->assertArrayHasKey('budget', $props['byManager'][0]);
+    }
+
+    public function test_leadership_still_sees_company_profit(): void
+    {
+        Deal::create(['number' => 'D-L', 'name' => 'Сделка', 'company_name' => 'Сделка',
+            'budget' => 1000, 'status' => 'active',
+            'deal_stage_id' => DealStage::orderBy('order')->first()->id]);
+
+        $props = $this->actingAs($this->user('director'))->get(route('reports.deals'))
+            ->assertOk()->viewData('page')['props'];
+
+        $this->assertArrayHasKey('company', $props['totals']);
+        $this->assertArrayHasKey('margin', $props['totals']);
+    }
+
+    public function test_report_breaks_deals_down_by_stage(): void
+    {
+        $admin = $this->user('admin');
+        $stages = DealStage::orderBy('order')->take(2)->get();
+
+        foreach ([[$stages[0], 2], [$stages[1], 1]] as [$stage, $count]) {
+            foreach (range(1, $count) as $i) {
+                Deal::create([
+                    'number' => 'S-'.$stage->id.'-'.$i, 'name' => 'Сделка', 'company_name' => 'Сделка',
+                    'budget' => 1000, 'status' => 'active', 'deal_stage_id' => $stage->id,
+                ]);
+            }
+        }
+
+        $page = $this->actingAs($admin)->get(route('reports.deals'))->assertOk()->viewData('page');
+
+        $byStage = collect($page['props']['byStage'])->keyBy('stage_id');
+        $this->assertSame(2, $byStage[$stages[0]->id]['count']);
+        $this->assertSame(1, $byStage[$stages[1]->id]['count']);
+        $this->assertEqualsWithDelta(2000, $byStage[$stages[0]->id]['budget'], 0.01);
     }
 
     public function test_report_renders_with_data_and_filters(): void

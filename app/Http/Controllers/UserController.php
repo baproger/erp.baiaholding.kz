@@ -21,7 +21,7 @@ class UserController extends Controller
         // Без пагинации: страница группирует сотрудников по отделам,
         // поиск и фильтры — мгновенные на клиенте.
         $users = User::query()
-            ->with(['department:id,name', 'roles:id,name', 'companies:companies.id,name'])
+            ->with(['department:id,name,code,company_id', 'roles:id,name', 'companies:companies.id,name'])
             ->orderBy('name')
             ->get()
             ->map(fn ($u) => [
@@ -35,6 +35,10 @@ class UserController extends Controller
                 'is_active' => $u->is_active,
                 'department' => $u->department,
                 'department_id' => $u->department_id,
+                // Отделы свои у каждой фирмы; code — общий ключ одноимённых
+                // отделов BAIA/ASU, по нему сотрудник обеих фирм попадает
+                // в свой отдел в секции каждой фирмы.
+                'department_code' => $u->department?->code,
                 'workshops' => $u->workshops ?? [],
                 'role' => $u->roles->first()?->name,
                 'company_ids' => $u->companies->pluck('id'),
@@ -46,9 +50,10 @@ class UserController extends Controller
 
         return Inertia::render('Users/Index', [
             'users' => $users,
-            'departments' => Department::where('is_active', true)->orderBy('name')->get(['id', 'name', 'head_user_id']),
+            'departments' => Department::where('is_active', true)->orderBy('company_id')->orderBy('name')
+                ->get(['id', 'company_id', 'name', 'code', 'head_user_id']),
             'roles' => Role::orderBy('name')->pluck('name'),
-            'companies' => \App\Models\Company::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'companies' => \App\Models\Company::where('is_active', true)->orderBy('id')->get(['id', 'name']),
             'can' => ['manage' => $request->user()->can('create', User::class)],
             // Цеха холдинга (у BAIA два) — чекбоксы доступа в форме сотрудника.
             'workshopOptions' => \App\Models\Company::where('is_active', true)->pluck('id')

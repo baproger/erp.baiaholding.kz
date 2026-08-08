@@ -119,4 +119,60 @@ class ExpenseConfirmationTest extends TestCase
         $this->assertSame('confirmed', $expense->status);
         $this->assertSame('bank', $expense->payment_method);
     }
+
+    /** Подтверждённый расход проведён по кассе — менеджер его больше не трогает. */
+    private function confirm(Expense $expense): Expense
+    {
+        $this->actingAs($this->financist)->patch(route('expenses.confirm', $expense->id), [
+            'payment_method' => 'cash',
+            'file' => UploadedFile::fake()->image('чек.jpg'),
+        ])->assertSessionHasNoErrors();
+
+        return $expense->fresh();
+    }
+
+    public function test_manager_can_delete_own_expense_while_pending(): void
+    {
+        $expense = $this->createPendingExpense();
+
+        $this->actingAs($this->manager)
+            ->delete(route('expenses.destroy', $expense->id))->assertRedirect();
+
+        $this->assertSoftDeleted($expense);
+    }
+
+    public function test_manager_cannot_delete_expense_confirmed_by_accountant(): void
+    {
+        $expense = $this->confirm($this->createPendingExpense());
+        $this->assertSame('confirmed', $expense->status);
+
+        $this->actingAs($this->manager)
+            ->delete(route('expenses.destroy', $expense->id))->assertForbidden();
+
+        // Расход на месте: касса бухгалтера не поехала.
+        $this->assertModelExists($expense);
+    }
+
+    public function test_manager_cannot_edit_expense_confirmed_by_accountant(): void
+    {
+        // Иначе запрет на удаление обходится правкой суммы на 1 ₸.
+        $expense = $this->confirm($this->createPendingExpense());
+
+        $this->actingAs($this->manager)->put(route('expenses.update', $expense->id), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'amount' => 1, 'date' => now()->toDateString(), 'description' => 'Подмена',
+        ])->assertForbidden();
+
+        $this->assertEqualsWithDelta(5000, (float) $expense->fresh()->amount, 0.01);
+    }
+
+    public function test_accountant_still_deletes_confirmed_expense(): void
+    {
+        $expense = $this->confirm($this->createPendingExpense());
+
+        $this->actingAs($this->financist)
+            ->delete(route('expenses.destroy', $expense->id))->assertRedirect();
+
+        $this->assertSoftDeleted($expense);
+    }
 }

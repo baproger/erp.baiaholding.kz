@@ -17,19 +17,32 @@ const props = defineProps({
     filters: Object,
     can: Object,
     users: { type: Array, default: () => [] },
+    companies: { type: Array, default: () => [] },
+    currentCompanyId: { type: Number, default: null },
 });
 
 const showModal = ref(false);
 const editing = ref(null);
 const search = ref(props.filters.search ?? '');
 
-const form = useForm({ name: '', description: '', head_user_id: '', is_active: true });
+const form = useForm({ name: '', description: '', head_user_id: '', is_active: true, company_ids: [] });
+
+// Отделы свои у каждой фирмы. В режиме «Все» отдел по умолчанию заводится
+// сразу в обеих — иначе он появится только в одной и половина людей окажется
+// «Без отдела».
+const defaultCompanyIds = () => (props.currentCompanyId ? [props.currentCompanyId] : props.companies.map((c) => c.id));
 
 const openCreate = () => {
     editing.value = null;
     form.reset();
     form.is_active = true;
+    form.company_ids = defaultCompanyIds();
     showModal.value = true;
+};
+const toggleCompany = (id) => {
+    form.company_ids = form.company_ids.includes(id)
+        ? form.company_ids.filter((c) => c !== id)
+        : [...form.company_ids, id];
 };
 const openEdit = (d) => {
     editing.value = d;
@@ -66,6 +79,7 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
             <table class="min-w-full divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
                     <tr>
+                        <th class="px-4 py-3">Компания</th>
                         <th class="px-4 py-3">Название</th>
                         <th class="px-4 py-3">Описание</th>
                         <th class="px-4 py-3">Руководитель</th>
@@ -76,6 +90,9 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="d in departments.data" :key="d.id" class="hover:bg-slate-50">
+                        <td class="px-4 py-3">
+                            <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{{ d.company?.name ?? '—' }}</span>
+                        </td>
                         <td class="px-4 py-3 font-medium text-slate-900">{{ d.name }}</td>
                         <td class="px-4 py-3 text-slate-500">{{ d.description }}</td>
                         <td class="px-4 py-3 text-slate-600">
@@ -94,7 +111,7 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
                         </td>
                     </tr>
                     <tr v-if="!departments.data.length">
-                        <td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-slate-400">Нет данных</td>
                     </tr>
                 </tbody>
             </table>
@@ -108,6 +125,22 @@ const doSearch = () => router.get(route('departments.index'), { search: search.v
             <div class="p-6">
                 <h2 class="mb-4 text-lg font-semibold">{{ editing ? 'Изменить отдел' : 'Новый отдел' }}</h2>
                 <div class="space-y-4">
+                    <!-- Фирма отдела: у BAIA и ASU свои отделы. При правке не меняется —
+                         перенос отдела между фирмами утащил бы за собой сотрудников. -->
+                    <div v-if="!editing && companies.length > 1">
+                        <InputLabel value="Фирма (можно обе — отдел заведётся в каждой)" />
+                        <div class="mt-1 flex flex-wrap gap-2">
+                            <button v-for="c in companies" :key="c.id" type="button" @click="toggleCompany(c.id)"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition"
+                                :class="form.company_ids.includes(c.id) ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                {{ c.name }}
+                            </button>
+                        </div>
+                        <InputError :message="form.errors.company_ids" class="mt-1" />
+                    </div>
+                    <div v-else-if="editing" class="text-xs text-slate-500">
+                        Фирма: <b class="text-slate-700">{{ editing.company?.name ?? '—' }}</b>
+                    </div>
                     <div>
                         <InputLabel value="Название" />
                         <TextInput v-model="form.name" class="mt-1 w-full" />

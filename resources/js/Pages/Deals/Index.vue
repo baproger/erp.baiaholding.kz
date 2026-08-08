@@ -10,6 +10,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 import SearchSelect from '@/Components/SearchSelect.vue';
 import ManagerPicker from '@/Components/ManagerPicker.vue';
 import { deadlineClass } from '@/utils/deadline';
@@ -99,7 +100,14 @@ const hasFilters = computed(() => search.value || fResponsible.value || fStage.v
 // При фильтре по этапу канбан показывает ТОЛЬКО выбранную колонку —
 // остальные этапы скрываются (а не пустеют).
 const visibleStages = computed(() => fStage.value ? props.stages.filter((s) => String(s.id) === String(fStage.value)) : props.stages);
-const resetFilters = () => { search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = ''; fContractFrom.value = ''; fContractTo.value = ''; applyFilters(); };
+const resetFilters = () => {
+    search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = '';
+    fContractFrom.value = ''; fContractTo.value = '';
+    clearStickyFilters('deals');
+    applyFilters();
+};
+// Фильтр страницы запоминается: вернулся в сделки — тот же менеджер/этап/период.
+useStickyFilters('deals', { search, fResponsible, fStage, fFrom, fTo, fContractFrom, fContractTo }, applyFilters);
 
 // Массовое удаление (вид «Список», только admin): чекбоксы + подтверждение.
 const selected = ref(new Set());

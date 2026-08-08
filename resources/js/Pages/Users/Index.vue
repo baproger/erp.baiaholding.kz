@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { confirmDialog } from '@/composables/useConfirm';
+import { useStickyFilters } from '@/composables/useStickyFilters';
 import Avatar from '@/Components/Avatar.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -66,8 +67,13 @@ const tenure = (u) => {
 
 // --- Фильтры (всё на клиенте — мгновенно, без запросов) ---
 const search = ref('');
-const deptFilter = ref('all'); // 'all' | id отдела | 0 («Без отдела»)
+// Фильтр по отделу — по code, а не по id: «Отдел продаж» есть в каждой фирме
+// отдельным отделом, но чип на них один. '' = «Без отдела».
+const deptFilter = ref('all');
+const companyFilter = ref('all'); // 'all' | id компании
 const showInactive = ref(false);
+// Фильтр страницы запоминается: ушёл и вернулся — те же фирма/отдел/поиск.
+useStickyFilters('users', { search, deptFilter, companyFilter, showInactive });
 
 const inactiveCount = computed(() => props.users.filter((u) => !u.is_active).length);
 
@@ -75,40 +81,89 @@ const visibleUsers = computed(() => {
     const q = search.value.trim().toLowerCase();
     return props.users.filter((u) => {
         if (!showInactive.value && !u.is_active) return false;
-        if (deptFilter.value !== 'all' && (u.department_id ?? 0) !== deptFilter.value) return false;
+        if (deptFilter.value !== 'all' && (u.department_code ?? '') !== deptFilter.value) return false;
         if (!q) return true;
         return [u.name, u.email, u.phone, u.department?.name, roleLabels[u.role]]
             .some((v) => (v ?? '').toLowerCase().includes(q));
     });
 });
 
+// Отдел фирмы по общему коду: «Отдел продаж» в BAIA и в ASU — разные записи.
+const deptByCompanyCode = computed(() => {
+    const map = new Map();
+    props.departments.forEach((d) => map.set(`${d.company_id}|${d.code}`, d));
+    return map;
+});
+
+// Отделы, сгруппированные по фирме — для селекта в форме сотрудника.
+const departmentsByCompany = computed(() => {
+    const map = {};
+    props.departments.forEach((d) => (map[d.company_id] ??= []).push(d));
+    return map;
+});
+
 // Чипы отделов с количеством (учитывают переключатель «отключённые», но не поиск).
 const deptChips = computed(() => {
     const pool = props.users.filter((u) => showInactive.value || u.is_active);
     const counts = {};
-    pool.forEach((u) => { const k = u.department_id ?? 0; counts[k] = (counts[k] ?? 0) + 1; });
-    const chips = props.departments
-        .map((d) => ({ id: d.id, name: d.name, count: counts[d.id] ?? 0 }))
-        .filter((c) => c.count > 0);
-    if (counts[0]) chips.push({ id: 0, name: 'Без отдела', count: counts[0] });
+    pool.forEach((u) => { const k = u.department_code ?? ''; counts[k] = (counts[k] ?? 0) + 1; });
+    // Одноимённые отделы разных фирм схлопываются в один чип (общий code).
+    const byCode = new Map();
+    props.departments.forEach((d) => { if (!byCode.has(d.code)) byCode.set(d.code, d.name); });
+    const chips = [...byCode.entries()]
+        .map(([code, name]) => ({ code, name, count: counts[code] ?? 0 }))
+        .filter((c) => c.count > 0)
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    if (counts['']) chips.push({ code: '', name: 'Без отдела', count: counts[''] });
     return chips;
 });
 
-// Секции: отделы по алфавиту, «Без отдела» — в конце.
-const groups = computed(() => {
-    const map = new Map();
+// Секции: компания → отделы. Сотрудник обеих фирм показывается в обеих
+// секциях — в одноимённом отделе своей фирмы (по общему code).
+const companySections = computed(() => {
+    const sections = props.companies
+        .filter((c) => companyFilter.value === 'all' || companyFilter.value === c.id)
+        .map((c) => ({ id: c.id, name: c.name, groups: [], count: 0 }));
+    const orphans = { id: 0, name: 'Без компании', groups: [], count: 0 };
+
+    const push = (section, u) => {
+        // В секции фирмы показываем отдел ЭТОЙ фирмы (у «двойного» сотрудника
+        // department_id указывает на отдел только одной из них).
+        const own = u.department_code ? deptByCompanyCode.value.get(`${section.id}|${u.department_code}`) : null;
+        const key = own?.id ?? u.department_code ?? 0;
+        const name = own?.name ?? u.department?.name ?? 'Без отдела';
+        let group = section.groups.find((g) => g.key === key);
+        if (!group) {
+            group = { key, name, head_user_id: own?.head_user_id ?? null, users: [] };
+            section.groups.push(group);
+        }
+        group.users.push(u);
+        section.count++;
+    };
+
     visibleUsers.value.forEach((u) => {
-        const key = u.department_id ?? 0;
-        if (!map.has(key)) map.set(key, { id: key, name: u.department?.name ?? 'Без отдела', users: [] });
-        map.get(key).users.push(u);
+        const ids = u.company_ids ?? [];
+        if (!ids.length) {
+            if (companyFilter.value === 'all') push(orphans, u);
+            return;
+        }
+        sections.filter((s) => ids.includes(s.id)).forEach((s) => push(s, u));
     });
-    return [...map.values()].sort((a, b) => (a.id === 0) - (b.id === 0) || a.name.localeCompare(b.name, 'ru'));
+
+    const sorted = [...sections, orphans]
+        .filter((s) => s.count > 0)
+        .map((s) => ({
+            ...s,
+            groups: [...s.groups].sort((a, b) => (a.key === 0) - (b.key === 0) || a.name.localeCompare(b.name, 'ru')),
+        }));
+    return sorted;
 });
 
 const stats = computed(() => ({
     total: props.users.length,
     active: props.users.length - inactiveCount.value,
-    departments: new Set(props.users.filter((u) => u.is_active && u.department_id).map((u) => u.department_id)).size,
+    // Отделы считаем по коду: «Отдел продаж» BAIA+ASU — один отдел холдинга.
+    departments: new Set(props.users.filter((u) => u.is_active && u.department_code).map((u) => u.department_code)).size,
 }));
 
 // --- Модалка (создание/правка) ---
@@ -128,9 +183,13 @@ const toggleWorkshop = (w) => {
 
 const openCreate = () => {
     editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true;
-    form.company_ids = props.companies.map((c) => c.id);
-    // Если открыт фильтр по отделу — сразу подставляем его в форму.
-    form.department_id = typeof deptFilter.value === 'number' && deptFilter.value !== 0 ? deptFilter.value : '';
+    form.company_ids = companyFilter.value === 'all' ? props.companies.map((c) => c.id) : [companyFilter.value];
+    // Если открыт фильтр по отделу — подставляем отдел выбранной фирмы
+    // (при «Все фирмы» отдел не угадать: одноимённых столько же, сколько фирм).
+    const pickedCompany = companyFilter.value === 'all' ? null : companyFilter.value;
+    form.department_id = deptFilter.value !== 'all' && deptFilter.value && pickedCompany
+        ? (deptByCompanyCode.value.get(`${pickedCompany}|${deptFilter.value}`)?.id ?? '')
+        : '';
     show.value = true;
 };
 const openEdit = (u) => {
@@ -198,6 +257,20 @@ const deactivate = async (u) => {
             </div>
         </div>
 
+        <!-- Фильтр по компаниям -->
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+            <button type="button" @click="companyFilter = 'all'"
+                class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                :class="companyFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
+                Все фирмы
+            </button>
+            <button v-for="c in companies" :key="c.id" type="button" @click="companyFilter = companyFilter === c.id ? 'all' : c.id"
+                class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                :class="companyFilter === c.id ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
+                {{ c.name }}
+            </button>
+        </div>
+
         <!-- Фильтр по отделам -->
         <div class="mb-5 flex flex-wrap items-center gap-2">
             <button type="button" @click="deptFilter = 'all'"
@@ -205,10 +278,10 @@ const deactivate = async (u) => {
                 :class="deptFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
                 Все
             </button>
-            <button v-for="c in deptChips" :key="c.id" type="button" @click="deptFilter = deptFilter === c.id ? 'all' : c.id"
+            <button v-for="c in deptChips" :key="c.code" type="button" @click="deptFilter = deptFilter === c.code ? 'all' : c.code"
                 class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
-                :class="deptFilter === c.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
-                {{ c.name }} <span :class="deptFilter === c.id ? 'text-indigo-200' : 'text-slate-400'">{{ c.count }}</span>
+                :class="deptFilter === c.code ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
+                {{ c.name }} <span :class="deptFilter === c.code ? 'text-indigo-200' : 'text-slate-400'">{{ c.count }}</span>
             </button>
             <label v-if="inactiveCount" class="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
                 <input type="checkbox" v-model="showInactive" class="rounded border-slate-300 text-indigo-600" />
@@ -216,8 +289,14 @@ const deactivate = async (u) => {
             </label>
         </div>
 
-        <!-- Секции по отделам -->
-        <div v-for="g in groups" :key="g.id" class="mb-7">
+        <!-- Секции: компания → отделы -->
+        <section v-for="s in companySections" :key="s.id" class="mb-9">
+            <div class="mb-4 flex items-center gap-2.5 border-b-2 border-slate-800 pb-2">
+                <h2 class="text-base font-extrabold uppercase tracking-wide text-slate-800">{{ s.name }}</h2>
+                <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-bold text-white">{{ s.count }}</span>
+            </div>
+
+        <div v-for="g in s.groups" :key="g.key" class="mb-7">
             <div class="mb-2.5 flex items-center gap-2">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ g.name }}</h3>
                 <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{{ g.users.length }}</span>
@@ -266,7 +345,8 @@ const deactivate = async (u) => {
                 </div>
             </div>
         </div>
-        <div v-if="!groups.length" class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-14 text-center text-slate-400">
+        </section>
+        <div v-if="!companySections.length" class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-14 text-center text-slate-400">
             Никого не нашли — измените поиск или фильтр
         </div>
 
@@ -297,7 +377,10 @@ const deactivate = async (u) => {
                         <InputLabel value="Отдел" />
                         <select v-model="form.department_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
                             <option value="">—</option>
-                            <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+                            <!-- Отделы свои у каждой фирмы — группируем, иначе одноимённые не различить. -->
+                            <optgroup v-for="c in companies" :key="c.id" :label="c.name">
+                                <option v-for="d in departmentsByCompany[c.id] ?? []" :key="d.id" :value="d.id">{{ d.name }}</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div>

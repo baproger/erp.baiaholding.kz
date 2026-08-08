@@ -13,7 +13,7 @@ class Department extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['name', 'description', 'head_user_id', 'is_active'];
+    protected $fillable = ['company_id', 'name', 'code', 'description', 'head_user_id', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
 
@@ -21,6 +21,23 @@ class Department extends Model
     public function head(): BelongsTo
     {
         return $this->belongsTo(User::class, 'head_user_id');
+    }
+
+    /** Фирма отдела: «Отдел продаж» BAIA и ASU — разные отделы. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Отделы одной фирмы. null = «Все компании» (сводный режим) — не сужаем.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Department>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<Department>
+     */
+    public function scopeForCompany($query, ?int $companyId)
+    {
+        return $query->when($companyId, fn ($q) => $q->where('company_id', $companyId));
     }
 
     public function users(): BelongsToMany

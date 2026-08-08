@@ -21,7 +21,7 @@ class PayrollController extends Controller
         return $request->user()->hasAnyRole(['admin', 'financist']);
     }
 
-    public function index(Request $request, PayrollService $payroll): Response
+    public function index(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): Response
     {
         $user = $request->user();
         abort_unless($user->can('payroll.view'), 403);
@@ -54,15 +54,39 @@ class PayrollController extends Controller
         // Per-deal breakdown so a row can expand into the employee's «Оплата успешно»
         // and «Акт утверждение» deals — the raw data the financist needs to check ЗП.
         $breakdown = $payroll->dealBreakdown();
-        // Отдел сотрудника — ведомость показывается раздельными секциями по отделам.
+        // Отдел и фирмы сотрудника — ведомость режется секциями «компания → отдел».
         $deptByUser = User::whereIn('id', $rows->pluck('uid'))
-            ->with('department:id,name')->get(['id', 'department_id'])->keyBy('id');
+            ->with(['department:id,name,code,company_id', 'companies:companies.id,name'])
+            ->get(['id', 'department_id'])->keyBy('id');
         // Своя норма часов у отдела (цех 200 ч, менеджеры 220 ч…): work_norm_{месяц}:dept:{id};
         // нет своей — действует общая норма месяца.
         $deptNorms = $deptByUser->pluck('department_id')->filter()->unique()
             ->mapWithKeys(fn ($id) => [$id => Setting::get('work_norm_'.$month.':dept:'.$id)])
             ->filter(fn ($v) => $v !== null)->map(fn ($v) => (float) $v);
-        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms) {
+        // Долги сотрудников: план погашения за ВЫБРАННЫЙ месяц. Считается из
+        // бонуса именно этого месяца (bonusByUserForMonth), а не из общего —
+        // иначе долг гасился бы бонусами, которых в месяце не было.
+        $bonusOfMonth = $payroll->bonusByUserForMonth($month);
+        $debtPlans = [];
+        $debtList = [];
+        foreach ($rows->pluck('uid') as $uid) {
+            $open = $debts->openFor((int) $uid);
+            if ($open->isEmpty()) {
+                continue;
+            }
+            $debtPlans[$uid] = $debts->planFor((int) $uid, $month, (float) ($bonusOfMonth[$uid] ?? 0));
+            $debtList[$uid] = $open->map(fn ($d) => [
+                'id' => $d->id,
+                'amount' => (float) $d->amount,
+                'monthly_amount' => (float) $d->monthly_amount,
+                'paid' => $d->paidSum(),
+                'remaining' => $d->remaining(),
+                'date' => optional($d->date)->toDateString(),
+                'note' => $d->note,
+            ])->values()->all();
+        }
+
+        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms, $debtPlans, $debtList) {
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
             $adj = $adjustments->get($r['uid']) ?? collect();
             $deductions = round((float) $adj->whereIn('type', PayrollAdjustment::DEDUCTIONS)->sum('amount'), 2);
@@ -87,8 +111,24 @@ class PayrollController extends Controller
             // К выплате = почасовая база (или оклад) + бонус − удержания + премии.
             $r['payout'] = round($r['base'] + $r['bonus'], 2);
             $r['final'] = round($r['payout'] - $deductions + $additions, 2);
+            // Долг: удержание ТОЛЬКО из бонуса месяца и не больше месячного
+            // платежа. Оклад не трогаем — нет бонуса, нет и удержания.
+            $plan = $debtPlans[$r['uid']] ?? null;
+            $r['debt_charge'] = $plan['charge'] ?? 0.0;
+            $r['debt_remaining'] = $plan['before'] ?? 0.0;
+            $r['debt_after'] = $plan['after'] ?? 0.0;
+            $r['debts'] = $debtList[$r['uid']] ?? [];
+            $r['final'] = round($r['final'] - $r['debt_charge'], 2);
             $r['department'] = $deptByUser[$r['uid']]?->department?->name;
             $r['department_id'] = $deptId;
+            // code — общий ключ одноимённых отделов BAIA/ASU: сотрудник обеих
+            // фирм встаёт в «свой» отдел в секции каждой из них.
+            $r['department_code'] = $deptByUser[$r['uid']]?->department?->code;
+            $companyIds = ($deptByUser[$r['uid']]?->companies ?? collect())->pluck('id')->sort()->values();
+            $r['company_ids'] = $companyIds->all();
+            // Работающий в обеих фирмах виден в обеих секциях, но его деньги
+            // попадают в итог ТОЛЬКО основной фирмы — иначе холдинг заплатил бы дважды.
+            $r['primary_company_id'] = $companyIds->first();
 
             return $r;
         });
@@ -101,6 +141,11 @@ class PayrollController extends Controller
             'normHours' => $normHours,
             'deptNorms' => $deptNorms,
             'taxRate' => $taxRate * 100,
+            'companies' => \App\Models\Company::where('is_active', true)->orderBy('id')->get(['id', 'name']),
+            // Отделы всех фирм: по ним ведомость раскладывает сотрудника
+            // в отдел ЕГО фирмы (у «двойного» department_id указывает на одну).
+            'departments' => \App\Models\Department::where('is_active', true)
+                ->orderBy('company_id')->orderBy('name')->get(['id', 'company_id', 'name', 'code']),
             'totals' => [
                 'budget' => (float) $rows->sum('budget'),
                 'tax' => (float) $rows->sum('tax'),
@@ -111,6 +156,8 @@ class PayrollController extends Controller
                 'payout' => (float) $rows->sum('payout'),
                 'deductions' => (float) $rows->sum('deductions'),
                 'additions' => (float) $rows->sum('additions'),
+                'debt_charge' => (float) $rows->sum('debt_charge'),
+                'debt_remaining' => (float) $rows->sum('debt_remaining'),
                 'final' => (float) $rows->sum('final'),
                 'company' => (float) $rows->sum('company'),
             ],
@@ -182,6 +229,72 @@ class PayrollController extends Controller
         return back()->with('success', $data['type'] === 'advance'
             ? 'Аванс добавлен и зафиксирован в Расходах на Финансах.'
             : 'Корректировка добавлена.');
+    }
+
+    /**
+     * Выдать долг сотруднику. Деньги реальные: как и аванс, создаёт
+     * подтверждённый расход компании и уменьшает кассу/банк. Дальше долг
+     * гасится сам — фиксированной суммой в месяц и ТОЛЬКО из бонуса.
+     */
+    public function storeDebt(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403, 'Долги заводит бухгалтер или админ.');
+
+        $data = $request->validate([
+            'user_id' => ['required', 'exists:users,id'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'monthly_amount' => ['required', 'numeric', 'min:1'],
+            'date' => ['required', 'date'],
+            'payment_method' => ['required', Rule::in(['cash', 'bank'])],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ((float) $data['monthly_amount'] > (float) $data['amount']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'monthly_amount' => 'Ежемесячный платёж не может быть больше самого долга.',
+            ]);
+        }
+
+        $employee = User::findOrFail($data['user_id']);
+        $companyId = \App\Support\CurrentCompany::id() ?: $employee->companies()->value('companies.id');
+
+        $category = \App\Models\ExpenseCategory::firstOrCreate(
+            ['name' => 'Расходы по сотрудникам'],
+            ['is_active' => true]
+        );
+        $expense = \App\Models\Expense::create([
+            'company_id' => $companyId,
+            'category_id' => $category->id,
+            'type' => 'direct',
+            'amount' => $data['amount'],
+            'date' => $data['date'],
+            'description' => 'Долг сотруднику: '.$employee->name
+                .(! empty($data['note']) ? ' — '.$data['note'] : ''),
+            'responsible_user_id' => $employee->id,
+            'status' => 'confirmed',
+            'payment_method' => $data['payment_method'],
+            'confirmed_by' => $request->user()->id,
+            'confirmed_at' => now(),
+        ]);
+
+        \App\Models\EmployeeDebt::create($data + [
+            'company_id' => $companyId,
+            'expense_id' => $expense->id,
+            'created_by' => $request->user()->id,
+        ]);
+
+        return back()->with('success', 'Долг выдан и зафиксирован в Расходах на Финансах.');
+    }
+
+    /** Удалить долг: вместе с ним уходит расход (деньги вернулись в кассу). */
+    public function destroyDebt(Request $request, \App\Models\EmployeeDebt $debt): RedirectResponse
+    {
+        abort_unless($this->canManage($request), 403);
+
+        \App\Models\Expense::find($debt->expense_id)?->delete();
+        $debt->delete(); // погашения уходят каскадом
+
+        return back()->with('success', 'Долг удалён — расход на Финансах убран.');
     }
 
     public function destroyAdjustment(Request $request, PayrollAdjustment $adjustment): RedirectResponse

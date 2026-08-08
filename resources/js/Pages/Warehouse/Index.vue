@@ -10,6 +10,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { formatDate, formatDateTime } from '@/utils/format';
+import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 
 const props = defineProps({
     materials: Array, writeoffs: Object, receipts: Array, units: Array,
@@ -77,7 +78,13 @@ const applyPeriod = () => router.get(route('warehouse.index'), {
     from: fFrom.value || undefined, to: fTo.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 const hasFilters = computed(() => search.value || fUnit.value || fStock.value || fFrom.value || fTo.value);
-const resetFilters = () => { search.value = ''; fUnit.value = ''; fStock.value = ''; fFrom.value = ''; fTo.value = ''; applyPeriod(); };
+const resetFilters = () => {
+    search.value = ''; fUnit.value = ''; fStock.value = ''; fFrom.value = ''; fTo.value = '';
+    clearStickyFilters('warehouse');
+    applyPeriod();
+};
+// Фильтр страницы запоминается: вернулся на склад — тот же период и отбор.
+useStickyFilters('warehouse', { search, fUnit, fStock, fFrom, fTo }, applyPeriod);
 // Ед. изм. в фильтре — только реально имеющиеся на складе.
 const unitOptions = computed(() => [...new Set(props.materials.map((m) => m.unit).filter(Boolean))]);
 const filtered = computed(() => {

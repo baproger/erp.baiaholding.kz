@@ -21,14 +21,19 @@ class ReportController extends Controller
 {
     public function deals(Request $request): Response
     {
-        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
+        $user = $request->user();
+        // Руководство видит отчёт целиком (бонусы всех менеджеров), МОП —
+        // ТОЛЬКО свои сделки: свой срез «сколько сделал за месяц и где стоит».
+        $isLeadership = $user->hasAnyRole(['admin', 'director']);
+        abort_unless($isLeadership || $user->hasRole('manager'), 403);
 
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
         $search = $request->string('search')->toString();
         $from = $request->string('from')->toString();
         $to = $request->string('to')->toString();
-        $managerId = $request->integer('manager') ?: null;
+        // Чужой ?manager= менеджеру не поможет: он всегда прибит к себе.
+        $managerId = $isLeadership ? ($request->integer('manager') ?: null) : $user->id;
         $stageId = $request->integer('stage') ?: null;
 
         $deals = Deal::forCurrentCompany()
@@ -121,6 +126,7 @@ class ReportController extends Controller
                 'bonus' => $bonus,
                 'company' => $company,
                 'manager' => $d->responsible?->name,
+                'manager_id' => $d->responsible_user_id,
                 'deadline' => optional($d->deadline)->toDateString(),
                 'stage' => $d->stage?->name,
                 'stage_color' => $d->stage?->color,
@@ -155,6 +161,54 @@ class ReportController extends Controller
             'count' => $rows->count(),
         ];
 
+        // Сводная по МОП: строка = менеджер (а не сделка) с общим оборотом за
+        // выбранный период. Считается из тех же $rows, что и таблица ниже, —
+        // итоги двух блоков сходятся по определению.
+        $byManager = $rows->groupBy(fn ($r) => $r['manager_id'] ?? 0)
+            ->map(function ($list) {
+                $budget = (float) $list->sum('budget');
+                $company = (float) $list->sum('company');
+
+                return [
+                    'manager_id' => $list->first()['manager_id'],
+                    'manager' => $list->first()['manager'] ?? 'Без менеджера',
+                    'deals' => $list->count(),
+                    'won' => $list->where('is_won', true)->count(),
+                    'budget' => $budget,
+                    'paid' => (float) $list->sum('paid'),
+                    'expense' => (float) $list->sum(fn ($r) => $r['material'] + $r['delivery'] + $r['purchase'] + $r['assembly'] + $r['other']),
+                    'tax' => (float) $list->sum('tax'),
+                    'remainder' => (float) $list->sum('remainder'),
+                    'bonus' => (float) $list->sum('bonus'),
+                    'company' => $company,
+                    // Маржа менеджера — доход фирмы к его обороту, а не среднее по сделкам.
+                    'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
+                ];
+            })
+            ->sortByDesc('budget')->values();
+
+        // «На каком этапе стоят сделки»: сколько штук и на какую сумму висит на
+        // каждом этапе воронки. Порядок — как в воронке, а не по алфавиту.
+        $stageOrder = \App\Models\DealStage::pluck('order', 'id');
+        $byStage = $deals->groupBy('deal_stage_id')
+            ->map(function ($list, $stageId) use ($rows, $stageOrder) {
+                $ids = $list->pluck('id');
+                $stageRows = $rows->whereIn('id', $ids);
+                $first = $list->first();
+
+                return [
+                    'stage_id' => $stageId ?: null,
+                    'stage' => $first->stage?->name ?? 'Без этапа',
+                    'color' => $first->stage?->color,
+                    'is_won' => (bool) $first->stage?->is_won,
+                    'count' => $list->count(),
+                    'budget' => (float) $stageRows->sum('budget'),
+                    'paid' => (float) $stageRows->sum('paid'),
+                    'order' => (int) ($stageOrder[$stageId] ?? 999),
+                ];
+            })
+            ->sortBy('order')->values();
+
         // Опции фильтров: активные менеджеры и этапы воронки текущей компании
         // (в режиме «Все компании» — обе воронки с пометкой фирмы).
         $companyId = \App\Support\CurrentCompany::id() ?: null;
@@ -165,13 +219,27 @@ class ReportController extends Controller
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : '')])
             ->values();
 
+        // Прибыль фирмы и маржа — только руководству. Прячем не в шаблоне, а в
+        // данных: иначе цифры видны в исходнике страницы (props Inertia).
+        if (! $isLeadership) {
+            $hideProfit = fn ($r) => \Illuminate\Support\Arr::except($r, ['company', 'margin']);
+            $rows = $rows->map($hideProfit);
+            $byManager = $byManager->map($hideProfit);
+            $totals = $hideProfit($totals);
+        }
+
         return Inertia::render('Reports/Deals', [
             'rows' => $rows,
+            'byManager' => $byManager,
+            'byStage' => $byStage,
+            'isLeadership' => $isLeadership,
             'totals' => $totals,
             'taxRate' => $taxRate * 100,
             'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId],
             // Для фильтра: менеджеры отдельно, остальные — по отделам (сворачиваются).
+            // МОПу выбирать не из кого — отчёт и так только по его сделкам.
             'managers' => \App\Models\User::where('is_active', true)
+                ->when(! $isLeadership, fn ($q) => $q->whereKey($user->id))
                 ->with(['roles:id,name', 'department:id,name'])
                 ->orderBy('name')->get(['id', 'name', 'department_id'])
                 ->map(fn ($u) => [

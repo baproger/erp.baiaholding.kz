@@ -318,8 +318,86 @@ class AnalyticsController extends Controller
             ->with('responsible:id,name')->get()
             ->map(fn ($r) => ['uid' => $r->responsible_user_id, 'user' => $r->responsible?->name ?? '—', 'deals' => (int) $r->deals, 'budget' => (float) $r->budget]);
 
+        // --- По бухгалтерам: сделки, застрявшие на АКТ и ЭСФ ---
+        // Меряем бухгалтера по ЕГО ЗАДАЧАМ, а не по владению сделкой:
+        // ответственный по сделке остаётся менеджер, а гейт-задачу на АКТ/ЭСФ
+        // система ставит бухгалтеру (StageTransitionService::createGateTask).
+        // Просрочка — по сроку задачи (due_date), это его личный срок, по нему
+        // же ему шлёт напоминания tasks:notify-overdue.
+        $stageById = $allStages->keyBy('id');
+        $gateDeals = Deal::whereIn('deal_stage_id', $pendingIds)
+            ->where('status', '!=', 'cancelled')
+            ->forCurrentCompany()
+            ->with('responsible:id,name')
+            ->get(['id', 'number', 'company_name', 'budget', 'deadline', 'deal_stage_id', 'responsible_user_id'])
+            ->keyBy('id');
+
+        $gateTasks = Task::where('taskable_type', 'deal')
+            ->whereIn('taskable_id', $gateDeals->keys())
+            ->where('status', '!=', 'done')
+            ->whereNotNull('assignee_id')
+            ->with('assignee:id,name,avatar')
+            ->get(['id', 'taskable_id', 'title', 'assignee_id', 'due_date', 'status']);
+
+        $byAccountant = $gateTasks->groupBy('assignee_id')->map(function ($tasks) use ($gateDeals, $stageById, $today) {
+            $items = $tasks->map(function ($t) use ($gateDeals, $stageById, $today) {
+                $deal = $gateDeals[$t->taskable_id];
+                $due = $t->due_date;
+                // abs(): diffInDays в Carbon 3 знаковый — без него просрочка
+                // уходит в минус и «просрочено» всегда 0.
+                $overdueDays = $due && $due->lt($today)
+                    ? (int) abs($today->diffInDays($due->copy()->startOfDay()))
+                    : 0;
+
+                return [
+                    'deal_id' => $deal->id,
+                    'number' => $deal->number,
+                    'company_name' => $deal->company_name,
+                    'budget' => (float) $deal->budget,
+                    'stage' => $stageById[$deal->deal_stage_id]?->name,
+                    'stage_type' => $stageById[$deal->deal_stage_id]?->stage_type,
+                    'task' => $t->title,
+                    'due_date' => optional($due)->toDateString(),
+                    'overdue_days' => (int) $overdueDays,
+                    // Ответственный по сделке — по-прежнему менеджер.
+                    'manager' => $deal->responsible?->name,
+                ];
+            })->sortByDesc('overdue_days')->values();
+
+            $overdue = $items->where('overdue_days', '>', 0);
+            $first = $tasks->first();
+
+            return [
+                'uid' => (int) $first->assignee_id,
+                'user' => $first->assignee?->name ?? '—',
+                'avatar' => $first->assignee?->avatar,
+                'act' => $items->where('stage_type', 'act')->count(),
+                'esf' => $items->where('stage_type', 'esf')->count(),
+                'total' => $items->count(),
+                'overdue' => $overdue->count(),
+                'overdue_budget' => (float) $overdue->sum('budget'),
+                'max_overdue_days' => (int) ($overdue->max('overdue_days') ?? 0),
+                'budget' => (float) $items->sum('budget'),
+                'deals' => $items->all(),
+            ];
+        })->sortByDesc('overdue')->values();
+
+        // Итог по УНИКАЛЬНЫМ сделкам: одна сделка висит сразу у всех бухгалтеров
+        // (задача ставится каждому), поэтому сумма по строкам больше реальности.
+        $overdueDealIds = $gateTasks->filter(fn ($t) => $t->due_date && $t->due_date->lt($today))
+            ->pluck('taskable_id')->unique();
+        $accountantTotals = [
+            'deals' => $gateDeals->count(),
+            'overdue_deals' => $overdueDealIds->count(),
+            'overdue_budget' => (float) $gateDeals->whereIn('id', $overdueDealIds)->sum('budget'),
+            'act' => $gateDeals->filter(fn ($d) => $stageById[$d->deal_stage_id]?->stage_type === 'act')->count(),
+            'esf' => $gateDeals->filter(fn ($d) => $stageById[$d->deal_stage_id]?->stage_type === 'esf')->count(),
+        ];
+
         return Inertia::render('Analytics/Index', [
             'byEmployee' => $byEmployee,
+            'byAccountant' => $byAccountant,
+            'accountantTotals' => $accountantTotals,
             'monthsFilter' => $monthsCount,
             'funnel' => $funnel,
             'byStatus' => $byStatus,

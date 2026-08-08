@@ -144,6 +144,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('payroll/salary/{user}', [PayrollController::class, 'updateSalary'])->name('payroll.salary');
     Route::patch('payroll/hours/{user}', [PayrollController::class, 'updateHours'])->name('payroll.hours');
     Route::patch('payroll/norm', [PayrollController::class, 'updateNorm'])->name('payroll.norm');
+    // Долги сотрудников: гасятся автоматически из бонусов (debts:charge).
+    Route::post('payroll/debts', [PayrollController::class, 'storeDebt'])->name('payroll.debts.store');
+    Route::delete('payroll/debts/{debt}', [PayrollController::class, 'destroyDebt'])->name('payroll.debts.destroy');
     Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
     Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');

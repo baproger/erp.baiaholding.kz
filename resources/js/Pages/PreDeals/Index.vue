@@ -8,6 +8,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
+import { useStickyFilters } from '@/composables/useStickyFilters';
 import TextInput from '@/Components/TextInput.vue';
 import { formatDate } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
@@ -27,6 +28,8 @@ const applyFilters = () => router.get(route('preDeals.index'), {
     manager: managerF.value || undefined, status: statusF.value || undefined,
     month: monthF.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
+// Фильтр страницы запоминается: вернулся в предсделки — тот же месяц/менеджер.
+useStickyFilters('pre-deals', { managerF, statusF, monthF }, applyFilters);
 
 // Форма лота: живой расчёт как в Excel (партнёр/налог/остаток/маржа).
 // «Сегодня + прошлые» как блок «Расходы» на Финансах: сегодняшние лоты сверху,

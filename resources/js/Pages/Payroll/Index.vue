@@ -8,8 +8,9 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { money, formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
+import { useStickyFilters } from '@/composables/useStickyFilters';
 
-const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number, totals: Object });
+const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number, totals: Object, companies: { type: Array, default: () => [] }, departments: { type: Array, default: () => [] } });
 const me = props.rows[0] ?? null;
 
 // Шкала бонусов — коммерческая информация: видят только отдел продаж
@@ -28,32 +29,77 @@ const BONUS_TIERS = [
 const open = ref(new Set());
 const toggle = (uid) => { const s = new Set(open.value); s.has(uid) ? s.delete(uid) : s.add(uid); open.value = s; };
 
-// Ведомость — раздельными секциями по отделам: отделы с большей выплатой сверху,
-// «Без отдела» — как обычная секция; внутри порядок строк серверный (по бонусу).
-const groups = computed(() => {
+const companyNames = computed(() => Object.fromEntries((props.companies ?? []).map((c) => [c.id, c.name])));
+
+// Отдел фирмы по общему коду: «Отдел продаж» BAIA и ASU — разные отделы.
+const deptByCompanyCode = computed(() => {
     const map = new Map();
+    (props.departments ?? []).forEach((d) => map.set(`${d.company_id}|${d.code}`, d));
+    return map;
+});
+
+// Ведомость — раздельно по фирмам, внутри фирмы — секциями по отделам
+// (отделы с большей выплатой сверху, «Без отдела» — как обычная секция;
+// внутри порядок строк серверный, по бонусу).
+//
+// Сотрудник, работающий в обеих фирмах, ВИДЕН в обеих секциях, но его деньги
+// входят в итог только основной фирмы (primary_company_id) — в чужой секции
+// строка помечена и в суммы не идёт, иначе холдинг «заплатил» бы дважды.
+const companySections = computed(() => {
+    const sections = (props.companies ?? []).map((c) => ({ id: c.id, name: c.name, map: new Map() }));
+    const orphan = { id: 0, name: 'Без фирмы', map: new Map() };
+
+    const put = (section, r) => {
+        const own = r.department_code ? deptByCompanyCode.value.get(`${section.id}|${r.department_code}`) : null;
+        const name = own?.name ?? r.department ?? 'Без отдела';
+        if (!section.map.has(name)) section.map.set(name, { list: [], id: own?.id ?? r.department_id ?? null });
+        section.map.get(name).list.push({ ...r, counted: (r.primary_company_id ?? 0) === section.id });
+    };
+
     for (const r of props.rows) {
-        const k = r.department || 'Без отдела';
-        if (!map.has(k)) map.set(k, []);
-        map.get(k).push(r);
+        const ids = r.company_ids ?? [];
+        if (!ids.length) { put(orphan, r); continue; }
+        sections.filter((s) => ids.includes(s.id)).forEach((s) => put(s, r));
     }
-    return [...map.entries()]
-        .map(([name, list]) => {
-            const id = list[0]?.department_id ?? null;
-            const own = id != null ? props.deptNorms?.[id] : null; // своя норма отдела
+
+    return [...sections, orphan]
+        .map((s) => {
+            const groups = [...s.map.entries()]
+                .map(([name, { list, id }]) => {
+                    const own = id != null ? props.deptNorms?.[id] : null; // своя норма отдела
+                    return {
+                        key: `${s.id}|${name}`, name, list, id,
+                        norm: own ?? props.normHours,
+                        override: own != null,
+                        final: list.reduce((sum, r) => sum + (r.counted ? r.final || 0 : 0), 0),
+                    };
+                })
+                .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
+            const counted = groups.flatMap((g) => g.list).filter((r) => r.counted);
             return {
-                name, list, id,
-                norm: own ?? props.normHours,
-                override: own != null,
-                final: list.reduce((s, r) => s + (r.final || 0), 0),
+                id: s.id, name: s.name, groups,
+                people: groups.reduce((n, g) => n + g.list.length, 0),
+                totals: {
+                    base: counted.reduce((n, r) => n + (r.base || 0), 0),
+                    bonus: counted.reduce((n, r) => n + (r.bonus || 0), 0),
+                    deductions: counted.reduce((n, r) => n + (r.deductions || 0), 0),
+                    additions: counted.reduce((n, r) => n + (r.additions || 0), 0),
+                    final: counted.reduce((n, r) => n + (r.final || 0), 0),
+                },
             };
         })
-        .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
+        .filter((s) => s.people > 0);
 });
+// Селект сотрудника в модалке корректировки: «Фирма · отдел», каждый человек
+// ровно один раз (в своей основной фирме) — корректировка одна на сотрудника.
+const adjGroups = computed(() => companySections.value.flatMap((s) => s.groups
+    .map((g) => ({ key: g.key, label: `${s.name} · ${g.name}`, list: g.list.filter((r) => r.counted) }))
+    .filter((g) => g.list.length)));
+
 // Своя норма часов отдела: правка в заголовке секции; пусто — сброс на общую.
 const editingDeptNorm = ref(null);
 const deptNormVal = ref('');
-const editDeptNorm = (g) => { editingDeptNorm.value = g.name; deptNormVal.value = g.override ? g.norm : ''; };
+const editDeptNorm = (g) => { editingDeptNorm.value = g.key; deptNormVal.value = g.override ? g.norm : ''; };
 const saveDeptNorm = (g) => router.patch(route('payroll.norm'), {
     month: props.month, department_id: g.id,
     norm: deptNormVal.value === '' ? null : Number(deptNormVal.value),
@@ -65,8 +111,15 @@ const toggleDept = (name) => { const s = new Set(collapsed.value); s.has(name) ?
 // Месяц корректировок (отгулы/больничные/штрафы) — серверный фильтр.
 const monthSel = ref(props.month);
 const setMonth = () => router.get(route('payroll.index'), { month: monthSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
+// Выбранный месяц ведомости запоминается за страницей.
+useStickyFilters('payroll', { monthSel }, setMonth);
 
 const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
+// Аванс и долг — РАЗНЫЕ вещи, обе заводятся модалкой:
+// аванс — разовая выдача, каждый месяц своя сумма, удерживается целиком в этом
+// же месяце; долг — переходящий остаток, гасится фиксированной суммой в месяц
+// и только из бонуса. Аванс остаётся типом корректировки.
+const newAdjTypes = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
 // «2026-07» → «июль 2026» для заголовков.
 const monthLabel = new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
@@ -102,6 +155,22 @@ const showAdj = ref(false);
 const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '', payment_method: 'cash' });
 const openAdj = (uid = '') => { adjForm.reset(); adjForm.user_id = uid; adjForm.date = new Date().toISOString().slice(0, 10); showAdj.value = true; };
 const submitAdj = () => adjForm.post(route('payroll.adjustments.store'), { preserveScroll: true, onSuccess: () => (showAdj.value = false) });
+
+// Долг сотрудника: выдаётся реальными деньгами (расход компании), дальше
+// гасится сам — фиксированной суммой в месяц и только из бонуса.
+const showDebt = ref(false);
+const debtForm = useForm({ user_id: '', amount: '', monthly_amount: '', date: new Date().toISOString().slice(0, 10), payment_method: 'cash', note: '' });
+const openDebt = (uid = '') => { debtForm.reset(); debtForm.user_id = uid; debtForm.date = new Date().toISOString().slice(0, 10); showDebt.value = true; };
+const submitDebt = () => debtForm.post(route('payroll.debts.store'), { preserveScroll: true, onSuccess: () => (showDebt.value = false) });
+const delDebt = async (d) => {
+    if (await confirmDialog({
+        title: 'Удалить долг',
+        message: `Долг ${money(d.amount)} будет удалён вместе с расходом на Финансах (деньги вернутся в кассу).`,
+        confirmText: 'Удалить', danger: true,
+    })) {
+        router.delete(route('payroll.debts.destroy', d.id), { preserveScroll: true });
+    }
+};
 const delAdj = async (a) => {
     if (await confirmDialog({ title: 'Удалить корректировку', message: `«${typeLabels[a.type]} ${money(a.amount)}» будет удалена.`, confirmText: 'Удалить', danger: true })) {
         router.delete(route('payroll.adjustments.destroy', a.id), { preserveScroll: true });
@@ -263,18 +332,35 @@ const delAdj = async (a) => {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <template v-for="g in groups" :key="g.name">
+                        <template v-for="s in companySections" :key="s.id">
+                        <!-- Секция ФИРМЫ: ведомость BAIA и ASU считаются раздельно -->
+                        <tr class="bg-slate-800">
+                            <td colspan="6" class="px-4 py-2.5">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wide text-white">
+                                        {{ s.name }}
+                                        <span class="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-white/80">{{ s.people }} сотр.</span>
+                                    </span>
+                                    <span class="flex flex-wrap items-center gap-3 text-[11px] font-semibold tabular-nums text-white/70">
+                                        <span>оклад {{ money(s.totals.base) }}</span>
+                                        <span>бонус {{ money(s.totals.bonus) }}</span>
+                                        <span class="text-sm text-emerald-300">к выплате {{ money(s.totals.final) }}</span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        <template v-for="g in s.groups" :key="g.key">
                         <!-- Секция отдела: название, число сотрудников, Σ к выплате; клик — свернуть/развернуть -->
-                        <tr class="cursor-pointer select-none bg-slate-100/80 hover:bg-slate-200/70" @click="toggleDept(g.name)">
+                        <tr class="cursor-pointer select-none bg-slate-100/80 hover:bg-slate-200/70" @click="toggleDept(g.key)">
                             <td colspan="6" class="px-4 py-2">
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
-                                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="collapsed.has(g.name) ? '' : 'rotate-90'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="collapsed.has(g.key) ? '' : 'rotate-90'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                         ⌂ {{ g.name }}
                                         <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }} сотр.</span>
                                         <!-- Своя норма часов отдела; пусто при правке — сброс на общую -->
                                         <span v-if="g.id != null" class="normal-case tracking-normal" @click.stop>
-                                            <span v-if="editingDeptNorm === g.name" class="flex items-center gap-1">
+                                            <span v-if="editingDeptNorm === g.key" class="flex items-center gap-1">
                                                 <input v-model="deptNormVal" type="number" min="1" max="744" :placeholder="normHours"
                                                     class="w-16 rounded-md border-indigo-300 py-0.5 text-right text-xs font-semibold tabular-nums"
                                                     @keydown.enter="saveDeptNorm(g)" @keydown.escape="editingDeptNorm = null" />
@@ -294,15 +380,26 @@ const delAdj = async (a) => {
                                 </div>
                             </td>
                         </tr>
-                        <template v-if="!collapsed.has(g.name)">
+                        <template v-if="!collapsed.has(g.key)">
                         <template v-for="r in g.list" :key="r.uid">
-                            <tr class="cursor-pointer hover:bg-slate-50" @click="toggle(r.uid)">
+                            <!-- Строка чужой фирмы (ЗП учтена в основной) — приглушена:
+                                 суммы показаны для справки и в итог секции не входят. -->
+                            <tr class="cursor-pointer hover:bg-slate-50" :class="r.counted ? '' : 'bg-slate-50/60 opacity-50'" @click="toggle(r.uid)">
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2.5">
                                         <svg class="h-4 w-4 shrink-0 text-slate-400 transition-transform" :class="open.has(r.uid) ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                         <Avatar :name="r.user" :src="r.avatar" :size="32" />
                                         <div class="min-w-0 leading-tight">
-                                            <div class="truncate font-medium text-slate-900">{{ r.user }}</div>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="truncate font-medium text-slate-900">{{ r.user }}</span>
+                                                <!-- Работает в обеих фирмах: показан в обеих секциях, но
+                                                     в суммы входит только у основной фирмы. -->
+                                                <span v-if="(r.company_ids?.length ?? 0) > 1" class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                                                    :class="r.counted ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' : 'bg-slate-100 text-slate-400'"
+                                                    :title="r.counted ? 'Работает в обеих фирмах — ЗП учтена здесь' : 'Работает в обеих фирмах — ЗП учтена в ' + (companyNames[r.primary_company_id] ?? 'другой фирме')">
+                                                    {{ r.counted ? 'обе фирмы' : 'учтено в ' + (companyNames[r.primary_company_id] ?? '—') }}
+                                                </span>
+                                            </div>
                                             <div v-if="r.deals > 0" class="text-[11px] text-slate-400">{{ r.deals }} сделок · {{ r.closed }} успешных</div>
                                         </div>
                                     </div>
@@ -354,6 +451,41 @@ const delAdj = async (a) => {
                                         <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Расходы <span class="font-semibold tabular-nums text-rose-600">− {{ money(r.expense) }}</span></span>
                                         <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Остаток <span class="font-semibold tabular-nums text-slate-700">{{ money(r.remainder) }}</span></span>
                                         <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Чистая прибыль <span class="font-semibold tabular-nums" :class="r.company >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(r.company) }}</span></span>
+                                    </div>
+                                    <!-- Долги сотрудника: гасятся сами, фиксированной суммой
+                                         в месяц и ТОЛЬКО из бонуса — оклад не трогается. -->
+                                    <div class="mb-3 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+                                        <div class="mb-1 flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Долг перед компанией</span>
+                                            <button v-if="canManage" class="text-xs font-medium text-amber-700 hover:text-amber-800" @click="openDebt(r.uid)">+ выдать долг</button>
+                                        </div>
+                                        <template v-if="r.debts?.length">
+                                            <div class="divide-y divide-amber-100 text-xs">
+                                                <div v-for="d in r.debts" :key="d.id" class="flex items-center justify-between gap-2 py-1.5">
+                                                    <span class="text-slate-500">
+                                                        {{ formatDate(d.date) }} · выдано <b class="tabular-nums text-slate-700">{{ money(d.amount) }}</b>
+                                                        · по <b class="tabular-nums text-slate-700">{{ money(d.monthly_amount) }}</b>/мес
+                                                        <template v-if="d.note"> · {{ d.note }}</template>
+                                                    </span>
+                                                    <span class="flex items-center gap-2">
+                                                        <span class="text-slate-400">погашено <span class="tabular-nums text-emerald-600">{{ money(d.paid) }}</span></span>
+                                                        <span class="font-semibold tabular-nums text-amber-700">осталось {{ money(d.remaining) }}</span>
+                                                        <button v-if="canManage" class="text-slate-300 hover:text-rose-600" title="Удалить долг" @click="delDebt(d)">✕</button>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="mt-2 border-t border-amber-200 pt-2 text-xs">
+                                                <template v-if="r.debt_charge > 0">
+                                                    Удержим из бонуса за {{ monthLabel }}:
+                                                    <b class="tabular-nums text-rose-600">− {{ money(r.debt_charge) }}</b>
+                                                    <span class="text-slate-400"> · останется {{ money(r.debt_after) }}</span>
+                                                </template>
+                                                <template v-else>
+                                                    <span class="text-slate-500">За {{ monthLabel }} бонуса нет — удержания не будет, долг {{ money(r.debt_remaining) }} переходит на следующий месяц.</span>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <p v-else class="text-xs text-slate-400">Долгов нет</p>
                                     </div>
                                     <!-- Корректировки сотрудника за месяц -->
                                     <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -416,6 +548,7 @@ const delAdj = async (a) => {
                         </template>
                         </template>
                         </template>
+                        </template>
                         <tr v-if="!rows.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
                     </tbody>
                 </table>
@@ -433,14 +566,15 @@ const delAdj = async (a) => {
                         <label class="mb-1 block text-xs font-medium text-slate-500">Сотрудник *</label>
                         <select v-model="adjForm.user_id" class="w-full rounded-md border-slate-300 text-sm shadow-sm">
                             <option value="">— выберите —</option>
-                            <optgroup v-for="g in groups" :key="g.name" :label="g.name">
+                            <!-- Сотрудник обеих фирм в списке один раз — в основной фирме. -->
+                            <optgroup v-for="g in adjGroups" :key="g.key" :label="g.label">
                                 <option v-for="r in g.list" :key="r.uid" :value="r.uid">{{ r.user }}</option>
                             </optgroup>
                         </select>
                         <div v-if="adjForm.errors.user_id" class="mt-1 text-xs text-red-600">{{ adjForm.errors.user_id }}</div>
                     </div>
                     <div class="sm:col-span-2 flex flex-wrap gap-2">
-                        <button v-for="(label, t) in typeLabels" :key="t" type="button" @click="adjForm.type = t"
+                        <button v-for="(label, t) in newAdjTypes" :key="t" type="button" @click="adjForm.type = t"
                             class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                             :class="adjForm.type === t ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">{{ label }}</button>
                     </div>
@@ -471,6 +605,11 @@ const delAdj = async (a) => {
                                 class="rounded-lg border px-3 py-1.5 text-sm font-medium">🏦 Банк</button>
                         </div>
                         <p class="mt-1 text-[11px] text-slate-400">Аванс автоматически попадёт в Расходы на Финансах (категория «Расходы по сотрудникам»)</p>
+                        <p class="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+                            Аванс — <b>разовый</b>: удерживается целиком в этом месяце, сумма каждый месяц своя.
+                            Если деньги выданы <b>в долг</b> и должны гаситься частями из бонусов — закройте это окно
+                            и нажмите «+ выдать долг» у сотрудника.
+                        </p>
                     </div>
                     <div :class="adjForm.type === 'absence' || adjForm.type === 'sick' || adjForm.type === 'advance' ? '' : 'sm:col-span-2'">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Комментарий</label>
@@ -480,6 +619,72 @@ const delAdj = async (a) => {
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showAdj = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="adjForm.processing || !adjForm.user_id" @click="submitAdj">Сохранить</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Модалка выдачи долга -->
+        <Modal :show="showDebt" @close="showDebt = false" max-width="lg">
+            <div class="p-6">
+                <h2 class="text-lg font-semibold text-slate-900">Выдать долг сотруднику</h2>
+                <p class="mt-1 text-xs text-slate-500">
+                    Долг гасится автоматически — фиксированной суммой каждый месяц и <b>только из бонуса</b>.
+                    Оклад не удерживается: нет бонуса в месяце — нет и удержания, остаток переходит дальше.
+                </p>
+                <p class="mt-2 rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
+                    Это <b>не аванс</b>. Разовую выдачу, которая удерживается целиком в этом же месяце,
+                    заводите через «Корректировка ЗП» → «Аванс».
+                </p>
+                <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class="sm:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Сотрудник *</label>
+                        <select v-model="debtForm.user_id" class="w-full rounded-md border-slate-300 text-sm shadow-sm">
+                            <option value="">— выберите —</option>
+                            <optgroup v-for="g in adjGroups" :key="g.key" :label="g.label">
+                                <option v-for="r in g.list" :key="r.uid" :value="r.uid">{{ r.user }}</option>
+                            </optgroup>
+                        </select>
+                        <div v-if="debtForm.errors.user_id" class="mt-1 text-xs text-red-600">{{ debtForm.errors.user_id }}</div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Сумма долга, ₸ *</label>
+                        <input v-model="debtForm.amount" type="number" min="1" step="0.01" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        <div v-if="debtForm.errors.amount" class="mt-1 text-xs text-red-600">{{ debtForm.errors.amount }}</div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Удерживать в месяц, ₸ *</label>
+                        <input v-model="debtForm.monthly_amount" type="number" min="1" step="0.01" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        <div v-if="debtForm.errors.monthly_amount" class="mt-1 text-xs text-red-600">{{ debtForm.errors.monthly_amount }}</div>
+                        <p class="mt-1 text-[11px] text-slate-400">Если бонус месяца меньше — удержим сколько есть.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Дата выдачи *</label>
+                        <input v-model="debtForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        <div v-if="debtForm.errors.date" class="mt-1 text-xs text-red-600">{{ debtForm.errors.date }}</div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Откуда выданы деньги *</label>
+                        <div class="flex gap-2">
+                            <button type="button" @click="debtForm.payment_method = 'cash'"
+                                :class="debtForm.payment_method === 'cash' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                class="rounded-lg border px-3 py-1.5 text-sm font-medium">💵 Наличные</button>
+                            <button type="button" @click="debtForm.payment_method = 'bank'"
+                                :class="debtForm.payment_method === 'bank' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                class="rounded-lg border px-3 py-1.5 text-sm font-medium">🏦 Банк</button>
+                        </div>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-slate-500">Комментарий</label>
+                        <input v-model="debtForm.note" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="За что выдан…" />
+                    </div>
+                </div>
+                <p class="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                    Деньги реальные: автоматически создастся подтверждённый расход компании
+                    (категория «Расходы по сотрудникам») и уменьшит кассу/банк.
+                </p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="showDebt = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="debtForm.processing || !debtForm.user_id" @click="submitDebt">Выдать долг</PrimaryButton>
                 </div>
             </div>
         </Modal>

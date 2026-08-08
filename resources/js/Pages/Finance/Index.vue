@@ -9,6 +9,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 import DdsPanel from '@/Components/DdsPanel.vue';
+import { useStickyFilters } from '@/composables/useStickyFilters';
 
 const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, isAdmin: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -119,6 +120,30 @@ const applyFinMonth = () => router.get(route('finance.index'), {
     ...props.filters, fin_month: finMonth.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 const resetFinMonth = () => { finMonth.value = ''; applyFinMonth(); };
+
+// Фильтры страницы запоминаются. Восстановление — ОДНИМ запросом на все блоки
+// (расходы, поступления, счета, месяц сводки): каждый applyXxx шлёт свой набор
+// поверх props.filters, и по очереди они бы затёрли друг друга.
+const applyAllFinFilters = () => router.get(route('finance.index'), {
+    fin_month: finMonth.value || undefined,
+    exp_kind: expKind.value || undefined,
+    exp_method: expMethod.value || undefined,
+    exp_status: expStatus.value || undefined,
+    exp_from: expFrom.value || undefined,
+    exp_to: expTo.value || undefined,
+    rc_search: rcSearch.value || undefined,
+    rc_from: rcFrom.value || undefined,
+    rc_to: rcTo.value || undefined,
+    xp_search: xpSearch.value || undefined,
+    xp_from: xpFrom.value || undefined,
+    xp_to: xpTo.value || undefined,
+    search: invSearch.value || undefined,
+}, { preserveState: true, preserveScroll: true, replace: true });
+
+useStickyFilters('finance', {
+    finMonth, expKind, expMethod, expStatus, expFrom, expTo,
+    rcSearch, rcFrom, rcTo, xpSearch, xpFrom, xpTo, invSearch,
+}, applyAllFinFilters);
 const monthActive = computed(() => !!props.filters?.fin_month);
 const monthLabel = computed(() => monthActive.value
     ? new Date(props.filters.fin_month + '-01T00:00:00').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
