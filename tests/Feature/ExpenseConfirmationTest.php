@@ -131,11 +131,22 @@ class ExpenseConfirmationTest extends TestCase
         return $expense->fresh();
     }
 
-    public function test_manager_can_delete_own_expense_while_pending(): void
+    public function test_manager_cannot_delete_expenses_at_all(): void
     {
+        // Даже свой, ещё не подтверждённый: удаление расходов — только бухгалтер/админ.
         $expense = $this->createPendingExpense();
 
         $this->actingAs($this->manager)
+            ->delete(route('expenses.destroy', $expense->id))->assertForbidden();
+
+        $this->assertModelExists($expense);
+    }
+
+    public function test_accountant_deletes_pending_expense(): void
+    {
+        $expense = $this->createPendingExpense();
+
+        $this->actingAs($this->financist)
             ->delete(route('expenses.destroy', $expense->id))->assertRedirect();
 
         $this->assertSoftDeleted($expense);

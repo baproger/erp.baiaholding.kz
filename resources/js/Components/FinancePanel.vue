@@ -65,10 +65,9 @@ const canSubmitExpense = computed(() => expenseMode.value === 'material'
 
 // Подтверждение прочего расхода — только бухгалтер (financist) или админ.
 const canConfirm = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
-// Расход, подтверждённый бухгалтером (чек + нал/банк, деньги ушли из кассы),
-// автор больше не трогает — только бухгалтер. Смотрим на confirmed_by, а не на
-// статус: списание со склада система проводит сама, его удалять можно.
-const canManageExpense = (e) => !e.confirmed_by || canConfirm.value;
+// Удалять расходы может только бухгалтер/админ — любые, включая ещё не
+// подтверждённые (та же проверка в ExpensePolicy::delete).
+const canManageExpense = () => canConfirm.value;
 const confirmFor = ref(null); // id расхода, открытого на подтверждение
 const confirmInput = ref(null);
 const confirmForm = useForm({ payment_method: 'bank', file: null });

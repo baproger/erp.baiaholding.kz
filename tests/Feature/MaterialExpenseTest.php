@@ -79,7 +79,13 @@ class MaterialExpenseTest extends TestCase
         ]);
         $this->assertEquals(12.0, (float) $this->material->fresh()->quantity);
 
-        $this->actingAs($this->manager)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
+        // Списание заводит менеджер, но удаляет его бухгалтер: удаление любых
+        // расходов — только admin/financist. Остаток при этом возвращается.
+        $financist = User::factory()->create();
+        $financist->assignRole('financist');
+        $financist->companies()->attach($this->deal->company_id);
+
+        $this->actingAs($financist)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
     }
 

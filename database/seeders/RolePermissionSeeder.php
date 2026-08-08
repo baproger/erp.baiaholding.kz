@@ -93,6 +93,11 @@ class RolePermissionSeeder extends Seeder
         $abilities = [];
         foreach (['client', 'deal', 'project', 'task', 'invoice', 'payment', 'expense', 'document', 'product'] as $module) {
             foreach (['viewAny', 'view', 'create', 'update', 'delete'] as $ability) {
+                // Удаление расходов — только бухгалтер/админ (просьба владельца
+                // 08.08.2026): это деньги компании, менеджер их не стирает.
+                if ($module === 'expense' && $ability === 'delete') {
+                    continue;
+                }
                 $abilities[] = "{$module}.{$ability}";
             }
         }

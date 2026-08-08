@@ -27,9 +27,21 @@ class ExpensePolicy
         return $u->can('expense.update') ? $this->unlessFrozen($u, $e, 'изменить') : Response::deny();
     }
 
+    /**
+     * Удалять расходы может ТОЛЬКО бухгалтер или админ (просьба владельца
+     * 08.08.2026) — включая ещё не подтверждённые. Расход завёл менеджер и
+     * передумал? Пусть бухгалтер удалит: деньги компании, и следов удаления
+     * не должно зависеть от того, успел бухгалтер посмотреть или нет.
+     * Проверка ролью, а не только правом: право `expense.delete` роль может
+     * получить обратно через админку, а правило должно держаться.
+     */
     public function delete(User $u, Expense $e): Response
     {
-        return $u->can('expense.delete') ? $this->unlessFrozen($u, $e, 'удалить') : Response::deny();
+        if (! $u->hasAnyRole(['admin', 'financist'])) {
+            return Response::deny('Удалять расходы может только бухгалтер или админ.');
+        }
+
+        return $u->can('expense.delete') ? Response::allow() : Response::deny();
     }
 
     /** Причину отказа отдаём текстом — иначе менеджер видит голое «403». */
