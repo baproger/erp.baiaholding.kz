@@ -471,9 +471,10 @@ const delAdj = async (a) => {
                                                 <table class="min-w-full divide-y divide-amber-100 text-xs">
                                                     <thead class="text-left uppercase tracking-wide text-amber-700/70">
                                                         <tr class="bg-amber-50/60">
-                                                            <th class="px-3 py-2 font-semibold">Выдан</th>
-                                                            <th class="px-3 py-2 font-semibold">Основание</th>
-                                                            <th class="px-3 py-2 text-right font-semibold">Сумма долга</th>
+                                                            <!-- Паспорт долга (сумма, когда и за что выдан) — одной
+                                                                 колонкой: он не меняется, а живые цифры справа
+                                                                 не должны из-за него сжиматься. -->
+                                                            <th class="px-3 py-2 font-semibold">Долг</th>
                                                             <th class="px-3 py-2 text-right font-semibold">В месяц</th>
                                                             <th class="px-3 py-2 text-right font-semibold">За {{ monthLabel }}</th>
                                                             <th class="px-3 py-2 text-right font-semibold">Погашено</th>
@@ -483,12 +484,15 @@ const delAdj = async (a) => {
                                                     </thead>
                                                     <tbody class="divide-y divide-amber-50">
                                                         <tr v-for="d in r.debts" :key="d.id" :class="d.closed ? 'opacity-60' : ''">
-                                                            <td class="whitespace-nowrap px-3 py-2 text-slate-500">{{ formatDate(d.date) }}</td>
-                                                            <td class="px-3 py-2 text-slate-500">
-                                                                {{ d.note || '—' }}
-                                                                <span v-if="d.closed" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">закрыт</span>
+                                                            <td class="px-3 py-2">
+                                                                <div class="flex items-center gap-1.5">
+                                                                    <span class="font-semibold tabular-nums text-slate-800">{{ money(d.amount) }}</span>
+                                                                    <span v-if="d.closed" class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">закрыт</span>
+                                                                </div>
+                                                                <div class="mt-0.5 text-[11px] text-slate-400">
+                                                                    {{ formatDate(d.date) }}<template v-if="d.note"> · {{ d.note }}</template>
+                                                                </div>
                                                             </td>
-                                                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-slate-800">{{ money(d.amount) }}</td>
                                                             <td class="px-3 py-2 text-right tabular-nums text-slate-500">{{ money(d.monthly_amount) }}</td>
                                                             <td class="px-3 py-2 text-right tabular-nums" :class="d.paid_this_month > 0 ? 'font-semibold text-rose-600' : 'text-slate-300'">
                                                                 {{ d.paid_this_month > 0 ? '− ' + money(d.paid_this_month) : '—' }}
@@ -501,8 +505,10 @@ const delAdj = async (a) => {
                                                         </tr>
                                                     </tbody>
                                                     <tfoot class="border-t-2 border-amber-200 bg-amber-50/80">
+                                                        <!-- Итог выровнен по колонкам: удержание встаёт под
+                                                             «За месяц», остаток — под «Осталось». -->
                                                         <tr v-if="r.debt_charge > 0">
-                                                            <td :colspan="canManage ? 4 : 3" class="px-3 py-2 font-semibold text-amber-800">
+                                                            <td colspan="2" class="px-3 py-2 font-semibold text-amber-800">
                                                                 {{ r.debt_planned > 0 ? 'Удержим' : 'Удержано' }} из бонуса за {{ monthLabel }}
                                                             </td>
                                                             <td class="px-3 py-2 text-right font-bold tabular-nums text-rose-600">− {{ money(r.debt_charge) }}</td>
@@ -510,7 +516,7 @@ const delAdj = async (a) => {
                                                             <td :colspan="canManage ? 2 : 1" class="px-3 py-2 text-right font-bold tabular-nums text-amber-800">{{ money(r.debt_after) }}</td>
                                                         </tr>
                                                         <tr v-else>
-                                                            <td :colspan="canManage ? 8 : 7" class="px-3 py-2 text-slate-500">
+                                                            <td :colspan="canManage ? 6 : 5" class="px-3 py-2 text-slate-500">
                                                                 За {{ monthLabel }} бонуса нет — удержания не будет,
                                                                 долг <b class="tabular-nums text-amber-800">{{ money(r.debt_remaining) }}</b> переходит на следующий месяц.
                                                             </td>
