@@ -50,7 +50,10 @@ class PaymentController extends Controller
             $payment->delete();
             $finance->recalcInvoiceStatus($invoice);
         });
-        \App\Support\FinanceAudit::notifyDeleted('Платёж на '.number_format((float) $payment->amount, 0, '.', ' ').' ₸ по счёту '.$payment->invoice->number);
+        \App\Support\FinanceAudit::notifyDeleted(
+            'Платёж на '.number_format((float) $payment->amount, 0, '.', ' ').' ₸ по счёту '.$payment->invoice->number,
+            \App\Support\FinanceAudit::linkTo($payment->invoice->invoiceable)
+        );
 
         return back()->with('success', 'Платёж удалён.');
     }

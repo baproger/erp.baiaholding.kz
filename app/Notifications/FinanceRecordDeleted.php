@@ -16,6 +16,10 @@ class FinanceRecordDeleted extends Notification
     public function __construct(
         public string $what,    // что удалено (описание с суммой)
         public string $byName,  // кто удалил
+        // Куда вести по «Открыть». Записи уже нет, поэтому ведём к её ХОЗЯИНУ:
+        // расход/счёт/платёж по сделке — на карточку сделки, по заказу цеха —
+        // на заказ. Ничего не передали (поступление, долг компании) — Финансы.
+        public ?string $url = null,
     ) {}
 
     /** @return array<int, string> */
@@ -31,7 +35,7 @@ class FinanceRecordDeleted extends Notification
             'type' => 'finance_deleted',
             'title' => 'Удалена финансовая запись',
             'message' => $this->what.' — удалил(а) '.$this->byName,
-            'url' => route('finance.index', absolute: false),
+            'url' => $this->url ?: route('finance.index', absolute: false),
         ];
     }
 }

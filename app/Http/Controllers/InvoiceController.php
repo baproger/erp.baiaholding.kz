@@ -384,7 +384,10 @@ class InvoiceController extends Controller
         $this->authorize('delete', $invoice);
         $this->assertOwnership(request()->user(), $invoice->invoiceable);
         $invoice->delete();
-        \App\Support\FinanceAudit::notifyDeleted('Счёт '.$invoice->number.' на '.number_format((float) $invoice->amount, 0, '.', ' ').' ₸');
+        \App\Support\FinanceAudit::notifyDeleted(
+            'Счёт '.$invoice->number.' на '.number_format((float) $invoice->amount, 0, '.', ' ').' ₸',
+            \App\Support\FinanceAudit::linkTo($invoice->invoiceable)
+        );
 
         return back()->with('success', 'Счёт удалён.');
     }

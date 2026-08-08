@@ -142,6 +142,43 @@ class ExpenseConfirmationTest extends TestCase
         $this->assertModelExists($expense);
     }
 
+    public function test_deleted_deal_expense_notification_links_to_the_deal(): void
+    {
+        // Записи уже нет — «Открыть» должно вести к её хозяину, а не на общие
+        // Финансы, иначе непонятно, у кого что пропало.
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->deal->company_id);
+
+        $expense = $this->createPendingExpense();
+        $this->actingAs($this->financist)->delete(route('expenses.destroy', $expense->id))->assertRedirect();
+
+        $data = $admin->notifications()->latest('id')->firstOrFail()->data;
+        $this->assertSame('finance_deleted', $data['type']);
+        $this->assertSame(route('deals.show', $this->deal->id, absolute: false), $data['url']);
+    }
+
+    public function test_deleted_company_expense_notification_falls_back_to_finance(): void
+    {
+        // Расход компании (без сделки) хозяина не имеет — ведём на Финансы.
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->deal->company_id);
+
+        $expense = \App\Models\Expense::create([
+            'company_id' => $this->deal->company_id,
+            'amount' => 5000, 'date' => now()->toDateString(),
+            'description' => 'Аренда', 'status' => 'confirmed',
+            'payment_method' => 'bank', 'confirmed_by' => $this->financist->id,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->actingAs($this->financist)->delete(route('expenses.destroy', $expense->id))->assertRedirect();
+
+        $data = $admin->notifications()->latest('id')->firstOrFail()->data;
+        $this->assertSame(route('finance.index', absolute: false), $data['url']);
+    }
+
     public function test_accountant_deletes_pending_expense(): void
     {
         $expense = $this->createPendingExpense();
