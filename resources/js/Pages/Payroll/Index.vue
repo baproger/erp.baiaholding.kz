@@ -456,42 +456,70 @@ const delAdj = async (a) => {
                                     </div>
                                     <!-- Долги сотрудника: гасятся сами, фиксированной суммой
                                          в месяц и ТОЛЬКО из бонуса — оклад не трогается. -->
-                                    <div class="mb-3 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
-                                        <div class="mb-1 flex items-center justify-between">
-                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Долг перед компанией</span>
+                                    <div class="mb-3">
+                                        <div class="mb-1.5 flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                                                Долг перед компанией
+                                                <span v-if="r.debt_remaining > 0" class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-800">
+                                                    {{ money(r.debt_remaining) }}
+                                                </span>
+                                            </span>
                                             <button v-if="canManage" class="text-xs font-medium text-amber-700 hover:text-amber-800" @click="openDebt(r.uid)">+ выдать долг</button>
                                         </div>
                                         <template v-if="r.debts?.length">
-                                            <div class="divide-y divide-amber-100 text-xs">
-                                                <div v-for="d in r.debts" :key="d.id" class="flex items-center justify-between gap-2 py-1.5">
-                                                    <span class="text-slate-500">
-                                                        {{ formatDate(d.date) }} · выдано <b class="tabular-nums text-slate-700">{{ money(d.amount) }}</b>
-                                                        · по <b class="tabular-nums text-slate-700">{{ money(d.monthly_amount) }}</b>/мес
-                                                        <template v-if="d.note"> · {{ d.note }}</template>
-                                                    </span>
-                                                    <span class="flex items-center gap-2">
-                                                        <span v-if="d.paid_this_month > 0" class="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600" :title="'Удержано за ' + monthLabel">
-                                                            − {{ money(d.paid_this_month) }}
-                                                        </span>
-                                                        <span class="text-slate-400">погашено <span class="tabular-nums text-emerald-600">{{ money(d.paid) }}</span></span>
-                                                        <span v-if="d.closed" class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">закрыт</span>
-                                                        <span v-else class="font-semibold tabular-nums text-amber-700">осталось {{ money(d.remaining) }}</span>
-                                                        <button v-if="canManage" class="text-slate-300 hover:text-rose-600" title="Удалить долг" @click="delDebt(d)">✕</button>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div class="mt-2 border-t border-amber-200 pt-2 text-xs">
-                                                <template v-if="r.debt_charge > 0">
-                                                    {{ r.debt_planned > 0 ? 'Удержим' : 'Удержано' }} из бонуса за {{ monthLabel }}:
-                                                    <b class="tabular-nums text-rose-600">− {{ money(r.debt_charge) }}</b>
-                                                    <span class="text-slate-400"> · останется {{ money(r.debt_after) }}</span>
-                                                </template>
-                                                <template v-else>
-                                                    <span class="text-slate-500">За {{ monthLabel }} бонуса нет — удержания не будет, долг {{ money(r.debt_remaining) }} переходит на следующий месяц.</span>
-                                                </template>
+                                            <div class="overflow-x-auto rounded-lg border border-amber-200 bg-white">
+                                                <table class="min-w-full divide-y divide-amber-100 text-xs">
+                                                    <thead class="text-left uppercase tracking-wide text-amber-700/70">
+                                                        <tr class="bg-amber-50/60">
+                                                            <th class="px-3 py-2 font-semibold">Выдан</th>
+                                                            <th class="px-3 py-2 font-semibold">Основание</th>
+                                                            <th class="px-3 py-2 text-right font-semibold">Сумма долга</th>
+                                                            <th class="px-3 py-2 text-right font-semibold">В месяц</th>
+                                                            <th class="px-3 py-2 text-right font-semibold">За {{ monthLabel }}</th>
+                                                            <th class="px-3 py-2 text-right font-semibold">Погашено</th>
+                                                            <th class="px-3 py-2 text-right font-semibold">Осталось</th>
+                                                            <th v-if="canManage" class="px-3 py-2"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-amber-50">
+                                                        <tr v-for="d in r.debts" :key="d.id" :class="d.closed ? 'opacity-60' : ''">
+                                                            <td class="whitespace-nowrap px-3 py-2 text-slate-500">{{ formatDate(d.date) }}</td>
+                                                            <td class="px-3 py-2 text-slate-500">
+                                                                {{ d.note || '—' }}
+                                                                <span v-if="d.closed" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">закрыт</span>
+                                                            </td>
+                                                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-slate-800">{{ money(d.amount) }}</td>
+                                                            <td class="px-3 py-2 text-right tabular-nums text-slate-500">{{ money(d.monthly_amount) }}</td>
+                                                            <td class="px-3 py-2 text-right tabular-nums" :class="d.paid_this_month > 0 ? 'font-semibold text-rose-600' : 'text-slate-300'">
+                                                                {{ d.paid_this_month > 0 ? '− ' + money(d.paid_this_month) : '—' }}
+                                                            </td>
+                                                            <td class="px-3 py-2 text-right tabular-nums text-emerald-600">{{ money(d.paid) }}</td>
+                                                            <td class="px-3 py-2 text-right font-semibold tabular-nums" :class="d.remaining > 0 ? 'text-amber-700' : 'text-slate-300'">{{ money(d.remaining) }}</td>
+                                                            <td v-if="canManage" class="px-3 py-2 text-right">
+                                                                <button class="text-slate-300 transition-colors hover:text-rose-600" title="Удалить долг" @click="delDebt(d)">✕</button>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                    <tfoot class="border-t-2 border-amber-200 bg-amber-50/80">
+                                                        <tr v-if="r.debt_charge > 0">
+                                                            <td :colspan="canManage ? 4 : 3" class="px-3 py-2 font-semibold text-amber-800">
+                                                                {{ r.debt_planned > 0 ? 'Удержим' : 'Удержано' }} из бонуса за {{ monthLabel }}
+                                                            </td>
+                                                            <td class="px-3 py-2 text-right font-bold tabular-nums text-rose-600">− {{ money(r.debt_charge) }}</td>
+                                                            <td class="px-3 py-2 text-right text-[11px] uppercase tracking-wide text-slate-400">останется</td>
+                                                            <td :colspan="canManage ? 2 : 1" class="px-3 py-2 text-right font-bold tabular-nums text-amber-800">{{ money(r.debt_after) }}</td>
+                                                        </tr>
+                                                        <tr v-else>
+                                                            <td :colspan="canManage ? 8 : 7" class="px-3 py-2 text-slate-500">
+                                                                За {{ monthLabel }} бонуса нет — удержания не будет,
+                                                                долг <b class="tabular-nums text-amber-800">{{ money(r.debt_remaining) }}</b> переходит на следующий месяц.
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
                                             </div>
                                         </template>
-                                        <p v-else class="text-xs text-slate-400">Долгов нет</p>
+                                        <p v-else class="rounded-lg border border-dashed border-amber-200 bg-amber-50/30 px-3 py-2 text-xs text-slate-400">Долгов нет</p>
                                     </div>
                                     <!-- Корректировки сотрудника за месяц -->
                                     <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
