@@ -69,15 +69,12 @@ class PayrollController extends Controller
         $bonusOfMonth = $payroll->bonusByUserForMonth($month);
         $debtPlans = [];
         $debtList = [];
-        foreach ($rows->pluck('uid') as $uid) {
-            // Долги месяца = открытые + закрывшиеся этим месяцем: иначе
-            // полностью погашенный долг исчез бы из ведомости вместе со своим
-            // удержанием, и «К выплате» подскочило бы после прогона cron.
-            $ofMonth = $debts->forMonth((int) $uid, $month);
-            if ($ofMonth->isEmpty()) {
-                continue;
-            }
-            $debtPlans[$uid] = $debts->planFor((int) $uid, $month, (float) ($bonusOfMonth[$uid] ?? 0));
+        // Долги месяца = открытые + закрывшиеся этим месяцем: иначе полностью
+        // погашенный долг исчез бы из ведомости вместе со своим удержанием,
+        // и «К выплате» подскочило бы после прогона cron.
+        // Грузим на ВСЕХ сразу (2 запроса), а не по сотруднику в цикле.
+        foreach ($debts->forMonthMany($rows->pluck('uid'), $month) as $uid => $ofMonth) {
+            $debtPlans[$uid] = $debts->planFrom($ofMonth, $month, (float) ($bonusOfMonth[$uid] ?? 0));
             $debtList[$uid] = $ofMonth->map(fn ($d) => [
                 'id' => $d->id,
                 'amount' => (float) $d->amount,

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\EmployeeDebt;
-use App\Models\EmployeeDebtPayment;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -41,10 +40,29 @@ class EmployeeDebtService
      */
     public function forMonth(int $userId, string $month): Collection
     {
-        return EmployeeDebt::with('payments')->where('user_id', $userId)
+        return $this->forMonthMany([$userId], $month)->get($userId, collect());
+    }
+
+    /**
+     * То же для СПИСКА сотрудников — двумя запросами на всех (долги + их
+     * погашения), а не тремя на каждого: ведомость ЗП грузит их пачкой.
+     *
+     * @param  iterable<int>  $userIds
+     * @return Collection<int, Collection<int, EmployeeDebt>>
+     */
+    public function forMonthMany(iterable $userIds, string $month): Collection
+    {
+        $ids = collect($userIds)->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return EmployeeDebt::with('payments')->whereIn('user_id', $ids)
             ->where(fn ($q) => $q->whereNull('closed_at')
                 ->orWhereHas('payments', fn ($p) => $p->where('month', $month)))
-            ->orderBy('date')->orderBy('id')->get();
+            ->orderBy('date')->orderBy('id')->get()
+            ->groupBy(fn ($d) => (int) $d->user_id);
     }
 
     /**
@@ -61,11 +79,25 @@ class EmployeeDebtService
      */
     public function planFor(int $userId, string $month, float $bonusOfMonth): array
     {
-        $debts = $this->openFor($userId);
-        // Уже удержано за месяц — по ВСЕМ долгам, включая закрытые этим месяцем.
-        $charged = round((float) EmployeeDebtPayment::whereIn(
-            'employee_debt_id', EmployeeDebt::where('user_id', $userId)->select('id')
-        )->where('month', $month)->sum('amount'), 2);
+        return $this->planFrom($this->forMonth($userId, $month), $month, $bonusOfMonth);
+    }
+
+    /**
+     * То же, но из УЖЕ загруженных долгов месяца (forMonth / forMonthMany) —
+     * не делает ни одного запроса, поэтому годится для ведомости на всех.
+     *
+     * @param  Collection<int, EmployeeDebt>  $ofMonth
+     */
+    public function planFrom(Collection $ofMonth, string $month, float $bonusOfMonth): array
+    {
+        // Гасим только открытые, старые первыми — чтобы первый выданный
+        // закрылся раньше.
+        $debts = $ofMonth->filter(fn ($d) => $d->closed_at === null && $d->remaining() > 0)->values();
+        // Уже удержано за месяц — по ВСЕМ долгам, включая закрытые этим месяцем
+        // (иначе списание закрывшегося долга потерялось бы).
+        $charged = round((float) $ofMonth->sum(
+            fn ($d) => (float) ($d->payments->firstWhere('month', $month)?->amount ?? 0)
+        ), 2);
 
         $openRemaining = round($debts->sum(fn ($d) => $d->remaining()), 2);
         // Бонус, ещё не разобранный другими долгами этого же сотрудника.
@@ -112,6 +144,7 @@ class EmployeeDebtService
     {
         $bonuses = $this->payroll->bonusByUserForMonth($month);
         $userIds = EmployeeDebt::whereNull('closed_at')->distinct()->pluck('user_id');
+        $byUser = $this->forMonthMany($userIds, $month);
         $touched = 0;
 
         foreach ($userIds as $userId) {
@@ -120,7 +153,7 @@ class EmployeeDebtService
                 continue; // Нет бонуса — нечего удерживать, оклад не трогаем.
             }
 
-            $plan = $this->planFor((int) $userId, $month, $bonus);
+            $plan = $this->planFrom($byUser->get((int) $userId, collect()), $month, $bonus);
             if (! $plan['per_debt']) {
                 continue;
             }

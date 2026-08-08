@@ -161,6 +161,8 @@ const submitAdj = () => adjForm.post(route('payroll.adjustments.store'), { prese
 const showDebt = ref(false);
 const debtForm = useForm({ user_id: '', amount: '', monthly_amount: '', date: new Date().toISOString().slice(0, 10), payment_method: 'cash', note: '' });
 const openDebt = (uid = '') => { debtForm.reset(); debtForm.user_id = uid; debtForm.date = new Date().toISOString().slice(0, 10); showDebt.value = true; };
+// Из «Корректировки ЗП» → в форму долга, сохранив выбранного сотрудника.
+const switchToDebt = () => { const uid = adjForm.user_id; showAdj.value = false; openDebt(uid); };
 const submitDebt = () => debtForm.post(route('payroll.debts.store'), { preserveScroll: true, onSuccess: () => (showDebt.value = false) });
 const delDebt = async (d) => {
     if (await confirmDialog({
@@ -581,6 +583,14 @@ const delAdj = async (a) => {
                         <button v-for="(label, t) in newAdjTypes" :key="t" type="button" @click="adjForm.type = t"
                             class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                             :class="adjForm.type === t ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">{{ label }}</button>
+                        <!-- Долг — не корректировка, а своя сущность (гасится из бонусов
+                             месяцами), поэтому кнопка переключает на форму долга.
+                             Цветом отделена от типов корректировки. -->
+                        <button type="button" @click="switchToDebt"
+                            class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-all hover:border-amber-400 hover:bg-amber-100"
+                            title="Долг гасится частями из бонусов — откроется отдельная форма">
+                            Долг →
+                        </button>
                     </div>
                     <div v-if="adjForm.type === 'absence' || adjForm.type === 'sick'">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Дней (сумма = оклад / 22 × дни)</label>
