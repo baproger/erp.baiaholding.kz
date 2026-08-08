@@ -81,11 +81,20 @@ const companySections = computed(() => {
             const groups = [...s.map.entries()]
                 .map(([name, { list, id }]) => {
                     const own = id != null ? props.deptNorms?.[id] : null; // своя норма отдела
+                    // Суммы отдела — по строкам, которые в этой фирме считаются
+                    // (у «двойного» сотрудника деньги идут только в основную).
+                    const counted = list.filter((r) => r.counted);
+                    const sum = (f) => counted.reduce((n, r) => n + (r[f] || 0), 0);
                     return {
                         key: `${s.id}|${name}`, name, list, id,
                         norm: own ?? props.normHours,
                         override: own != null,
-                        final: list.reduce((sum, r) => sum + (r.counted ? r.final || 0 : 0), 0),
+                        base: sum('base'),
+                        bonus: sum('bonus'),
+                        deductions: sum('deductions'),
+                        additions: sum('additions'),
+                        debt: sum('debt_charge'),
+                        final: sum('final'),
                     };
                 })
                 .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
@@ -98,6 +107,7 @@ const companySections = computed(() => {
                     bonus: counted.reduce((n, r) => n + (r.bonus || 0), 0),
                     deductions: counted.reduce((n, r) => n + (r.deductions || 0), 0),
                     additions: counted.reduce((n, r) => n + (r.additions || 0), 0),
+                    debt: counted.reduce((n, r) => n + (r.debt_charge || 0), 0),
                     final: counted.reduce((n, r) => n + (r.final || 0), 0),
                 },
             };
@@ -118,9 +128,13 @@ const saveDeptNorm = (g) => router.patch(route('payroll.norm'), {
     month: props.month, department_id: g.id,
     norm: deptNormVal.value === '' ? null : Number(deptNormVal.value),
 }, { preserveScroll: true, onSuccess: () => (editingDeptNorm.value = null) });
-// Свернуть/развернуть секцию отдела кликом по её заголовку (по умолчанию все раскрыты).
-const collapsed = ref(new Set());
-const toggleDept = (name) => { const s = new Set(collapsed.value); s.has(name) ? s.delete(name) : s.add(name); collapsed.value = s; };
+// Отделы СВЁРНУТЫ по умолчанию: страница открывается сводкой по фирмам и
+// отделам, а не стеной из всех сотрудников — раскрываем только нужный.
+const expanded = ref(new Set());
+const toggleDept = (key) => { const s = new Set(expanded.value); s.has(key) ? s.delete(key) : s.add(key); expanded.value = s; };
+const allKeys = computed(() => companySections.value.flatMap((s) => s.groups.map((g) => g.key)));
+const allExpanded = computed(() => allKeys.value.length > 0 && allKeys.value.every((k) => expanded.value.has(k)));
+const toggleAll = () => { expanded.value = allExpanded.value ? new Set() : new Set(allKeys.value); };
 
 // Месяц корректировок (отгулы/больничные/штрафы) — серверный фильтр.
 const monthSel = ref(props.month);
@@ -388,7 +402,17 @@ const delAdj = async (a) => {
                 <table class="min-w-full divide-y divide-slate-100 text-sm">
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                         <tr>
-                            <th class="px-4 py-3">Сотрудник</th>
+                            <th class="px-4 py-3">
+                                <span class="flex items-center gap-2">
+                                    Сотрудник
+                                    <!-- Отделы свёрнуты по умолчанию — даём быстрый способ
+                                         раскрыть всё, когда нужен полный список. -->
+                                    <button type="button" @click="toggleAll"
+                                        class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-slate-500 transition hover:border-slate-300 hover:text-slate-700">
+                                        {{ allExpanded ? 'свернуть всё' : 'развернуть всё' }}
+                                    </button>
+                                </span>
+                            </th>
                             <th class="px-4 py-3 text-right" title="Отработанные часы за месяц. Пусто — полный оклад.">Часы</th>
                             <th class="px-4 py-3 text-right">Оклад (начислено)</th>
                             <th class="px-4 py-3 text-right">Бонус</th>
@@ -398,29 +422,32 @@ const delAdj = async (a) => {
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <template v-for="s in companySections" :key="s.id">
-                        <!-- Секция ФИРМЫ: ведомость BAIA и ASU считаются раздельно -->
-                        <tr class="bg-slate-800">
-                            <td colspan="6" class="px-4 py-2.5">
-                                <div class="flex flex-wrap items-center justify-between gap-2">
-                                    <span class="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wide text-white">
-                                        {{ s.name }}
-                                        <span class="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-white/80">{{ s.people }} сотр.</span>
-                                    </span>
-                                    <span class="flex flex-wrap items-center gap-3 text-[11px] font-semibold tabular-nums text-white/70">
-                                        <span>оклад {{ money(s.totals.base) }}</span>
-                                        <span>бонус {{ money(s.totals.bonus) }}</span>
-                                        <span class="text-sm text-emerald-300">к выплате {{ money(s.totals.final) }}</span>
-                                    </span>
-                                </div>
+                        <!-- Секция ФИРМЫ: ведомость BAIA и ASU считаются раздельно.
+                             Суммы разложены по тем же колонкам, что и строки
+                             сотрудников — свёрнутая ведомость читается как сводка. -->
+                        <tr class="bg-slate-800 text-white">
+                            <td class="px-4 py-2.5">
+                                <span class="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wide">
+                                    {{ s.name }}
+                                    <span class="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-white/70">{{ s.people }} сотр.</span>
+                                </span>
                             </td>
+                            <td></td>
+                            <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums text-white/90">{{ money(s.totals.base) }}</td>
+                            <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums text-emerald-300">{{ money(s.totals.bonus) }}</td>
+                            <td class="px-4 py-2.5 text-right text-sm font-semibold tabular-nums" :class="s.totals.deductions > 0 || s.totals.debt > 0 ? 'text-rose-300' : 'text-white/30'">
+                                {{ s.totals.deductions > 0 ? '− ' + money(s.totals.deductions) : (s.totals.debt > 0 ? '' : '—') }}
+                                <span v-if="s.totals.debt > 0" class="text-amber-300" title="Погашение долга из бонуса">− {{ money(s.totals.debt) }} долг</span>
+                            </td>
+                            <td class="px-4 py-2.5 text-right text-base font-bold tabular-nums text-emerald-300">{{ money(s.totals.final) }}</td>
                         </tr>
                         <template v-for="g in s.groups" :key="g.key">
                         <!-- Секция отдела: название, число сотрудников, Σ к выплате; клик — свернуть/развернуть -->
                         <tr class="cursor-pointer select-none bg-slate-100/80 hover:bg-slate-200/70" @click="toggleDept(g.key)">
-                            <td colspan="6" class="px-4 py-2">
-                                <div class="flex items-center justify-between gap-2">
+                            <td class="px-4 py-2">
+                                <div class="flex items-center gap-2">
                                     <span class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
-                                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="collapsed.has(g.key) ? '' : 'rotate-90'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="expanded.has(g.key) ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                         ⌂ {{ g.name }}
                                         <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }} сотр.</span>
                                         <!-- Своя норма часов отдела; пусто при правке — сброс на общую -->
@@ -441,11 +468,19 @@ const delAdj = async (a) => {
                                             <span v-else class="rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums" :class="g.override ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200/70 text-slate-500'">норма {{ g.norm }} ч</span>
                                         </span>
                                     </span>
-                                    <span class="text-xs font-semibold tabular-nums text-emerald-700">к выплате {{ money(g.final) }}</span>
                                 </div>
                             </td>
+                            <td></td>
+                            <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums text-slate-600">{{ money(g.base) }}</td>
+                            <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums text-emerald-600">{{ money(g.bonus) }}</td>
+                            <td class="px-4 py-2 text-right text-xs font-semibold tabular-nums" :class="g.deductions > 0 || g.debt > 0 ? 'text-rose-600' : 'text-slate-300'">
+                                {{ g.deductions > 0 ? '− ' + money(g.deductions) : (g.additions > 0 || g.debt > 0 ? '' : '—') }}
+                                <span v-if="g.additions > 0" class="text-emerald-600"> + {{ money(g.additions) }}</span>
+                                <span v-if="g.debt > 0" class="text-amber-600" title="Погашение долга из бонуса"> − {{ money(g.debt) }} долг</span>
+                            </td>
+                            <td class="px-4 py-2 text-right text-sm font-bold tabular-nums text-emerald-700">{{ money(g.final) }}</td>
                         </tr>
-                        <template v-if="!collapsed.has(g.key)">
+                        <template v-if="expanded.has(g.key)">
                         <template v-for="r in g.list" :key="r.uid">
                             <!-- Строка чужой фирмы (ЗП учтена в основной) — приглушена:
                                  суммы показаны для справки и в итог секции не входят. -->
