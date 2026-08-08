@@ -234,4 +234,44 @@ class EmployeeDebtTest extends TestCase
         $this->assertNull(EmployeeDebt::find($debt->id));
         $this->assertSoftDeleted(Expense::withTrashed()->findOrFail($expenseId));
     }
+
+    public function test_payroll_still_shows_the_charge_after_month_was_charged(): void
+    {
+        // Команда уже списала за месяц — ведомость обязана показывать удержание
+        // и держать «К выплате» уменьшенным, иначе цифра прыгает после cron.
+        $month = now()->format('Y-m');
+        $this->wonDeal(5_000_000, now()->startOfMonth()->toDateString());
+        $this->giveDebt(300000, 50000);
+
+        app(EmployeeDebtService::class)->chargeMonth($month);
+
+        $props = $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('payroll.index', ['month' => $month]))->assertOk()->viewData('page')['props'];
+
+        $row = collect($props['rows'])->firstWhere('uid', $this->manager->id);
+        $this->assertEqualsWithDelta(50000, $row['debt_charge'], 0.01);
+        $this->assertEqualsWithDelta($row['payout'] - 50000, $row['final'], 0.01);
+    }
+
+    public function test_fully_repaid_debt_still_shows_its_charge_in_that_month(): void
+    {
+        // Долг закрылся этим месяцем — он обязан остаться в ведомости месяца
+        // вместе со своим удержанием, иначе деньги списаны, а строки нет.
+        $month = now()->format('Y-m');
+        $this->wonDeal(5_000_000, now()->startOfMonth()->toDateString());
+        $this->giveDebt(40000, 40000);
+
+        app(EmployeeDebtService::class)->chargeMonth($month);
+
+        $props = $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('payroll.index', ['month' => $month]))->assertOk()->viewData('page')['props'];
+
+        $row = collect($props['rows'])->firstWhere('uid', $this->manager->id);
+        $this->assertEqualsWithDelta(40000, $row['debt_charge'], 0.01);
+        $this->assertEqualsWithDelta(40000, $row['debt_remaining'], 0.01, 'Долг на начало месяца.');
+        $this->assertEqualsWithDelta(0, $row['debt_after'], 0.01);
+        $this->assertEqualsWithDelta($row['payout'] - 40000, $row['final'], 0.01);
+        $this->assertCount(1, $row['debts'], 'Закрытый долг остаётся в списке своего месяца.');
+        $this->assertTrue($row['debts'][0]['closed']);
+    }
 }

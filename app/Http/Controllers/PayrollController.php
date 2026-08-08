@@ -70,17 +70,22 @@ class PayrollController extends Controller
         $debtPlans = [];
         $debtList = [];
         foreach ($rows->pluck('uid') as $uid) {
-            $open = $debts->openFor((int) $uid);
-            if ($open->isEmpty()) {
+            // Долги месяца = открытые + закрывшиеся этим месяцем: иначе
+            // полностью погашенный долг исчез бы из ведомости вместе со своим
+            // удержанием, и «К выплате» подскочило бы после прогона cron.
+            $ofMonth = $debts->forMonth((int) $uid, $month);
+            if ($ofMonth->isEmpty()) {
                 continue;
             }
             $debtPlans[$uid] = $debts->planFor((int) $uid, $month, (float) ($bonusOfMonth[$uid] ?? 0));
-            $debtList[$uid] = $open->map(fn ($d) => [
+            $debtList[$uid] = $ofMonth->map(fn ($d) => [
                 'id' => $d->id,
                 'amount' => (float) $d->amount,
                 'monthly_amount' => (float) $d->monthly_amount,
                 'paid' => $d->paidSum(),
                 'remaining' => $d->remaining(),
+                'paid_this_month' => (float) ($d->payments->firstWhere('month', $month)?->amount ?? 0),
+                'closed' => $d->closed_at !== null,
                 'date' => optional($d->date)->toDateString(),
                 'note' => $d->note,
             ])->values()->all();
@@ -115,6 +120,7 @@ class PayrollController extends Controller
             // платежа. Оклад не трогаем — нет бонуса, нет и удержания.
             $plan = $debtPlans[$r['uid']] ?? null;
             $r['debt_charge'] = $plan['charge'] ?? 0.0;
+            $r['debt_planned'] = $plan['planned'] ?? 0.0;
             $r['debt_remaining'] = $plan['before'] ?? 0.0;
             $r['debt_after'] = $plan['after'] ?? 0.0;
             $r['debts'] = $debtList[$r['uid']] ?? [];

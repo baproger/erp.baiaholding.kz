@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\EmployeeDebt;
+use App\Models\EmployeeDebtPayment;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -32,18 +33,41 @@ class EmployeeDebtService
     }
 
     /**
-     * Что произойдёт с долгами сотрудника в этом месяце при таком бонусе:
-     * [charge — сколько удержим, remaining_before, remaining_after, per_debt].
+     * Долги сотрудника, относящиеся к месяцу: открытые + те, что этим месяцем
+     * и закрылись (иначе полностью погашенный долг пропал бы из ведомости
+     * вместе со своим удержанием).
      *
-     * Ничего не пишет в базу — этим же методом страница ЗП показывает план,
-     * а месячная команда считает факт.
+     * @return Collection<int, EmployeeDebt>
+     */
+    public function forMonth(int $userId, string $month): Collection
+    {
+        return EmployeeDebt::with('payments')->where('user_id', $userId)
+            ->where(fn ($q) => $q->whereNull('closed_at')
+                ->orWhereHas('payments', fn ($p) => $p->where('month', $month)))
+            ->orderBy('date')->orderBy('id')->get();
+    }
+
+    /**
+     * Что происходит с долгами сотрудника в этом месяце при таком бонусе.
      *
-     * @return array{charge: float, before: float, after: float, per_debt: array<int, array{id: int, take: float}>}
+     * charge — сколько месяц стоит сотруднику ВСЕГО: уже удержанное командой
+     * (charged) плюс то, что ещё предстоит (planned). Без этой суммы ведомость
+     * показывала бы 0 сразу после прогона cron, и «К выплате» прыгало бы.
+     *
+     * Ничего не пишет в базу: этим же методом страница ЗП показывает план,
+     * а месячная команда — считает факт (ей нужен только per_debt).
+     *
+     * @return array{charge: float, charged: float, planned: float, before: float, after: float, per_debt: array<int, array{id: int, take: float}>}
      */
     public function planFor(int $userId, string $month, float $bonusOfMonth): array
     {
         $debts = $this->openFor($userId);
-        $before = round($debts->sum(fn ($d) => $d->remaining()), 2);
+        // Уже удержано за месяц — по ВСЕМ долгам, включая закрытые этим месяцем.
+        $charged = round((float) EmployeeDebtPayment::whereIn(
+            'employee_debt_id', EmployeeDebt::where('user_id', $userId)->select('id')
+        )->where('month', $month)->sum('amount'), 2);
+
+        $openRemaining = round($debts->sum(fn ($d) => $d->remaining()), 2);
         // Бонус, ещё не разобранный другими долгами этого же сотрудника.
         $budget = max(0.0, round($bonusOfMonth, 2));
         $perDebt = [];
@@ -63,12 +87,16 @@ class EmployeeDebtService
             }
         }
 
-        $charge = round(array_sum(array_column($perDebt, 'take')), 2);
+        $planned = round(array_sum(array_column($perDebt, 'take')), 2);
 
         return [
-            'charge' => $charge,
-            'before' => $before,
-            'after' => round($before - $charge, 2),
+            // Сколько месяц стоит сотруднику всего — факт + план.
+            'charge' => round($charged + $planned, 2),
+            'charged' => $charged,
+            'planned' => $planned,
+            // Долг на начало месяца и на конец.
+            'before' => round($openRemaining + $charged, 2),
+            'after' => round($openRemaining - $planned, 2),
             'per_debt' => $perDebt,
         ];
     }

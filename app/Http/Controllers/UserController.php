@@ -199,6 +199,36 @@ class UserController extends Controller
         }, 'Сотрудники — '.now()->format('d.m.Y').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
+    /**
+     * Держит отдел сотрудника в его же фирме. Отделы принадлежат фирме, а
+     * список фирм можно поменять в любой момент — без этого сотрудник остаётся
+     * в отделе фирмы, где он больше не работает (и, например, считается по
+     * чужой норме часов). Переставляем на одноимённый отдел своей фирмы (общий
+     * `code`); такого нет — отдел снимаем, чтобы не врал.
+     */
+    private function realignDepartment(User $user): void
+    {
+        $user->load(['department', 'companies']);
+        $department = $user->department;
+        $companyIds = $user->companies->pluck('id');
+
+        if (! $department || $companyIds->isEmpty() || $companyIds->contains($department->company_id)) {
+            return;
+        }
+
+        $twin = Department::where('code', $department->code)
+            ->whereIn('company_id', $companyIds)
+            ->where('is_active', true)->first();
+
+        $user->update(['department_id' => $twin?->id]);
+
+        if ($twin) {
+            $user->departments()->syncWithoutDetaching([$twin->id]);
+        }
+        // Членство в отделе покинутой фирмы убираем — иначе он висел бы там.
+        $user->departments()->detach($department->id);
+    }
+
     public function store(UserRequest $request): RedirectResponse
     {
         $this->authorize('create', User::class);
@@ -226,6 +256,7 @@ class UserController extends Controller
         }
         // Компании сотрудника (BAIA / ASU, можно обе); без выбора — привязка к обеим.
         $user->companies()->sync($this->companyIds($request));
+        $this->realignDepartment($user);
 
         return back()->with('success', 'Сотрудник добавлен.');
     }
@@ -260,6 +291,7 @@ class UserController extends Controller
         }
         $user->syncRoles([$data['role']]);
         $user->companies()->sync($this->companyIds($request));
+        $this->realignDepartment($user);
 
         return back()->with('success', 'Сотрудник обновлён.');
     }

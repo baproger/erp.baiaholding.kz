@@ -468,15 +468,19 @@ const delAdj = async (a) => {
                                                         <template v-if="d.note"> · {{ d.note }}</template>
                                                     </span>
                                                     <span class="flex items-center gap-2">
+                                                        <span v-if="d.paid_this_month > 0" class="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600" :title="'Удержано за ' + monthLabel">
+                                                            − {{ money(d.paid_this_month) }}
+                                                        </span>
                                                         <span class="text-slate-400">погашено <span class="tabular-nums text-emerald-600">{{ money(d.paid) }}</span></span>
-                                                        <span class="font-semibold tabular-nums text-amber-700">осталось {{ money(d.remaining) }}</span>
+                                                        <span v-if="d.closed" class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">закрыт</span>
+                                                        <span v-else class="font-semibold tabular-nums text-amber-700">осталось {{ money(d.remaining) }}</span>
                                                         <button v-if="canManage" class="text-slate-300 hover:text-rose-600" title="Удалить долг" @click="delDebt(d)">✕</button>
                                                     </span>
                                                 </div>
                                             </div>
                                             <div class="mt-2 border-t border-amber-200 pt-2 text-xs">
                                                 <template v-if="r.debt_charge > 0">
-                                                    Удержим из бонуса за {{ monthLabel }}:
+                                                    {{ r.debt_planned > 0 ? 'Удержим' : 'Удержано' }} из бонуса за {{ monthLabel }}:
                                                     <b class="tabular-nums text-rose-600">− {{ money(r.debt_charge) }}</b>
                                                     <span class="text-slate-400"> · останется {{ money(r.debt_after) }}</span>
                                                 </template>

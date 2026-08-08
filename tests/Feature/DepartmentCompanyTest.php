@@ -168,4 +168,47 @@ class DepartmentCompanyTest extends TestCase
         // Сводка и таблица считаются из одних данных — итоги обязаны совпасть.
         $this->assertEqualsWithDelta($page['props']['totals']['budget'], $summary['budget'], 0.01);
     }
+
+    public function test_changing_user_companies_moves_department_to_the_twin(): void
+    {
+        // Отдел принадлежит фирме: перевели сотрудника в другую фирму —
+        // он не должен остаться в отделе фирмы, где больше не работает.
+        $baia = Company::where('code', 'BAIA')->firstOrFail();
+        $asu = Company::where('code', 'ASU')->firstOrFail();
+        $inBaia = Department::create(['company_id' => $baia->id, 'name' => 'Отдел продаж', 'code' => 'sales', 'is_active' => true]);
+        $inAsu = Department::create(['company_id' => $asu->id, 'name' => 'Отдел продаж', 'code' => 'sales', 'is_active' => true]);
+
+        $admin = $this->user('admin', [$baia->id, $asu->id]);
+        $employee = $this->user('manager', [$baia->id]);
+        $employee->update(['department_id' => $inBaia->id]);
+
+        $this->actingAs($admin)->put(route('users.update', $employee->id), [
+            'name' => $employee->name, 'email' => $employee->email,
+            'role' => 'manager', 'department_id' => $inBaia->id,
+            'company_ids' => [$asu->id], 'is_active' => true, 'salary' => 0,
+        ])->assertRedirect();
+
+        // Переехал в одноимённый отдел ASU, а не остался в BAIA.
+        $this->assertSame($inAsu->id, $employee->fresh()->department_id);
+    }
+
+    public function test_department_is_cleared_when_new_company_has_no_twin(): void
+    {
+        $baia = Company::where('code', 'BAIA')->firstOrFail();
+        $asu = Company::where('code', 'ASU')->firstOrFail();
+        $onlyBaia = Department::create(['company_id' => $baia->id, 'name' => 'Металл цех', 'code' => 'metal', 'is_active' => true]);
+
+        $admin = $this->user('admin', [$baia->id, $asu->id]);
+        $employee = $this->user('employee', [$baia->id]);
+        $employee->update(['department_id' => $onlyBaia->id]);
+
+        $this->actingAs($admin)->put(route('users.update', $employee->id), [
+            'name' => $employee->name, 'email' => $employee->email,
+            'role' => 'employee', 'department_id' => $onlyBaia->id,
+            'company_ids' => [$asu->id], 'is_active' => true, 'salary' => 0,
+        ])->assertRedirect();
+
+        // Одноимённого отдела в ASU нет — отдел снимаем, а не оставляем чужой.
+        $this->assertNull($employee->fresh()->department_id);
+    }
 }
