@@ -21,7 +21,7 @@ import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, formatDateTime, formatDuration, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] } });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null } });
 
 const tab = ref('finance');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
@@ -433,5 +433,43 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
             </div>
         </Modal>
+        <!-- Из предварительной сделки: в самом конце карточки, чтобы было видно,
+             что сделка выросла из лота, и с какими цифрами он считался. -->
+        <div v-if="preDeal" class="mt-6 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-3">
+                <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-violet-700">
+                    ◧ Из предварительной сделки
+                    <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold normal-case tracking-normal text-violet-700 ring-1 ring-violet-200">{{ preDeal.action }}</span>
+                </span>
+                <Link :href="route('preDeals.index')" class="text-xs font-semibold text-violet-700 hover:underline">Все лоты →</Link>
+            </div>
+            <div class="grid gap-x-6 gap-y-3 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div v-if="preDeal.lot_number">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">№ лота</div>
+                    <div class="font-semibold text-slate-800">{{ preDeal.lot_number }}</div>
+                </div>
+                <div>
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Внёс</div>
+                    <div class="font-semibold text-slate-800">{{ preDeal.manager ?? '—' }}<span class="ml-1 text-xs font-normal text-slate-400">{{ preDeal.created_at }}</span></div>
+                </div>
+                <div v-if="preDeal.tender_deadline">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Срок тендера</div>
+                    <div class="font-semibold text-slate-800">{{ preDeal.tender_deadline }}</div>
+                </div>
+                <div v-if="preDeal.margin > 0">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Расчётная маржа лота</div>
+                    <div class="font-semibold text-emerald-600">{{ preDeal.margin }}%</div>
+                </div>
+            </div>
+            <!-- Цифры лота — справочные: расходы уехали в сделку и ждут бухгалтера -->
+            <div v-if="preDeal.purchase_price || preDeal.delivery || preDeal.assembly || preDeal.commission"
+                class="flex flex-wrap gap-2 border-t border-violet-100 px-5 py-3 text-[11px]">
+                <span v-if="preDeal.purchase_price" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">закуп <b class="tabular-nums">{{ money(preDeal.purchase_price) }}</b></span>
+                <span v-if="preDeal.delivery" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">🚚 доставка, грузчики <b class="tabular-nums">{{ money(preDeal.delivery) }}</b></span>
+                <span v-if="preDeal.assembly" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">🔧 сборка <b class="tabular-nums">{{ money(preDeal.assembly) }}</b></span>
+                <span v-if="preDeal.commission" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">комиссия <b class="tabular-nums">{{ money(preDeal.commission) }}</b></span>
+            </div>
+            <p v-if="preDeal.comment" class="border-t border-violet-100 px-5 py-3 text-sm text-slate-600">{{ preDeal.comment }}</p>
+        </div>
     </AppLayout>
 </template>

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Deal;
 use App\Models\DealStage;
 use App\Models\PreDeal;
-use App\Models\PreDealChecklistItem;
 use App\Models\User;
 use App\Services\DealNumberService;
 use App\Support\CurrentCompany;
@@ -83,40 +82,60 @@ class PreDealController extends Controller
 
         return Inertia::render('PreDeals/Index', [
             'preDeals' => $q->limit(300)->get(),
-            'items' => PreDealChecklistItem::where('is_active', true)->orderBy('order')->get(['id', 'label']),
             'minMargin' => PreDeal::minMargin(),
             'taxPercent' => (float) \App\Models\Setting::get('tax_percent', 3),
             'leadership' => $lead,
             'stats' => $stats,
             'managers' => $lead ? User::role('manager')->where('is_active', true)->orderBy('name')->get(['id', 'name']) : [],
             'filters' => $request->only('manager', 'status', 'month'),
-            'canManageChecklist' => $request->user()->hasAnyRole(['admin', 'financist']),
         ]);
     }
 
     /** @return array<string, mixed> */
     private function validated(Request $request, ?PreDeal $ignore = null): array
     {
-        return $request->validate([
-            // Уникальный № лота: менеджеры не заводят один лот дважды
-            // (при правке — без ложного срабатывания на самого себя).
-            'lot_number' => ['nullable', 'string', 'max:100',
-                \Illuminate\Validation\Rule::unique('pre_deals', 'lot_number')->ignore($ignore?->id)],
-            'tender_deadline' => ['nullable', 'date'],
+        // Действие определяет форму: у звонка и КП только контакты, товар и
+        // сумма договора; расчёт маржи (закуп, доставка, сборка, комиссия,
+        // партнёр, № лота, срок тендера) есть только у «Участия».
+        $action = in_array($request->input('action'), PreDeal::ACTIONS, true)
+            ? (string) $request->input('action') : 'participation';
+        $short = in_array($action, PreDeal::SHORT_ACTIONS, true);
+
+        $rules = [
+            // Не required: «Участие» — умолчание, не приславший действие лот
+            // ведёт себя как раньше.
+            'action' => ['nullable', \Illuminate\Validation\Rule::in(PreDeal::ACTIONS)],
+            'comment' => ['nullable', 'string', 'max:255'],
             'bin' => ['nullable', 'string', 'max:40'],
             'customer' => ['nullable', 'string', 'max:255'],
             'client_name' => ['nullable', 'string', 'max:255'],
             'client_phone' => ['nullable', 'string', 'max:40'],
             'product' => ['required', 'string', 'max:255'],
             'contract_sum' => ['required', 'numeric', 'min:1'],
-            'purchase_price' => ['nullable', 'numeric', 'min:0'],
-            'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'delivery' => ['nullable', 'numeric', 'min:0'],
-            'assembly' => ['nullable', 'numeric', 'min:0'],
-            'commission' => ['nullable', 'numeric', 'min:0'],
-        ], [
+        ];
+
+        if (! $short) {
+            $rules += [
+                // Уникальный № лота: менеджеры не заводят один лот дважды
+                // (при правке — без ложного срабатывания на самого себя).
+                'lot_number' => ['nullable', 'string', 'max:100',
+                    \Illuminate\Validation\Rule::unique('pre_deals', 'lot_number')->ignore($ignore?->id)],
+                'tender_deadline' => ['nullable', 'date'],
+                'purchase_price' => ['nullable', 'numeric', 'min:0'],
+                'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+                'delivery' => ['nullable', 'numeric', 'min:0'],
+                'assembly' => ['nullable', 'numeric', 'min:0'],
+                'commission' => ['nullable', 'numeric', 'min:0'],
+            ];
+        }
+
+        $data = $request->validate($rules, [
             'lot_number.unique' => 'Такой № лота уже существует — этот лот уже внесён.',
         ]);
+
+        // Пришедшие «лишние» поля короткой формы игнорируем: тип записи —
+        // единственный источник правды о том, что у лота может быть заполнено.
+        return $data + ['action' => $action];
     }
 
     /**
@@ -205,16 +224,6 @@ class PreDealController extends Controller
         return back()->with('success', 'Предварительная сделка удалена.');
     }
 
-    /** Галочка чек-листа («КП в WhatsApp», «Позвонил клиенту»…). */
-    public function check(Request $request, PreDeal $preDeal, PreDealChecklistItem $item): RedirectResponse
-    {
-        $this->guardOwner($request, $preDeal);
-        $checks = $preDeal->checks ?? [];
-        $checks[(string) $item->id] = ! ($checks[(string) $item->id] ?? false);
-        $preDeal->update(['checks' => $checks]);
-
-        return back();
-    }
 
     /** «Подтвердить»: маржа ≥ порога → создаётся настоящая сделка. */
     public function confirm(Request $request, PreDeal $preDeal, DealNumberService $numbers): RedirectResponse
@@ -251,10 +260,11 @@ class PreDealController extends Controller
                 .'; закуп '.number_format((float) $preDeal->purchase_price, 0, '.', ' ')
                 .'; расчётная маржа '.$preDeal->margin.'%',
         ]);
-        // Доставка и сборка из лота → сразу расходы сделки (🚚/🔧, confirmed),
-        // чтобы не вносить их в сделку второй раз. БЕЗ нал/банк (payment_method
-        // null): остаток/маржу сделки уменьшают, кассу и банк — нет (деньги
-        // физически ещё не потрачены; бухгалтер проставит способ по факту).
+        // Доставка/грузчики и сборка из лота переносятся в сделку, чтобы не
+        // вносить их второй раз, но в статусе «ждёт бухгалтера» (pending):
+        // деньги физически ещё не потрачены, поэтому на маржу сделки и на
+        // кассу они не влияют, пока бухгалтер не подтвердит их чеком
+        // (просьба владельца 09.08.2026 — раньше подтверждались автоматом).
         foreach ([['delivery', '🚚 Доставка'], ['assembly', '🔧 Сборка']] as [$type, $label]) {
             $amount = (float) $preDeal->{$type};
             if ($amount > 0) {
@@ -267,9 +277,7 @@ class PreDealController extends Controller
                     'date' => now()->toDateString(),
                     'description' => 'Из лота'.($preDeal->lot_number ? ' №'.$preDeal->lot_number : '').': '.$label,
                     'responsible_user_id' => $preDeal->user_id,
-                    'status' => 'confirmed',
-                    'confirmed_by' => $request->user()->id,
-                    'confirmed_at' => now(),
+                    'status' => 'pending',
                 ]);
             }
         }
@@ -280,36 +288,4 @@ class PreDealController extends Controller
         return redirect()->route('deals.index')->with('success', 'Выиграл! Сделка '.$deal->number.' создана.');
     }
 
-    // ---- Чек-лист: пункты настраивают админ и финансист ----
-
-    private function guardChecklist(Request $request): void
-    {
-        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Чек-лист настраивает админ или финансист.');
-    }
-
-    public function storeItem(Request $request): RedirectResponse
-    {
-        $this->guardChecklist($request);
-        $data = $request->validate(['label' => ['required', 'string', 'max:255']]);
-        PreDealChecklistItem::create(['label' => $data['label'], 'order' => (int) PreDealChecklistItem::max('order') + 1]);
-
-        return back()->with('success', 'Пункт чек-листа добавлен.');
-    }
-
-    public function updateItem(Request $request, PreDealChecklistItem $item): RedirectResponse
-    {
-        $this->guardChecklist($request);
-        $data = $request->validate(['label' => ['required', 'string', 'max:255']]);
-        $item->update(['label' => $data['label']]);
-
-        return back()->with('success', 'Пункт обновлён.');
-    }
-
-    public function destroyItem(Request $request, PreDealChecklistItem $item): RedirectResponse
-    {
-        $this->guardChecklist($request);
-        $item->delete();
-
-        return back()->with('success', 'Пункт удалён.');
-    }
 }

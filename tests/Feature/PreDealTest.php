@@ -31,9 +31,10 @@ class PreDealTest extends TestCase
         return $u;
     }
 
-    // «Выиграл ✓»: доставка и сборка лота автоматически становятся расходами
-    // сделки (🚚/🔧, confirmed, БЕЗ нал/банк — кассу не трогают); маржа лота
-    // учитывает сборку; откат ↩ удаляет авто-расходы и проходит.
+    // «Выиграл ✓»: доставка/грузчики и сборка лота переносятся в сделку
+    // расходами (🚚/🔧), но в статусе «ждёт бухгалтера» — на маржу сделки и
+    // кассу не влияют, пока он не подтвердит их чеком. Маржа ЛОТА сборку
+    // учитывает; откат ↩ удаляет эти расходы и проходит.
     public function test_confirm_creates_delivery_and_assembly_expenses(): void
     {
         $mgr = $this->user('manager');
@@ -51,7 +52,10 @@ class PreDealTest extends TestCase
         $this->assertCount(2, $exp);
         $this->assertEquals(100000.0, (float) $exp['delivery']->amount);
         $this->assertEquals(50000.0, (float) $exp['assembly']->amount);
-        $this->assertSame('confirmed', $exp['assembly']->status);
+        // Ждут бухгалтера: ни на маржу сделки, ни на кассу пока не влияют.
+        $this->assertSame('pending', $exp['assembly']->status);
+        $this->assertSame('pending', $exp['delivery']->status);
+        $this->assertNull($exp['assembly']->confirmed_by);
         $this->assertNull($exp['assembly']->payment_method); // касса/банк не тронуты
 
         // Откат ↩: авто-расходы лота не блокируют и удаляются вместе со сделкой.
@@ -217,19 +221,68 @@ class PreDealTest extends TestCase
             ->assertInertia(fn (Assert $p) => $p->has('preDeals', 2)->has('stats'));
     }
 
-    public function test_checklist_managed_by_admin_or_financist_only(): void
+
+    /** Звонок и КП — короткая запись: контакты и сумма, без расчёта маржи. */
+    public function test_short_action_keeps_only_contact_fields(): void
     {
-        $fin = $this->user('financist');
         $mgr = $this->user('manager');
 
-        $this->actingAs($fin)->post(route('preDealItems.store'), ['label' => 'Выставил счёт'])->assertRedirect();
-        $item = PreDealChecklistItem::where('label', 'Выставил счёт')->firstOrFail();
-        $this->actingAs($mgr)->post(route('preDealItems.store'), ['label' => 'X'])->assertForbidden();
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'action' => 'call',
+            'bin' => '990440002867', 'customer' => 'Школа №5', 'product' => 'Парта',
+            'client_name' => 'Асель', 'client_phone' => '+77001234567',
+            'contract_sum' => 500000, 'comment' => 'Перезвонить в среду',
+            // Эти поля короткой форме не положены — должны быть проигнорированы.
+            'purchase_price' => 400000, 'delivery' => 50000, 'lot_number' => 'Л-1',
+        ])->assertSessionHasNoErrors();
 
-        // Менеджер ставит галочку на СВОЁМ лоте.
-        PreDeal::create(PreDeal::calculate(['product' => 'A', 'contract_sum' => 100]) + ['user_id' => $mgr->id]);
         $lot = PreDeal::firstOrFail();
-        $this->actingAs($mgr)->post(route('preDeals.check', [$lot->id, $item->id]))->assertRedirect();
-        $this->assertTrue((bool) ($lot->fresh()->checks[(string) $item->id] ?? false));
+        $this->assertSame('call', $lot->action);
+        $this->assertSame('Перезвонить в среду', $lot->comment);
+        $this->assertSame('990440002867', $lot->bin);
+        $this->assertEquals(500000.0, (float) $lot->contract_sum);
+        // Расчёта нет: закуп, доставка и № лота не сохраняются.
+        $this->assertEquals(0.0, (float) $lot->purchase_price);
+        $this->assertEquals(0.0, (float) $lot->delivery);
+        $this->assertNull($lot->lot_number);
+    }
+
+    /** Без указания действия лот остаётся «участием» — это умолчание. */
+    public function test_action_defaults_to_participation(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'product' => 'Шкаф', 'contract_sum' => 1000000, 'purchase_price' => 500000,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('participation', PreDeal::firstOrFail()->action);
+    }
+
+    public function test_unknown_action_is_rejected(): void
+    {
+        $this->actingAs($this->user('manager'))->post(route('preDeals.store'), [
+            'action' => 'telepathy', 'product' => 'Шкаф', 'contract_sum' => 1000,
+        ])->assertSessionHasErrors('action');
+    }
+
+    /** Карточка сделки показывает лот, из которого она выросла. */
+    public function test_deal_card_shows_source_pre_deal(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'action' => 'participation', 'product' => 'Стол', 'customer' => 'Школа',
+            'contract_sum' => 1600000, 'purchase_price' => 700000, 'comment' => 'Взяли лот',
+        ])->assertSessionHasNoErrors();
+        $lot = PreDeal::firstOrFail();
+        $this->actingAs($mgr)->post(route('preDeals.confirm', $lot->id))->assertSessionHas('success');
+
+        $props = $this->actingAs($this->user('admin'))
+            ->get(route('deals.show', $lot->fresh()->deal_id))
+            ->assertOk()->viewData('page')['props'];
+
+        $this->assertNotNull($props['preDeal']);
+        $this->assertSame('Участие', $props['preDeal']['action']);
+        $this->assertSame('Взяли лот', $props['preDeal']['comment']);
+        $this->assertSame($mgr->name, $props['preDeal']['manager']);
     }
 }

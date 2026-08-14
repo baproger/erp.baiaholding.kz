@@ -14,8 +14,8 @@ import { formatDate } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({
-    preDeals: Array, items: Array, minMargin: Number, taxPercent: Number,
-    leadership: Boolean, stats: Array, managers: Array, filters: Object, canManageChecklist: Boolean,
+    preDeals: Array, minMargin: Number, taxPercent: Number,
+    leadership: Boolean, stats: Array, managers: Array, filters: Object,
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -59,7 +59,18 @@ const lotGroups = computed(() => {
 
 const showForm = ref(false);
 const editingId = ref(null);
-const form = useForm({ lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', assembly: '', commission: '' });
+// Действие по лоту — тип записи, выбирается при создании:
+// «Участие» (умолчание) считает маржу, «Звонок» и «КП» фиксируют только
+// контакт и сумму — им расчёт не нужен.
+const actionLabels = { participation: 'Участие', call: 'Звонок', offer: 'КП (ватсап)' };
+const actionClass = (a) => a === 'call' ? 'bg-sky-100 text-sky-700'
+    : a === 'offer' ? 'bg-violet-100 text-violet-700'
+    : 'bg-emerald-100 text-emerald-700';
+const SHORT_ACTIONS = ['call', 'offer'];
+
+const form = useForm({ action: 'participation', comment: '', lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', assembly: '', commission: '' });
+// Короткая форма: у звонка и КП нет расчёта маржи.
+const isShort = computed(() => SHORT_ACTIONS.includes(form.action));
 // Срок окончания тендера: сегодня/прошёл у невыигранного лота — подсветка.
 const tenderUrgent = (p) => p.tender_deadline && p.status === 'new' && new Date(p.tender_deadline) <= new Date(new Date().toDateString());
 const calc = computed(() => {
@@ -85,12 +96,13 @@ const checkLot = async () => {
     lotChecking.value = false;
 };
 
-const openCreate = () => { editingId.value = null; form.reset(); form.clearErrors(); lotCheck.value = null; showForm.value = true; };
+const openCreate = () => { editingId.value = null; form.reset(); form.action = 'participation'; form.clearErrors(); lotCheck.value = null; showForm.value = true; };
 const openEdit = (p) => {
     editingId.value = p.id;
     form.clearErrors();
     lotCheck.value = null;
     Object.assign(form, {
+        action: p.action ?? 'participation', comment: p.comment ?? '',
         lot_number: p.lot_number ?? '', tender_deadline: p.tender_deadline ? p.tender_deadline.slice(0, 10) : '', bin: p.bin ?? '', customer: p.customer ?? '',
         client_name: p.client_name ?? '', client_phone: p.client_phone ?? '', product: p.product,
         contract_sum: Number(p.contract_sum), purchase_price: Number(p.purchase_price),
@@ -117,30 +129,8 @@ const del = async (p) => {
     router.delete(route('preDeals.destroy', p.id), { preserveScroll: true });
 };
 
-// Чек-лист: раскрытие строки + галочки.
+// Раскрытие строки: действие и комментарий по лоту.
 const expanded = ref(null);
-const checked = (p, item) => !!(p.checks ?? {})[String(item.id)];
-const checkedCount = (p) => props.items.filter((i) => checked(p, i)).length;
-const toggleCheck = (p, item) => router.post(route('preDeals.check', [p.id, item.id]), {}, { preserveScroll: true });
-
-// Управление чек-листом (админ/финансист).
-const showItems = ref(false);
-const newItem = ref('');
-const itemNames = ref({});
-const openItems = () => { itemNames.value = Object.fromEntries(props.items.map((i) => [i.id, i.label])); showItems.value = true; };
-const addItem = () => {
-    if (!newItem.value.trim()) return;
-    router.post(route('preDealItems.store'), { label: newItem.value.trim() }, { preserveScroll: true, onSuccess: () => (newItem.value = '') });
-};
-const saveItem = (i) => {
-    const label = (itemNames.value[i.id] ?? '').trim();
-    if (!label || label === i.label) return;
-    router.put(route('preDealItems.update', i.id), { label }, { preserveScroll: true });
-};
-const delItem = async (i) => {
-    if (!(await confirmDialog({ title: `Удалить пункт «${i.label}»?`, confirmText: 'Удалить', danger: true }))) return;
-    router.delete(route('preDealItems.destroy', i.id), { preserveScroll: true });
-};
 
 const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
     ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
@@ -170,8 +160,6 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
         <!-- Панель: фильтры + действия -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
             <PrimaryButton @click="openCreate">+ Предв. сделка</PrimaryButton>
-            <button v-if="canManageChecklist" @click="openItems"
-                class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50">⚙ Чек-лист</button>
             <div class="ml-auto flex flex-wrap items-center gap-2">
                 <select v-if="leadership" v-model="managerF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
                     <option value="">Все менеджеры</option>
@@ -251,9 +239,8 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 </td>
                                 <td class="px-4 py-3 text-center">
                                     <button @click="expanded = expanded === p.id ? null : p.id"
-                                        class="rounded-full px-2.5 py-1 text-xs font-semibold transition"
-                                        :class="checkedCount(p) === items.length && items.length ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">
-                                        ☑ {{ checkedCount(p) }}/{{ items.length }}</button>
+                                        class="rounded-full px-2.5 py-1 text-xs font-bold transition" :class="actionClass(p.action)">
+                                        {{ actionLabels[p.action] ?? '—' }}</button>
                                 </td>
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
                                     <template v-if="p.status === 'confirmed'">
@@ -271,15 +258,15 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                     </template>
                                 </td>
                             </tr>
-                            <!-- Чек-лист + контакт клиента -->
+                            <!-- Комментарий + контакт клиента -->
                             <tr v-if="expanded === p.id" class="bg-slate-50/60">
                                 <td :colspan="leadership ? 15 : 14" class="px-6 py-3">
                                     <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                        <label v-for="i in items" :key="i.id" class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                                            <input type="checkbox" :checked="checked(p, i)" @change="toggleCheck(p, i)"
-                                                class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                                            {{ i.label }}
-                                        </label>
+                                        <span class="text-sm text-slate-600">
+                                            <span class="rounded-full px-2 py-0.5 text-[11px] font-bold" :class="actionClass(p.action)">{{ actionLabels[p.action] ?? '—' }}</span>
+                                            <span v-if="p.comment" class="ml-2">{{ p.comment }}</span>
+                                            <span v-else class="ml-2 text-slate-300">без комментария</span>
+                                        </span>
                                         <span v-if="p.client_name || p.client_phone" class="ml-auto text-sm text-slate-500">
                                             Клиент: <b class="text-slate-700">{{ p.client_name || '—' }}</b>
                                             <a v-if="p.client_phone" :href="'tel:' + p.client_phone" class="ml-2 font-semibold text-indigo-600 hover:underline">{{ p.client_phone }}</a>
@@ -300,8 +287,23 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
         <Modal :show="showForm" max-width="2xl" @close="showForm = false">
             <div class="p-6">
                 <h3 class="mb-4 text-base font-semibold text-slate-900">{{ editingId ? 'Изменить предварительную сделку' : 'Новая предварительная сделка' }}</h3>
+                <!-- Действие: у звонка и КП только контакты и сумма, у участия — расчёт маржи -->
+                <div class="mb-4">
+                    <InputLabel value="Действие *" />
+                    <div class="mt-1.5 flex flex-wrap gap-2">
+                        <button v-for="(label, a) in actionLabels" :key="a" type="button" @click="form.action = a"
+                            class="rounded-lg border px-3.5 py-2 text-sm font-semibold transition"
+                            :class="form.action === a ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                            {{ label }}
+                        </button>
+                    </div>
+                    <p class="mt-1.5 text-[11px] text-slate-400">
+                        {{ isShort ? 'Фиксируем контакт и сумму — расчёт маржи не нужен.' : 'Полный расчёт: закуп, доставка, сборка, комиссия и маржа.' }}
+                    </p>
+                </div>
+
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
+                    <div v-if="!isShort">
                         <InputLabel value="№ лота" />
                         <div class="mt-1 flex gap-2">
                             <TextInput v-model="form.lot_number" class="w-full" @input="lotCheck = null" @keydown.enter.prevent="checkLot" />
@@ -316,7 +318,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         <p v-else-if="lotCheck" class="mt-1 text-xs font-semibold text-emerald-600">✓ Свободен — можно заполнять</p>
                         <InputError :message="form.errors.lot_number" class="mt-1" />
                     </div>
-                    <div>
+                    <div v-if="!isShort">
                         <InputLabel value="Срок окончания тендера" />
                         <TextInput v-model="form.tender_deadline" type="date" class="mt-1 w-full" />
                         <p class="mt-1 text-[11px] text-slate-400">В день окончания менеджеру придёт уведомление</p>
@@ -328,15 +330,20 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <div><InputLabel value="Имя клиента (контакт)" /><TextInput v-model="form.client_name" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Телефон клиента" /><TextInput v-model="form.client_phone" class="mt-1 w-full" placeholder="+7 ___ ___ __ __" /></div>
                     <div><InputLabel value="Сумма договора *" /><TextInput v-model="form.contract_sum" type="number" min="1" class="mt-1 w-full" /><div v-if="form.errors.contract_sum" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_sum }}</div></div>
-                    <div><InputLabel value="Закуп цена" /><TextInput v-model="form.purchase_price" type="number" min="0" class="mt-1 w-full" /></div>
-                    <div><InputLabel value="Доля партнёра, %" /><TextInput v-model="form.partner_pct" type="number" min="0" max="100" step="0.1" class="mt-1 w-full" /></div>
-                    <div><InputLabel value="Доставка, грузчики" /><TextInput v-model="form.delivery" type="number" min="0" class="mt-1 w-full" /></div>
-                    <div><InputLabel value="Сборка" /><TextInput v-model="form.assembly" type="number" min="0" class="mt-1 w-full" /></div>
-                    <div><InputLabel value="Комиссия (ГЗ, Омаркет, Самрук)" /><TextInput v-model="form.commission" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div v-if="!isShort"><InputLabel value="Закуп цена" /><TextInput v-model="form.purchase_price" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div v-if="!isShort"><InputLabel value="Доля партнёра, %" /><TextInput v-model="form.partner_pct" type="number" min="0" max="100" step="0.1" class="mt-1 w-full" /></div>
+                    <div v-if="!isShort"><InputLabel value="Доставка, грузчики" /><TextInput v-model="form.delivery" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div v-if="!isShort"><InputLabel value="Сборка" /><TextInput v-model="form.assembly" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div v-if="!isShort"><InputLabel value="Комиссия (ГЗ, Омаркет, Самрук)" /><TextInput v-model="form.commission" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div class="sm:col-span-2">
+                        <InputLabel value="Комментарий" />
+                        <TextInput v-model="form.comment" class="mt-1 w-full" placeholder="Что обсудили, о чём договорились…" />
+                        <InputError :message="form.errors.comment" class="mt-1" />
+                    </div>
                 </div>
 
-                <!-- Живой расчёт -->
-                <div class="mt-4 rounded-xl border p-4" :class="calc.pass ? 'border-emerald-200 bg-emerald-50/60' : 'border-rose-200 bg-rose-50/60'">
+                <!-- Живой расчёт: только у «Участия» -->
+                <div v-if="!isShort" class="mt-4 rounded-xl border p-4" :class="calc.pass ? 'border-emerald-200 bg-emerald-50/60' : 'border-rose-200 bg-rose-50/60'">
                     <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
                         <span class="text-slate-500">Партнёр: <b class="tabular-nums text-slate-700">{{ money(calc.partner) }}</b></span>
                         <span class="text-slate-500">Налог {{ taxPercent }}%: <b class="tabular-nums text-slate-700">{{ money(calc.tax) }}</b></span>
@@ -352,28 +359,6 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <SecondaryButton @click="showForm = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="form.processing" @click="submit">{{ editingId ? 'Сохранить' : 'Добавить' }}</PrimaryButton>
                 </div>
-            </div>
-        </Modal>
-
-        <!-- Настройка чек-листа (админ/финансист) -->
-        <Modal :show="showItems" max-width="md" @close="showItems = false">
-            <div class="p-6">
-                <h3 class="mb-1 text-base font-semibold text-slate-900">Чек-лист предварительной сделки</h3>
-                <p class="mb-4 text-xs text-slate-400">Пункты видят все менеджеры. Переименование — Enter или клик мимо, ✕ — удалить.</p>
-                <div class="max-h-72 space-y-2 overflow-y-auto pr-1">
-                    <div v-for="i in items" :key="i.id" class="flex items-center gap-2">
-                        <input v-model="itemNames[i.id]" @keyup.enter="saveItem(i)" @blur="saveItem(i)" type="text"
-                            class="flex-1 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                        <button @click="delItem(i)" class="rounded p-1.5 text-slate-300 transition hover:text-rose-600" title="Удалить пункт">✕</button>
-                    </div>
-                    <div v-if="!items.length" class="py-4 text-center text-sm text-slate-400">Пунктов пока нет</div>
-                </div>
-                <div class="mt-4 flex gap-2">
-                    <input v-model="newItem" @keyup.enter="addItem" type="text" placeholder="Новый пункт…"
-                        class="flex-1 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                    <PrimaryButton type="button" @click="addItem">Добавить</PrimaryButton>
-                </div>
-                <div class="mt-4 text-right"><SecondaryButton @click="showItems = false">Закрыть</SecondaryButton></div>
             </div>
         </Modal>
     </AppLayout>

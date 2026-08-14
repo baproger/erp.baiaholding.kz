@@ -94,25 +94,28 @@ class WorkshopScreenController extends Controller
                 sum(case when status = 'confirmed' and deal_id is not null then 1 else 0 end) deals")
             ->get()->keyBy('user_id');
 
-        // Чек-листы лотов («КП через WhatsApp», «Позвонил»…): видно, работает
-        // ли менеджер по лоту. checks = {itemId: true} на каждом лоте.
-        $checkItemsList = \App\Models\PreDealChecklistItem::where('is_active', true)
-            ->orderBy('order')->get(['id', 'label']);
-        $checkItems = $checkItemsList->count();
+        // Воронка строится по ДЕЙСТВИЮ лота (звонок / КП / участие) — раньше
+        // по пунктам чек-листа, но чек-лист убран: действие и есть та самая
+        // отметка «что менеджер сделал по лоту».
+        $actionSteps = collect(\App\Models\PreDeal::ACTIONS)
+            ->map(fn ($a) => ['action' => $a, 'label' => \App\Models\PreDeal::ACTION_LABELS[$a]]);
+        $checkItems = $actionSteps->count();
         $monthLots = \App\Models\PreDeal::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
             ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)
             ->with('user:id,name')
             ->latest()
-            ->get(['id', 'user_id', 'product', 'customer', 'margin', 'status', 'checks', 'created_at']);
-        $checksDone = fn ($p) => count(array_filter($p->checks ?? []));
-        $checksByUser = $monthLots->groupBy('user_id')->map(fn ($rows) => $rows->sum($checksDone));
-        // Персональная воронка менеджера: лоты → каждый пункт чек-листа → выиграл.
-        $funnelFor = function ($rows) use ($checkItemsList) {
+            ->get(['id', 'user_id', 'action', 'product', 'customer', 'margin', 'status', 'created_at']);
+        // «Проработан» лот, по которому менеджер сделал хоть что-то, кроме
+        // простой отметки участия, — звонок или КП.
+        $checksByUser = $monthLots->groupBy('user_id')
+            ->map(fn ($rows) => $rows->whereIn('action', \App\Models\PreDeal::SHORT_ACTIONS)->count());
+        // Персональная воронка менеджера: лоты → по каждому действию → выиграл.
+        $funnelFor = function ($rows) use ($actionSteps) {
             return collect([['label' => 'Лоты', 'count' => $rows->count(), 'kind' => 'start']])
-                ->concat($checkItemsList->map(fn ($it) => [
-                    'label' => trim(str_ireplace('через WhatsApp', '', $it->label)),
-                    'count' => $rows->filter(fn ($p) => ! empty(($p->checks ?? [])[(string) $it->id]))->count(),
+                ->concat($actionSteps->map(fn ($it) => [
+                    'label' => $it['label'],
+                    'count' => $rows->where('action', $it['action'])->count(),
                     'kind' => 'step',
                 ]))
                 ->push(['label' => 'Выиграл', 'count' => $rows->where('status', 'confirmed')->count(), 'kind' => 'won'])
@@ -120,14 +123,13 @@ class WorkshopScreenController extends Controller
         };
         $funnelByUser = $monthLots->groupBy('user_id')->map($funnelFor);
         $emptyFunnel = $funnelFor(collect());
-        // Список лотов на экран (последние 40): лот · менеджер · чек-лист · статус.
+        // Список лотов на экран (последние 40): лот · менеджер · действие · статус.
         $lotRows = $monthLots->take(40)->map(fn ($p) => [
             'manager' => $p->user?->name ?? '—',
             'product' => $p->product,
             'customer' => $p->customer,
             'won' => $p->status === 'confirmed',
-            'checks_done' => min($checksDone($p), $checkItems),
-            'checks_total' => $checkItems,
+            'action' => \App\Models\PreDeal::ACTION_LABELS[$p->action] ?? $p->action,
         ])->values();
 
         $managers = \App\Models\User::role('manager')->where('is_active', true)->get(['id', 'name', 'avatar'])
@@ -170,9 +172,9 @@ class WorkshopScreenController extends Controller
                 'count' => $monthLots->count(),
                 'plan' => $plan,
                 'kind' => 'start',
-            ]])->concat($checkItemsList->map(fn ($it) => [
-                'label' => trim(str_ireplace('через WhatsApp', '', $it->label)),
-                'count' => $monthLots->filter(fn ($p) => ! empty(($p->checks ?? [])[(string) $it->id]))->count(),
+            ]])->concat($actionSteps->map(fn ($it) => [
+                'label' => $it['label'],
+                'count' => $monthLots->where('action', $it['action'])->count(),
                 'plan' => $plan,
                 'kind' => 'step',
             ]))->push([

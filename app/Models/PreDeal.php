@@ -8,13 +8,34 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Предварительная сделка (лот): расчёт маржи до создания настоящей сделки. */
 class PreDeal extends Model
 {
-    protected $fillable = [
-        'company_id', 'user_id', 'lot_number', 'tender_deadline', 'bin', 'customer', 'client_name', 'client_phone',
-        'product', 'contract_sum', 'purchase_price', 'partner_pct', 'partner_sum',
-        'delivery', 'assembly', 'commission', 'tax', 'remainder', 'margin', 'checks', 'status', 'deal_id',
+    /**
+     * Действие по лоту — тип записи, выбирается при создании:
+     * звонок и КП фиксируют только контакт и сумму, участие считает маржу.
+     */
+    public const ACTIONS = ['participation', 'call', 'offer'];
+
+    public const ACTION_LABELS = [
+        'participation' => 'Участие',
+        'call' => 'Звонок',
+        'offer' => 'КП (ватсап)',
     ];
 
-    protected $casts = ['checks' => 'array', 'tender_deadline' => 'date'];
+    /** У звонка и КП расчёта нет — только контакты, сумма и комментарий. */
+    public const SHORT_ACTIONS = ['call', 'offer'];
+
+    protected $fillable = [
+        'company_id', 'user_id', 'action', 'comment', 'lot_number', 'tender_deadline', 'bin', 'customer',
+        'client_name', 'client_phone', 'product', 'contract_sum', 'purchase_price', 'partner_pct', 'partner_sum',
+        'delivery', 'assembly', 'commission', 'tax', 'remainder', 'margin', 'status', 'deal_id',
+    ];
+
+    protected $casts = ['tender_deadline' => 'date'];
+
+    /** Лот со звонком или КП: короткая форма, без расчёта маржи. */
+    public function isShort(): bool
+    {
+        return in_array($this->action, self::SHORT_ACTIONS, true);
+    }
 
     public function user(): BelongsTo
     {

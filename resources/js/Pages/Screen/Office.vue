@@ -6,8 +6,10 @@ import Avatar from '@/Components/Avatar.vue';
 const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] }, funnel: { type: Array, default: () => [] } });
 
 // Чек-лист: доля закрытых галочек — видно, работает менеджер по лотам или нет.
-const checksPct = (m) => m.checks_total > 0 ? Math.round(m.checks_done / m.checks_total * 100) : 0;
-const checksClass = (p) => p >= 70 ? 'bg-emerald-100 text-emerald-700' : p >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600';
+// Цвет действия по лоту: участие — нейтральное, звонок и КП — активная работа.
+const actionClass = (a) => a === 'Звонок' ? 'bg-sky-100 text-sky-700'
+    : a === 'КП (ватсап)' ? 'bg-violet-100 text-violet-700'
+    : 'bg-slate-100 text-slate-500';
 
 // ТВ-режим: часы + автообновление раз в 10 секунд. Без автопрокрутки —
 // список статичен, весь во всю ширину (просьба владельца 31.07.2026).
@@ -95,8 +97,8 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                                 <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
                                 <!-- Чек-лист: закрыто галочек из возможных по его лотам -->
                                 <span class="rounded-full px-1.5 py-0.5 font-bold tabular-nums"
-                                    :class="m.checks_total > 0 ? checksClass(checksPct(m)) : 'bg-slate-100 text-slate-400'"
-                                    title="Чек-лист по лотам: сделано / всего">☑ {{ m.checks_done }}/{{ m.checks_total }}</span>
+                                    :class="m.checks_done > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'"
+                                    title="Лоты, по которым был звонок или КП">☎ {{ m.checks_done }}</span>
                             </div>
                         </div>
                     </div>
@@ -119,13 +121,9 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                         </div>
                         <div class="truncate text-xs text-slate-400">{{ l.customer || '—' }} · {{ l.manager }}</div>
                     </div>
-                    <div class="flex w-44 flex-shrink-0 items-center gap-2">
-                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                            <div class="h-2 rounded-full transition-all duration-700"
-                                :class="l.checks_total > 0 && l.checks_done === l.checks_total ? 'bg-emerald-500' : l.checks_done > 0 ? 'bg-amber-400' : 'bg-rose-300'"
-                                :style="{ width: Math.max(4, l.checks_total > 0 ? Math.round(l.checks_done / l.checks_total * 100) : 0) + '%' }"></div>
-                        </div>
-                        <span class="flex-shrink-0 text-xs font-bold tabular-nums" :class="l.checks_done === l.checks_total && l.checks_total > 0 ? 'text-emerald-600' : 'text-slate-500'">☑ {{ l.checks_done }}/{{ l.checks_total }}</span>
+                    <!-- Действие по лоту вместо прежних галочек чек-листа -->
+                    <div class="flex w-44 flex-shrink-0 justify-end">
+                        <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="actionClass(l.action)">{{ l.action }}</span>
                     </div>
                 </div>
                 <div v-if="!lots.length" class="px-5 py-8 text-center text-sm text-slate-400">В {{ monthLabel }} лотов ещё нет</div>

@@ -77,10 +77,6 @@ Route::middleware('auth')->group(function () {
     Route::post('pre-deals/{preDeal}/confirm', [\App\Http\Controllers\PreDealController::class, 'confirm'])->name('preDeals.confirm');
     // Откат случайного «Выиграл ✓»: сделка удаляется, лот снова «В работе».
     Route::post('pre-deals/{preDeal}/revert', [\App\Http\Controllers\PreDealController::class, 'revert'])->name('preDeals.revert');
-    Route::post('pre-deals/{preDeal}/check/{item}', [\App\Http\Controllers\PreDealController::class, 'check'])->name('preDeals.check');
-    Route::post('pre-deal-items', [\App\Http\Controllers\PreDealController::class, 'storeItem'])->name('preDealItems.store');
-    Route::put('pre-deal-items/{item}', [\App\Http\Controllers\PreDealController::class, 'updateItem'])->name('preDealItems.update');
-    Route::delete('pre-deal-items/{item}', [\App\Http\Controllers\PreDealController::class, 'destroyItem'])->name('preDealItems.destroy');
     Route::get('deals/overdue', [DealController::class, 'overdue'])->name('deals.overdue');
     // До resource-маршрута: иначе DELETE deals/bulk сматчится как deals/{deal}.
     Route::delete('deals/bulk', [DealController::class, 'bulkDestroy'])->name('deals.bulkDestroy');

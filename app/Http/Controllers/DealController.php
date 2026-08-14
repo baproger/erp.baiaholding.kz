@@ -204,8 +204,30 @@ class DealController extends Controller
             ];
         }
 
+        // Из какого лота выросла сделка: блок в самом конце карточки, чтобы
+        // было видно, что она пришла из предварительной сделки.
+        $preDeal = \App\Models\PreDeal::where('deal_id', $deal->id)
+            ->with('user:id,name')->first();
+
         return Inertia::render('Deals/Show', [
             'deal' => $deal,
+            'preDeal' => $preDeal ? [
+                'id' => $preDeal->id,
+                'action' => \App\Models\PreDeal::ACTION_LABELS[$preDeal->action] ?? $preDeal->action,
+                'lot_number' => $preDeal->lot_number,
+                'tender_deadline' => optional($preDeal->tender_deadline)->toDateString(),
+                'product' => $preDeal->product,
+                'customer' => $preDeal->customer,
+                'contract_sum' => (float) $preDeal->contract_sum,
+                'purchase_price' => (float) $preDeal->purchase_price,
+                'delivery' => (float) $preDeal->delivery,
+                'assembly' => (float) $preDeal->assembly,
+                'commission' => (float) $preDeal->commission,
+                'margin' => (float) $preDeal->margin,
+                'comment' => $preDeal->comment,
+                'manager' => $preDeal->user?->name,
+                'created_at' => optional($preDeal->created_at)->toDateString(),
+            ] : null,
             'stageTask' => $stageTask,
             // История этапов: сколько сделка провела на каждом и кто перевёл
             // (открытый лог — тикает, как тайминг у заказа цеха).
