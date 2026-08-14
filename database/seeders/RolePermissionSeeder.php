@@ -65,6 +65,7 @@ class RolePermissionSeeder extends Seeder
             'project.viewAny', 'project.view',
             'task.viewAny', 'task.view', 'task.update',
             'payroll.view',
+            'expense.create', 'expense.viewAny', 'expense.view',
         ]);
 
         // Должности компании (юрист/повар/дизайнер/технолог) — права уровня
@@ -75,6 +76,9 @@ class RolePermissionSeeder extends Seeder
                 'project.viewAny', 'project.view',
                 'task.viewAny', 'task.view', 'task.update',
                 'payroll.view',
+                // Заявка «Расход компании» бухгалтеру на оплату: подать может
+                // любой сотрудник, подтверждает и оплачивает только бухгалтер.
+                'expense.create', 'expense.viewAny', 'expense.view',
             ];
             // Дизайнер и снабженец подтверждают гейт-этапы («Дизайн и расчет»,
             // «Закуп ЛДСП,МДФ») — им нужен просмотр сделок.

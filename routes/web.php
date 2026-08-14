@@ -151,6 +151,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
     Route::post('payments', [PaymentController::class, 'store'])->name('payments.store');
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+    // Рабочее место бухгалтера: заявки с открытыми чеками + оплаченные.
+    Route::get('expenses-board', [\App\Http\Controllers\ExpenseBoardController::class, 'index'])->name('expenses.board');
+    // «Мои расходы» — личная страница сотрудника: свои заявки и что ему выдали.
+    Route::get('my-expenses', [\App\Http\Controllers\MyExpenseController::class, 'index'])->name('myExpenses.index');
     Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
     Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
     Route::patch('expenses/{expense}/confirm', [ExpenseController::class, 'confirm'])->name('expenses.confirm');

@@ -52,10 +52,15 @@ const allNav = [
     { key: 'nav.warehouse', name: 'Склад', route: 'warehouse.index', icon: '▤', roles: ['admin', 'director', 'financist', 'manager'] },
     // МОП тоже заходит — но видит ТОЛЬКО свои сделки (срез «мой месяц и этапы»).
     { key: 'nav.reports', name: 'Сводный отчет', route: 'reports.deals', icon: '▦', roles: ['admin', 'director', 'manager'] },
-    { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
-    // Касса — кассовая книга за день, рядом с Финансами.
-    { key: 'nav.cashbook', name: 'Касса', route: 'cashBook.index', icon: '▣', roles: ['admin', 'director', 'financist'] },
-    { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },
+    // «Финансы» — группа с подменю: обзор, касса, расходы, ЗП. Сотрудник видит
+    // из неё только «Мои расходы» и «Зарплата» — по своим правам.
+    { key: 'nav.finance', name: 'Финансы', icon: '₸', group: 'finance', children: [
+        { key: 'nav.finance.overview', name: 'Обзор', route: 'finance.index', perm: 'invoice.viewAny', leadershipOnly: true },
+        { key: 'nav.cashbook', name: 'Касса', route: 'cashBook.index', roles: ['admin', 'director', 'financist'] },
+        { key: 'nav.expenses', name: 'Расходы', route: 'expenses.board', roles: ['admin', 'director', 'financist'] },
+        { key: 'nav.myexpenses', name: 'Мои расходы', route: 'myExpenses.index', perm: 'expense.create', hideForRoles: ['admin', 'financist'] },
+        { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', perm: 'payroll.view' },
+    ] },
     { key: 'nav.chat', name: 'Чат', route: 'chat.index', icon: '✉' },
     { key: 'nav.audit', name: 'Аудит', route: 'audit.index', icon: '❑', roles: ['admin'] },
     { key: 'nav.departments', name: 'Отделы', route: 'departments.index', icon: '⌂', perm: 'department.viewAny', leadershipOnly: true },
@@ -64,7 +69,24 @@ const allNav = [
     { key: 'nav.settings', name: 'Настройки', route: 'settings.index', icon: '⚙', perm: 'setting.update' },
     { key: 'nav.translations', name: 'Переводы', route: 'translations.index', icon: '🌐', perm: 'setting.update' },
 ];
-const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes(i.perm)) && (!i.leadershipOnly || isLeadership.value) && (!i.roles || i.roles.some((r) => roles.value.includes(r)))));
+const visible = (i) => (!i.perm || perms.value.includes(i.perm))
+    && (!i.leadershipOnly || isLeadership.value)
+    && (!i.roles || i.roles.some((r) => roles.value.includes(r)))
+    && (!i.hideForRoles || !i.hideForRoles.some((r) => roles.value.includes(r)));
+// Группа видна, если виден хотя бы один её пункт.
+const nav = computed(() => allNav
+    .map((i) => (i.children ? { ...i, children: i.children.filter(visible) } : i))
+    .filter((i) => (i.children ? i.children.length > 0 : visible(i))));
+
+// Раскрытие группы запоминается; раскрыта, если активен любой её пункт.
+const openGroups = ref(JSON.parse(localStorage.getItem('baia:nav:groups') || '[]'));
+const toggleGroup = (g) => {
+    openGroups.value = openGroups.value.includes(g)
+        ? openGroups.value.filter((x) => x !== g) : [...openGroups.value, g];
+    localStorage.setItem('baia:nav:groups', JSON.stringify(openGroups.value));
+};
+const groupActive = (item) => (item.children ?? []).some((c) => isActive(c.route));
+const groupOpen = (item) => openGroups.value.includes(item.group) || groupActive(item);
 
 // Инлайн-SVG иконки (Lucide-style outline) по route — заменяют псевдо-иконки.
 // Чисто презентационно: массив allNav и его perm/leadershipOnly не тронуты.
@@ -163,7 +185,39 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                 </div>
             </div>
             <nav class="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
-                <Link v-for="item in nav" :key="item.route" :href="route(item.route)" @click="go"
+                <template v-for="item in nav" :key="item.group ?? item.route">
+                <!-- Группа с подменю («Финансы»): раскрывается, состояние запоминается -->
+                <div v-if="item.children">
+                    <button type="button" @click="collapsed && !mobileOpen ? null : toggleGroup(item.group)"
+                        :title="collapsed ? t(item.key, item.name) : ''"
+                        :class="groupActive(item) ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
+                        class="group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200">
+                        <span v-if="groupActive(item)" class="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-indigo-500"></span>
+                        <svg v-if="navIcons['finance.index']" class="h-5 w-5 shrink-0" :class="groupActive(item) ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                            v-html="navIcons['finance.index']"></svg>
+                        <span v-if="!collapsed || mobileOpen" class="truncate">{{ t(item.key, item.name) }}</span>
+                        <svg v-if="!collapsed || mobileOpen" class="ml-auto h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform"
+                            :class="groupOpen(item) ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                    </button>
+                    <div v-if="groupOpen(item) && (!collapsed || mobileOpen)" class="mt-0.5 space-y-0.5 border-l border-white/10 pl-3 ml-4">
+                        <Link v-for="c in item.children" :key="c.route" :href="route(c.route)" @click="go"
+                            :class="isActive(c.route) ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
+                            class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200">
+                            <span class="truncate">{{ t(c.key, c.name) }}</span>
+                        </Link>
+                    </div>
+                    <!-- Свёрнутое меню: дети доступны прямыми иконками-подсказками -->
+                    <div v-else-if="collapsed && !mobileOpen" class="mt-0.5 space-y-0.5">
+                        <Link v-for="c in item.children" :key="c.route" :href="route(c.route)" @click="go" :title="t(c.key, c.name)"
+                            :class="isActive(c.route) ? 'bg-white/10 text-white' : 'text-slate-500 hover:bg-white/5 hover:text-white'"
+                            class="flex items-center justify-center rounded-lg px-3 py-1 text-[10px] font-semibold">
+                            {{ t(c.key, c.name).slice(0, 3) }}
+                        </Link>
+                    </div>
+                </div>
+
+                <Link v-else :key="item.route" :href="route(item.route)" @click="go"
                     :title="collapsed ? t(item.key, item.name) : ''"
                     :class="isActive(item.route) ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
                     class="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out">
@@ -179,6 +233,7 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
                     <span v-else-if="item.route === 'chat.index' && chatUnread > 0"
                         class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-slate-900"></span>
                 </Link>
+                </template>
             </nav>
             <!-- User block -->
             <Link :href="route('profile.edit')" @click="go"

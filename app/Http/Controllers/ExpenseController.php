@@ -78,7 +78,9 @@ class ExpenseController extends Controller
         // Расход КОМПАНИИ (без сделки): аренда/комуслуги/интернет/бензин и т.п.
         // Вводит только бухгалтер/админ, категория обязательна, склад — нельзя.
         if ($entity === null) {
-            abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Расход компании вводит бухгалтер или админ.');
+            // Заявку подаёт ЛЮБОЙ сотрудник — это «счёт бухгалтеру на оплату».
+            // Бухгалтер проверяет чек и оплачивает; до подтверждения расход
+            // pending и на кассу/маржу не влияет (см. ExpensePolicy).
             if (empty($data['category_id'])) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'category_id' => 'Выберите категорию расхода (аренда, интернет, бензин…).',
@@ -151,6 +153,12 @@ class ExpenseController extends Controller
         // (и директора) ждёт подтверждения бухгалтера — чек + нал/банк.
         $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
         $data['status'] = $isAccountant ? 'confirmed' : 'pending';
+        // Заявка сотрудника — это ещё не выдача денег: откуда платить, решает
+        // бухгалтер при подтверждении. Иначе касса/банк уменьшились бы по
+        // выбору автора, ещё до фактической оплаты.
+        if (! $isAccountant && $entity === null) {
+            unset($data['payment_method']);
+        }
         if ($isAccountant) {
             $data['confirmed_by'] = $request->user()->id;
             $data['confirmed_at'] = now();
