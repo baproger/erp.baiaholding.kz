@@ -92,6 +92,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('deals/{deal}/bonus-rate', [DealController::class, 'updateBonusRate'])->name('deals.bonusRate');
     Route::patch('deals/{deal}/stage-task', [DealController::class, 'completeStageTask'])->name('deals.stageTask');
 
+    // Касса: кассовая книга за день (остаток на начало → операции → на конец).
+    Route::get('cash-book', [\App\Http\Controllers\CashBookController::class, 'index'])->name('cashBook.index');
+
     // Склад (приход товара + остатки, у каждой компании свой)
     Route::get('warehouse', [\App\Http\Controllers\WarehouseController::class, 'index'])->name('warehouse.index');
     Route::post('warehouse/receipt', [\App\Http\Controllers\WarehouseController::class, 'receipt'])->name('warehouse.receipt');

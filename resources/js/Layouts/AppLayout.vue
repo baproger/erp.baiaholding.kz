@@ -53,6 +53,8 @@ const allNav = [
     // МОП тоже заходит — но видит ТОЛЬКО свои сделки (срез «мой месяц и этапы»).
     { key: 'nav.reports', name: 'Сводный отчет', route: 'reports.deals', icon: '▦', roles: ['admin', 'director', 'manager'] },
     { key: 'nav.finance', name: 'Финансы', route: 'finance.index', icon: '₸', perm: 'invoice.viewAny', leadershipOnly: true },
+    // Касса — кассовая книга за день, рядом с Финансами.
+    { key: 'nav.cashbook', name: 'Касса', route: 'cashBook.index', icon: '▣', roles: ['admin', 'director', 'financist'] },
     { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', icon: '💵', perm: 'payroll.view' },
     { key: 'nav.chat', name: 'Чат', route: 'chat.index', icon: '✉' },
     { key: 'nav.audit', name: 'Аудит', route: 'audit.index', icon: '❑', roles: ['admin'] },
@@ -69,6 +71,7 @@ const nav = computed(() => allNav.filter((i) => (!i.perm || perms.value.includes
 const navIcons = {
     'analytics.index': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 15v-4M12 15V7M17 15v-6"/>',
     'reports.deals': '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+    'cashBook.index': '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
     'deals.index': '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
     'deals.overdue': '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/>',
     'projects.index': '<path d="M2 20h20"/><path d="M4 20V10l5 4v-4l5 4V6h6v14"/>',
