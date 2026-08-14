@@ -88,8 +88,13 @@ class PayrollController extends Controller
             ])->values()->all();
         }
 
-        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms, $debtPlans, $debtList) {
+        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms, $debtPlans, $debtList, $bonusOfMonth) {
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
+            // Бонус ЗА ВЫБРАННЫЙ МЕСЯЦ — информационный срез рядом с общим
+            // «за всё время». В «К выплате» НЕ участвует: формула выплаты
+            // осознанно считается от общего бонуса (решение владельца).
+            // Переиспользуем уже посчитанный для долгов $bonusOfMonth.
+            $r['bonus_month'] = (float) ($bonusOfMonth[$r['uid']] ?? 0);
             $adj = $adjustments->get($r['uid']) ?? collect();
             $deductions = round((float) $adj->whereIn('type', PayrollAdjustment::DEDUCTIONS)->sum('amount'), 2);
             $additions = round((float) $adj->where('type', 'bonus')->sum('amount'), 2);
@@ -154,6 +159,7 @@ class PayrollController extends Controller
                 'tax' => (float) $rows->sum('tax'),
                 'expense' => (float) $rows->sum('expense'),
                 'bonus' => (float) $rows->sum('bonus'),
+                'bonus_month' => (float) $rows->sum('bonus_month'),
                 'salary' => (float) $rows->sum('salary'),
                 'base' => (float) $rows->sum('base'),
                 'payout' => (float) $rows->sum('payout'),

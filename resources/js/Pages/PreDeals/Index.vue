@@ -16,6 +16,7 @@ import { confirmDialog } from '@/composables/useConfirm';
 const props = defineProps({
     preDeals: Array, minMargin: Number, taxPercent: Number,
     leadership: Boolean, stats: Array, managers: Array, filters: Object,
+    byAction: { type: Array, default: () => [] },
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -24,12 +25,13 @@ const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) +
 const managerF = ref(props.filters?.manager ?? '');
 const statusF = ref(props.filters?.status ?? '');
 const monthF = ref(props.filters?.month ?? '');
+const actionF = ref(props.filters?.action ?? '');
 const applyFilters = () => router.get(route('preDeals.index'), {
     manager: managerF.value || undefined, status: statusF.value || undefined,
-    month: monthF.value || undefined,
+    month: monthF.value || undefined, action: actionF.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
-// Фильтр страницы запоминается: вернулся в предсделки — тот же месяц/менеджер.
-useStickyFilters('pre-deals', { managerF, statusF, monthF }, applyFilters);
+// Фильтр страницы запоминается: вернулся в предсделки — тот же месяц/действие.
+useStickyFilters('pre-deals', { managerF, statusF, monthF, actionF }, applyFilters);
 
 // Форма лота: живой расчёт как в Excel (партнёр/налог/остаток/маржа).
 // «Сегодня + прошлые» как блок «Расходы» на Финансах: сегодняшние лоты сверху,
@@ -157,6 +159,27 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
             </div>
         </div>
 
+        <!-- Результат по действиям: из скольких лотов вышли сделки и на сколько.
+             Уважает фильтр месяца и менеджера, но не фильтр действия — иначе
+             сравнивать было бы не с чем. -->
+        <div v-if="leadership && byAction?.length" class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <button v-for="a in byAction" :key="a.action" type="button"
+                @click="actionF = actionF === a.action ? '' : a.action; applyFilters()"
+                class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:shadow-md"
+                :class="actionF === a.action ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-slate-200'">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="rounded-full px-2 py-0.5 text-[11px] font-bold" :class="actionClass(a.action)">{{ a.label }}</span>
+                    <span class="text-[11px] text-slate-400">{{ a.total }} лотов</span>
+                </div>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span class="text-2xl font-bold tabular-nums text-emerald-600">{{ a.won }}</span>
+                    <span class="text-xs text-slate-400">выиграно · {{ a.conversion }}%</span>
+                </div>
+                <div class="mt-1 text-sm font-semibold tabular-nums text-slate-700">{{ money(a.won_sum) }}</div>
+                <div class="text-[11px] text-slate-400">сумма выигранных договоров</div>
+            </button>
+        </div>
+
         <!-- Панель: фильтры + действия -->
         <div class="mb-4 flex flex-wrap items-center gap-2">
             <PrimaryButton @click="openCreate">+ Предв. сделка</PrimaryButton>
@@ -164,6 +187,10 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 <select v-if="leadership" v-model="managerF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
                     <option value="">Все менеджеры</option>
                     <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+                </select>
+                <select v-model="actionF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                    <option value="">Все действия</option>
+                    <option v-for="(label, a) in actionLabels" :key="a" :value="a">{{ label }}</option>
                 </select>
                 <select v-model="statusF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
                     <option value="">Все статусы</option>

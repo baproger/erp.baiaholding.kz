@@ -361,4 +361,33 @@ class EmployeeDebtTest extends TestCase
         // Чужие суммы не должны просочиться в выдачу вообще.
         $this->assertStringNotContainsString('700000', json_encode($props['rows']));
     }
+
+    /**
+     * A1: бонус за месяц в ведомости совпадает с расчётом bonusByUserForMonth
+     * и не подменяет собой общий бонус, от которого считается «К выплате».
+     */
+    public function test_payroll_shows_month_bonus_separately_from_total(): void
+    {
+        $month = now()->format('Y-m');
+        // Сделка ПРОШЛОГО месяца: в общий бонус войдёт, в бонус августа — нет.
+        $this->wonDeal(3_000_000, now()->subMonthNoOverflow()->startOfMonth()->toDateString());
+        $this->wonDeal(5_000_000, now()->startOfMonth()->toDateString());
+
+        $expected = (float) (app(\App\Services\PayrollService::class)
+            ->bonusByUserForMonth($month)[$this->manager->id] ?? 0);
+
+        $props = $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('payroll.index', ['month' => $month]))->assertOk()->viewData('page')['props'];
+
+        $row = collect($props['rows'])->firstWhere('uid', $this->manager->id);
+        $this->assertEqualsWithDelta($expected, $row['bonus_month'], 0.01);
+        // Месячный меньше общего: сделка прошлого месяца в него не попала.
+        $this->assertLessThan($row['bonus'], $row['bonus_month']);
+        // «К выплате» по-прежнему считается от ОБЩЕГО бонуса.
+        $this->assertEqualsWithDelta($row['base'] + $row['bonus'], $row['payout'], 0.01);
+        // Итог плитки = сумме строк.
+        $this->assertEqualsWithDelta(
+            collect($props['rows'])->sum('bonus_month'), $props['totals']['bonus_month'], 0.01
+        );
+    }
 }

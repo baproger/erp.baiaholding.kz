@@ -285,4 +285,80 @@ class PreDealTest extends TestCase
         $this->assertSame('Взяли лот', $props['preDeal']['comment']);
         $this->assertSame($mgr->name, $props['preDeal']['manager']);
     }
+
+    /** B1: фильтр по действию отбирает только лоты этого типа. */
+    public function test_action_filter_narrows_the_list(): void
+    {
+        $mgr = $this->user('manager');
+        foreach ([['call', 'Звонок-лот'], ['participation', 'Участие-лот']] as [$action, $product]) {
+            $this->actingAs($mgr)->post(route('preDeals.store'), [
+                'action' => $action, 'product' => $product, 'contract_sum' => 100000,
+            ])->assertSessionHasNoErrors();
+        }
+
+        $products = fn ($action) => collect($this->actingAs($mgr)
+            ->get(route('preDeals.index', array_filter(['action' => $action])))
+            ->viewData('page')['props']['preDeals'])->pluck('product');
+
+        $this->assertEqualsCanonicalizing(['Звонок-лот'], $products('call')->all());
+        $this->assertEqualsCanonicalizing(['Участие-лот'], $products('participation')->all());
+        $this->assertCount(2, $products(null), 'Без фильтра видны оба.');
+    }
+
+    /** B2: результат по действиям — лотов, выиграно, конверсия, сумма. */
+    public function test_by_action_block_counts_wins_and_sum(): void
+    {
+        $mgr = $this->user('manager');
+        $admin = $this->user('admin');
+
+        // Два «участия»: одно выиграем, второе оставим в работе.
+        foreach ([['Выигрышный', 1600000, 700000], ['Проигрышный', 900000, 400000]] as [$product, $sum, $buy]) {
+            $this->actingAs($mgr)->post(route('preDeals.store'), [
+                'action' => 'participation', 'product' => $product,
+                'contract_sum' => $sum, 'purchase_price' => $buy,
+            ])->assertSessionHasNoErrors();
+        }
+        $win = PreDeal::where('product', 'Выигрышный')->firstOrFail();
+        $this->actingAs($mgr)->post(route('preDeals.confirm', $win->id))->assertSessionHas('success');
+
+        $rows = collect($this->actingAs($admin)->get(route('preDeals.index'))
+            ->viewData('page')['props']['byAction'])->keyBy('action');
+
+        $this->assertSame(2, $rows['participation']['total']);
+        $this->assertSame(1, $rows['participation']['won']);
+        $this->assertEqualsWithDelta(50.0, $rows['participation']['conversion'], 0.01);
+        $this->assertEqualsWithDelta(1600000, $rows['participation']['won_sum'], 0.01);
+        // Действия без лотов присутствуют нулями — иначе сравнивать не с чем.
+        $this->assertSame(0, $rows['call']['total']);
+    }
+
+    /** B2: блок считается только для руководства. */
+    public function test_by_action_block_hidden_from_manager(): void
+    {
+        $props = $this->actingAs($this->user('manager'))
+            ->get(route('preDeals.index'))->viewData('page')['props'];
+
+        $this->assertNull($props['byAction']);
+    }
+
+    /** B3: в разбивке ЗП у сделки из лота виден источник. */
+    public function test_payroll_breakdown_shows_lot_action(): void
+    {
+        $mgr = $this->user('manager');
+        $this->actingAs($mgr)->post(route('preDeals.store'), [
+            'action' => 'offer', 'product' => 'Стол', 'contract_sum' => 1600000, 'purchase_price' => 700000,
+        ])->assertSessionHasNoErrors();
+        $lot = PreDeal::firstOrFail();
+        $this->actingAs($mgr)->post(route('preDeals.confirm', $lot->id))->assertSessionHas('success');
+
+        // Разбивка ЗП показывает только выигранные и «на подходе» — двигаем туда.
+        $deal = \App\Models\Deal::findOrFail($lot->fresh()->deal_id);
+        $deal->update(['deal_stage_id' => \App\Models\DealStage::where('is_won', true)->firstOrFail()->id]);
+
+        $breakdown = app(\App\Services\PayrollService::class)->dealBreakdown();
+        $row = collect($breakdown->get($mgr->id) ?? [])->firstWhere('id', $deal->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame('КП (ватсап)', $row['lot_action']);
+    }
 }

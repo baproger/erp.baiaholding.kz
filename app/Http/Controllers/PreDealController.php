@@ -55,6 +55,10 @@ class PreDealController extends Controller
         if ($st = $request->string('status')->toString()) {
             $q->where('status', $st);
         }
+        // Фильтр по действию (участие / звонок / КП): что именно делали по лоту.
+        if (in_array($act = $request->string('action')->toString(), PreDeal::ACTIONS, true)) {
+            $q->where('action', $act);
+        }
         // Фильтр по месяцу ВНЕСЕНИЯ лота (YYYY-MM): какие лоты в какой день вводили.
         if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m = $request->string('month')->toString())) {
             $start = $m.'-01';
@@ -80,14 +84,50 @@ class PreDealController extends Controller
                 ])->sortByDesc('confirmed')->values();
         }
 
+        // Результат по действиям (руководству): из скольких лотов с каждым
+        // действием вышли сделки и на какую сумму. Уважает фильтр месяца, но
+        // НЕ фильтр действия — иначе блок показывал бы одну строку из трёх.
+        $byAction = null;
+        if ($lead) {
+            $rows = PreDeal::query()
+                ->when($companyId, fn ($qq, $c) => $qq->where('company_id', $c))
+                ->when($mid ?? null, fn ($qq, $m) => $qq->where('user_id', $m))
+                ->when(preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m2 = $request->string('month')->toString()), function ($qq) use ($m2) {
+                    $start = $m2.'-01';
+                    $qq->whereDate('created_at', '>=', $start)
+                        ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
+                })
+                ->selectRaw("action, count(*) total,
+                    sum(case when status = 'confirmed' then 1 else 0 end) won,
+                    sum(case when status = 'confirmed' then contract_sum else 0 end) won_sum")
+                ->groupBy('action')->get()->keyBy('action');
+
+            $byAction = collect(PreDeal::ACTIONS)->map(function ($a) use ($rows) {
+                $r = $rows->get($a);
+                $total = (int) ($r->total ?? 0);
+                $won = (int) ($r->won ?? 0);
+
+                return [
+                    'action' => $a,
+                    'label' => PreDeal::ACTION_LABELS[$a],
+                    'total' => $total,
+                    'won' => $won,
+                    'conversion' => $total > 0 ? round($won / $total * 100, 1) : 0.0,
+                    'won_sum' => (float) ($r->won_sum ?? 0),
+                ];
+            })->values();
+        }
+
         return Inertia::render('PreDeals/Index', [
+            'byAction' => $byAction,
             'preDeals' => $q->limit(300)->get(),
             'minMargin' => PreDeal::minMargin(),
             'taxPercent' => (float) \App\Models\Setting::get('tax_percent', 3),
             'leadership' => $lead,
             'stats' => $stats,
             'managers' => $lead ? User::role('manager')->where('is_active', true)->ofCompany($companyId)->orderBy('name')->get(['id', 'name']) : [],
-            'filters' => $request->only('manager', 'status', 'month'),
+            'filters' => $request->only('manager', 'status', 'month', 'action'),
+            'actionLabels' => PreDeal::ACTION_LABELS,
         ]);
     }
 

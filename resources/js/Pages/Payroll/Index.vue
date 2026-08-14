@@ -55,6 +55,20 @@ const deptByCompanyCode = computed(() => {
     return map;
 });
 
+// Поиск и отборы по ведомости — на клиенте: данные уже загружены.
+const search = ref('');
+const onlyWith = ref(''); // '' | 'bonus' | 'debt' | 'deductions'
+const onlyLabels = { bonus: 'с бонусом за месяц', debt: 'с долгом', deductions: 'с удержаниями' };
+const matches = (r) => {
+    const q = search.value.trim().toLowerCase();
+    if (q && !(r.user ?? '').toLowerCase().includes(q)) return false;
+    if (onlyWith.value === 'bonus' && !(r.bonus_month > 0)) return false;
+    if (onlyWith.value === 'debt' && !(r.debts?.length)) return false;
+    if (onlyWith.value === 'deductions' && !(r.deductions > 0 || r.additions > 0)) return false;
+    return true;
+};
+const filterActive = computed(() => !!search.value.trim() || !!onlyWith.value);
+
 // Ведомость — раздельно по фирмам, внутри фирмы — секциями по отделам
 // (отделы с большей выплатой сверху, «Без отдела» — как обычная секция;
 // внутри порядок строк серверный, по бонусу).
@@ -74,6 +88,7 @@ const companySections = computed(() => {
     };
 
     for (const r of props.rows) {
+        if (!matches(r)) continue; // поиск/отбор — суммы секций считаются по видимым
         const ids = r.company_ids ?? [];
         if (!ids.length) { put(orphan, r); continue; }
         sections.filter((s) => ids.includes(s.id)).forEach((s) => put(s, r));
@@ -139,11 +154,12 @@ const allKeys = computed(() => companySections.value.flatMap((s) => s.groups.map
 const allExpanded = computed(() => allKeys.value.length > 0 && allKeys.value.every((k) => expanded.value.has(k)));
 const toggleAll = () => { expanded.value = allExpanded.value ? new Set() : new Set(allKeys.value); };
 
+
 // Месяц корректировок (отгулы/больничные/штрафы) — серверный фильтр.
 const monthSel = ref(props.month);
 const setMonth = () => router.get(route('payroll.index'), { month: monthSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
 // Выбранный месяц ведомости запоминается за страницей.
-useStickyFilters('payroll', { monthSel }, setMonth);
+useStickyFilters('payroll', { monthSel, search, onlyWith }, setMonth);
 
 const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
 // Аванс и долг — РАЗНЫЕ вещи, обе заводятся модалкой:
@@ -320,7 +336,12 @@ const delAdj = async (a) => {
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="d in me.dealsList" :key="d.id" class="hover:bg-slate-50">
-                            <td class="px-3 py-2"><Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link> <span class="text-slate-400">{{ d.number }}</span></td>
+                            <td class="px-3 py-2">
+                                                        <Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link>
+                                                        <span class="text-slate-400">{{ d.number }}</span>
+                                                        <!-- Из какого действия по лоту выросла сделка -->
+                                                        <span v-if="d.lot_action" class="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700" title="Сделка из предварительной сделки">◧ {{ d.lot_action }}</span>
+                                                    </td>
                             <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
                             <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
@@ -391,8 +412,12 @@ const delAdj = async (a) => {
                     <div v-if="totals.base !== totals.salary" class="truncate text-[10px] text-slate-400">по карточкам {{ money(totals.salary) }}</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонусы (по марже)</div>
-                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 xl:text-xl">{{ money(totals.bonus) }}</div>
+                    <!-- Бонус месяца — главная цифра: «сколько заработали в августе».
+                         Общий («за всё время») оставлен подписью: именно он идёт
+                         в «К выплате», и путать их нельзя. -->
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонус за {{ monthShort }}</div>
+                    <div class="mt-1 whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 xl:text-xl">{{ money(totals.bonus_month) }}</div>
+                    <div class="truncate text-[10px] text-slate-400" title="Именно этот бонус входит в «К выплате»">за всё время {{ money(totals.bonus) }}</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Удержания / премии</div>
@@ -552,7 +577,10 @@ const delAdj = async (a) => {
                                         <div v-if="r.hours != null" class="text-[10px] text-slate-400">оклад {{ money(r.salary) }} · {{ r.hours }} ч × {{ money(r.hourly_rate ?? 0) }}</div>
                                     </template>
                                 </td>
-                                <td class="hidden sm:table-cell px-4 py-3 text-right tabular-nums" :class="r.bonus > 0 ? 'font-medium text-emerald-600' : 'text-slate-300'">{{ r.bonus > 0 ? money(r.bonus) : '—' }}</td>
+                                <td class="hidden sm:table-cell px-4 py-3 text-right tabular-nums" :class="r.bonus > 0 ? 'font-medium text-emerald-600' : 'text-slate-300'">
+                                    {{ r.bonus > 0 ? money(r.bonus) : '—' }}
+                                    <div v-if="r.bonus_month > 0" class="text-[10px] font-normal text-slate-400" :title="'Бонус за ' + monthLabel">за {{ monthShort }}: {{ money(r.bonus_month) }}</div>
+                                </td>
                                 <td class="hidden sm:table-cell px-4 py-3 text-right tabular-nums" :class="r.deductions > 0 ? 'text-rose-600 font-medium' : 'text-slate-300'">
                                     <template v-if="r.deductions > 0">− {{ money(r.deductions) }}</template>
                                     <template v-else>—</template>

@@ -151,7 +151,12 @@ class PayrollService
             ->whereIn('expenseable_id', $ids)
             ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
 
-        return $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate, $wonStageIds, $stageNames) {
+        // Из какого действия по лоту выросла сделка (участие / звонок / КП) —
+        // одним запросом на все, видно, что именно приносит бонус.
+        $lotAction = \App\Models\PreDeal::whereIn('deal_id', $deals->pluck('id'))
+            ->pluck('action', 'deal_id');
+
+        return $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate, $wonStageIds, $stageNames, $lotAction) {
             $budget = (float) $d->budget;
             $paid = (float) ($paidByDeal[$d->id] ?? 0);
             $expense = (float) ($expenseByDeal[$d->id] ?? 0);
@@ -182,6 +187,9 @@ class PayrollService
                 'bonus_manual' => $override !== null,
                 'bonus' => $bonus,
                 'net' => round($remainder - $bonus, 2),
+                // Сделка из лота — покажем действие; своя сделка — null.
+                'lot_action' => isset($lotAction[$d->id])
+                    ? (\App\Models\PreDeal::ACTION_LABELS[$lotAction[$d->id]] ?? null) : null,
             ];
         })->groupBy('uid');
     }
