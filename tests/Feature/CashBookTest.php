@@ -61,10 +61,10 @@ class CashBookTest extends TestCase
         ]);
     }
 
-    private function book(string $date): array
+    private function book(string $date, string $kind = 'cash'): array
     {
         return $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
-            ->get(route('cashBook.index', ['date' => $date]))
+            ->get(route('cashBook.index', ['date' => $date, 'kind' => $kind]))
             ->assertOk()->viewData('page')['props'];
     }
 
@@ -122,5 +122,38 @@ class CashBookTest extends TestCase
         $manager->companies()->attach($this->company->id);
 
         $this->actingAs($manager)->get(route('cashBook.index'))->assertForbidden();
+    }
+
+    /** Банковская книга — свой поток: наличные в неё не лезут и наоборот. */
+    public function test_bank_book_shows_bank_operations_only(): void
+    {
+        $this->receipt(500_000, '2026-08-03', 'bank');
+        $this->spend(80_000, '2026-08-03', 'bank');
+        $this->receipt(100_000, '2026-08-03', 'cash');
+
+        $bank = $this->book('2026-08-03', 'bank');
+        $this->assertSame('bank', $bank['kind']);
+        $this->assertEqualsWithDelta(500_000, $bank['income'], 0.01);
+        $this->assertEqualsWithDelta(80_000, $bank['expense'], 0.01);
+        $this->assertEqualsWithDelta(420_000, $bank['closing'], 0.01);
+        $this->assertCount(2, $bank['operations']);
+
+        // Касса при этом видит только свои 100 000.
+        $cash = $this->book('2026-08-03');
+        $this->assertEqualsWithDelta(100_000, $cash['income'], 0.01);
+        $this->assertEqualsWithDelta(0, $cash['expense'], 0.01);
+    }
+
+    /** Расход входит в книгу ТОЛЬКО после подтверждения бухгалтером. */
+    public function test_expense_enters_the_book_only_after_confirmation(): void
+    {
+        $this->spend(80_000, '2026-08-03', 'bank', 'pending');
+        $this->assertEqualsWithDelta(0, $this->book('2026-08-03', 'bank')['expense'], 0.01);
+
+        Expense::latest('id')->firstOrFail()->update([
+            'status' => 'confirmed', 'confirmed_by' => $this->financist->id, 'confirmed_at' => now(),
+        ]);
+
+        $this->assertEqualsWithDelta(80_000, $this->book('2026-08-03', 'bank')['expense'], 0.01);
     }
 }

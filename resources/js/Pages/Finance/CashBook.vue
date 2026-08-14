@@ -7,6 +7,7 @@ import { money } from '@/utils/format';
 
 const props = defineProps({
     date: String,
+    kind: { type: String, default: 'cash' },
     opening: Number,
     income: Number,
     expense: Number,
@@ -15,11 +16,14 @@ const props = defineProps({
     liveBalance: Number,
 });
 
-// День кассовой книги. Запоминается, как остальные фильтры страниц.
+// День книги и вид денег (наличные / банк). Запоминаются, как остальные фильтры.
 const day = ref(props.date);
-const setDay = () => router.get(route('cashBook.index'), { date: day.value || undefined },
+const kindSel = ref(props.kind);
+const setDay = () => router.get(route('cashBook.index'),
+    { date: day.value || undefined, kind: kindSel.value === 'bank' ? 'bank' : undefined },
     { preserveState: true, preserveScroll: true, replace: true });
-useStickyFilters('cash-book', { day }, setDay);
+useStickyFilters('cash-book', { day, kindSel }, setDay);
+const isBank = computed(() => props.kind === 'bank');
 
 const shift = (n) => {
     const d = new Date(props.date + 'T00:00:00');
@@ -39,8 +43,15 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
     <AppLayout>
         <template #header>
             <div class="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <span class="truncate">Касса · отчёт за день</span>
+                <span class="truncate">{{ isBank ? 'Банк · отчёт за день' : 'Касса · отчёт за день' }}</span>
                 <div class="flex flex-wrap items-center gap-1.5">
+                    <!-- Наличные единые на холдинг, банк раздельный по фирмам -->
+                    <div class="mr-1 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                        <button v-for="k in [['cash','Наличные'],['bank','Банк']]" :key="k[0]" type="button"
+                            @click="kindSel = k[0]; setDay()"
+                            class="rounded-md px-3 py-1 text-xs font-semibold transition"
+                            :class="kind === k[0] ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-800'">{{ k[1] }}</button>
+                    </div>
                     <button @click="shift(-1)" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-50" title="Предыдущий день">←</button>
                     <input v-model="day" @change="setDay" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm" />
                     <button @click="shift(1)" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-50" title="Следующий день">→</button>
@@ -72,7 +83,7 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
             <!-- Главная цифра: сколько наличных в кассе на конец этого дня -->
             <div class="rounded-2xl border border-transparent p-4 text-white shadow-md" style="background-color: #1A3B5C">
                 <div class="text-[11px] font-medium uppercase tracking-wide text-white/60">
-                    {{ isToday ? 'Доступно сейчас' : 'Остаток на конец дня' }}
+                    {{ isToday ? (isBank ? 'На счёте сейчас' : 'Доступно сейчас') : 'Остаток на конец дня' }}
                 </div>
                 <div class="mt-1.5 whitespace-nowrap text-2xl font-bold tabular-nums">{{ money(closing) }}</div>
                 <div class="mt-0.5 text-[11px] text-white/60">{{ money(opening) }} + {{ money(income) }} − {{ money(expense) }}</div>
@@ -82,7 +93,7 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
         <!-- Расхождение с плиткой «Касса» на Финансах бывает только у прошлых
              дней (там остаток на сегодня) — подсказываем, чтобы не искали ошибку. -->
         <p v-if="!isToday" class="mt-2 px-1 text-[11px] text-slate-400">
-            Это остаток на конец {{ dayLabel }}. Наличные в кассе сегодня: <b class="tabular-nums text-slate-600">{{ money(liveBalance) }}</b>.
+            Это остаток на конец {{ dayLabel }}. {{ isBank ? 'На счёте сегодня:' : 'Наличные в кассе сегодня:' }} <b class="tabular-nums text-slate-600">{{ money(liveBalance) }}</b>.
         </p>
 
         <!-- Лента операций: как строки бумажного отчёта кассира -->
@@ -119,7 +130,7 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
 
             <div v-else class="px-4 py-14 text-center">
                 <div class="mb-2 text-3xl">▣</div>
-                <div class="text-sm text-slate-400">За {{ dayLabel }} движения наличных не было</div>
+                <div class="text-sm text-slate-400">За {{ dayLabel }} движения {{ isBank ? "по счёту" : "наличных" }} не было</div>
             </div>
 
             <div v-if="operations.length" class="flex flex-wrap items-center justify-between gap-2 border-t-2 border-slate-200 bg-slate-50 px-4 py-3">
@@ -133,8 +144,9 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
         </div>
 
         <p class="mt-3 px-1 text-[11px] text-slate-400">
-            Только наличные. Касса единая на холдинг: наличные физически в одной кассе, поэтому расход налом любой фирмы уменьшает общий остаток.
-            В книгу входят оплаты по счетам налом, поступления в кассу и подтверждённые расходы налом.
+            <template v-if="isBank">Банк раздельный по фирмам — показан счёт текущей компании. В книгу входят оплаты по счетам безналом, поступления на счёт и подтверждённые расходы безналом.</template>
+            <template v-else>Только наличные. Касса единая на холдинг: наличные физически в одной кассе, поэтому расход налом любой фирмы уменьшает общий остаток. В книгу входят оплаты по счетам налом, поступления в кассу и подтверждённые расходы налом.</template>
+            Расход попадает сюда только ПОСЛЕ подтверждения бухгалтером.
         </p>
     </AppLayout>
 </template>

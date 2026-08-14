@@ -34,8 +34,13 @@ class CashBookController extends Controller
             ? $request->string('date')->toString() : now()->toDateString();
         $day = Carbon::parse($date);
 
-        $opening = $this->balanceBefore($day);
-        $operations = $this->operationsOf($day);
+        // Наличные ЕДИНЫЕ на холдинг, банк — РАЗДЕЛЬНЫЙ по фирмам: в банковской
+        // книге сужаемся до текущей компании, в кассовой — нет.
+        $kind = $request->string('kind')->toString() === 'bank' ? 'bank' : 'cash';
+        $companyId = $kind === 'bank' ? (\App\Support\CurrentCompany::id() ?: null) : null;
+
+        $opening = $this->balanceBefore($day, $kind, $companyId);
+        $operations = $this->operationsOf($day, $kind, $companyId);
 
         $income = round($operations->where('kind', 'in')->sum('amount'), 2);
         $expense = round($operations->where('kind', 'out')->sum('amount'), 2);
@@ -52,13 +57,15 @@ class CashBookController extends Controller
 
         return Inertia::render('Finance/CashBook', [
             'date' => $date,
+            'kind' => $kind,
             'opening' => $opening,
             'income' => $income,
             'expense' => $expense,
             'closing' => round($opening + $income - $expense, 2),
             'operations' => $operations->values(),
             // Итог кассы «за всё время» — сверка с плиткой на Финансах.
-            'liveBalance' => round(app(\App\Services\FinanceService::class)->companyBalances(\App\Support\CurrentCompany::id() ?: null)['cash'] ?? 0, 2),
+            'liveBalance' => round(app(\App\Services\FinanceService::class)
+                ->companyBalances(\App\Support\CurrentCompany::id() ?: null)[$kind] ?? 0, 2),
         ]);
     }
 
@@ -67,19 +74,55 @@ class CashBookController extends Controller
      * Ручная корректировка кассы (инвентаризация) даты не имеет, поэтому
      * относится к прошлому и входит в остаток на начало.
      */
-    private function balanceBefore(Carbon $day): float
+    private function balanceBefore(Carbon $day, string $kind, ?int $companyId): float
     {
         $before = $day->toDateString();
 
-        $in = (float) Payment::where('payment_method', 'cash')
+        $in = (float) $this->payments($kind, $companyId)
             ->whereDate('payment_date', '<', $before)->sum('amount');
-        $in += (float) CashReceipt::where('method', 'cash')
+        $in += (float) $this->receipts($kind, $companyId)
             ->whereDate('date', '<', $before)->sum('amount');
 
-        $out = (float) Expense::where('status', 'confirmed')->where('payment_method', 'cash')
+        $out = (float) $this->expenses($kind, $companyId)
             ->whereDate('date', '<', $before)->sum('amount');
 
-        return round($in - $out + (float) Setting::get('cash_correction', 0), 2);
+        // Ручная корректировка (инвентаризация) есть только у кассы и даты не
+        // имеет, поэтому относится к прошлому.
+        $correction = $kind === 'cash' ? (float) Setting::get('cash_correction', 0) : 0.0;
+
+        return round($in - $out + $correction, 2);
+    }
+
+    /**
+     * Оплаты по счетам выбранным способом. Банк = всё, что не «нал» (включая
+     * незаполненный способ) — то же правило, что в FinanceService.
+     */
+    private function payments(string $kind, ?int $companyId)
+    {
+        $q = Payment::query();
+        $kind === 'cash'
+            ? $q->where('payment_method', 'cash')
+            : $q->where(fn ($w) => $w->where('payment_method', '!=', 'cash')->orWhereNull('payment_method'));
+
+        return $q->when($companyId, fn ($qq, $c) => $qq->whereHas('invoice', fn ($i) => $i
+            ->where('invoiceable_type', 'deal')
+            ->whereIn('invoiceable_id', \App\Models\Deal::where('company_id', $c)->select('id'))));
+    }
+
+    private function receipts(string $kind, ?int $companyId)
+    {
+        return CashReceipt::where('method', $kind === 'cash' ? 'cash' : 'bank')
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
+    }
+
+    private function expenses(string $kind, ?int $companyId)
+    {
+        $q = Expense::where('status', 'confirmed');
+        $kind === 'cash'
+            ? $q->where('payment_method', 'cash')
+            : $q->where('payment_method', '!=', 'cash')->whereNotNull('payment_method');
+
+        return $q->when($companyId, fn ($qq, $c) => $qq->where('company_id', $c));
     }
 
     /**
@@ -87,11 +130,11 @@ class CashBookController extends Controller
      *
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    private function operationsOf(Carbon $day): \Illuminate\Support\Collection
+    private function operationsOf(Carbon $day, string $kind, ?int $companyId): \Illuminate\Support\Collection
     {
         $on = $day->toDateString();
 
-        $payments = Payment::where('payment_method', 'cash')->whereDate('payment_date', $on)
+        $payments = $this->payments($kind, $companyId)->whereDate('payment_date', $on)
             ->with('invoice:id,number,invoiceable_type,invoiceable_id')
             ->get(['id', 'invoice_id', 'amount', 'payment_date', 'reference', 'note', 'created_at'])
             ->map(fn ($p) => [
@@ -105,21 +148,20 @@ class CashBookController extends Controller
                 'at' => optional($p->created_at)->toIso8601String(),
             ]);
 
-        $receipts = CashReceipt::where('method', 'cash')->whereDate('date', $on)
+        $receipts = $this->receipts($kind, $companyId)->whereDate('date', $on)
             ->get(['id', 'amount', 'source', 'note', 'date', 'created_at'])
             ->map(fn ($r) => [
                 'id' => 'rec-'.$r->id,
                 'kind' => 'in',
                 'amount' => (float) $r->amount,
-                'title' => $r->source ?: 'Поступление в кассу',
+                'title' => $r->source ?: ($kind === 'cash' ? 'Поступление в кассу' : 'Поступление на счёт'),
                 'note' => $r->note,
                 'tag' => 'Поступление',
                 'deal_id' => null,
                 'at' => optional($r->created_at)->toIso8601String(),
             ]);
 
-        $expenses = Expense::where('status', 'confirmed')->where('payment_method', 'cash')
-            ->whereDate('date', $on)
+        $expenses = $this->expenses($kind, $companyId)->whereDate('date', $on)
             ->with('category:id,name')
             ->get(['id', 'amount', 'description', 'category_id', 'type', 'expenseable_type', 'expenseable_id', 'date', 'created_at'])
             ->map(fn ($e) => [
