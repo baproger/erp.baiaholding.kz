@@ -36,11 +36,19 @@ class CashBookController extends Controller
 
         // Наличные ЕДИНЫЕ на холдинг, банк — РАЗДЕЛЬНЫЙ по фирмам: в банковской
         // книге сужаемся до текущей компании, в кассовой — нет.
-        $kind = $request->string('kind')->toString() === 'bank' ? 'bank' : 'cash';
-        $companyId = $kind === 'bank' ? (\App\Support\CurrentCompany::id() ?: null) : null;
+        $kind = in_array($request->string('kind')->toString(), ['bank', 'all'], true)
+            ? $request->string('kind')->toString() : 'cash';
+        // «Общее» = наличные + банк, каждый по своему правилу: касса едина на
+        // холдинг, банк берётся у текущей фирмы. Смешивать правила нельзя —
+        // цифры перестали бы сходиться с Финансами.
+        $kinds = $kind === 'all' ? ['cash', 'bank'] : [$kind];
+        $scope = fn (string $k) => $k === 'bank' ? (\App\Support\CurrentCompany::id() ?: null) : null;
 
-        $opening = $this->balanceBefore($day, $kind, $companyId);
-        $operations = $this->operationsOf($day, $kind, $companyId);
+        $opening = round(collect($kinds)->sum(fn ($k) => $this->balanceBefore($day, $k, $scope($k))), 2);
+        $operations = collect($kinds)
+            ->flatMap(fn ($k) => $this->operationsOf($day, $k, $scope($k))
+                ->map(fn ($op) => $op + ['method' => $k]))
+            ->sortBy('at')->values();
 
         $income = round($operations->where('kind', 'in')->sum('amount'), 2);
         $expense = round($operations->where('kind', 'out')->sum('amount'), 2);
@@ -64,8 +72,10 @@ class CashBookController extends Controller
             'closing' => round($opening + $income - $expense, 2),
             'operations' => $operations->values(),
             // Итог кассы «за всё время» — сверка с плиткой на Финансах.
-            'liveBalance' => round(app(\App\Services\FinanceService::class)
-                ->companyBalances(\App\Support\CurrentCompany::id() ?: null)[$kind] ?? 0, 2),
+            'liveBalance' => round(collect($kinds)->sum(
+                fn ($k) => app(\App\Services\FinanceService::class)
+                    ->companyBalances(\App\Support\CurrentCompany::id() ?: null)[$k] ?? 0
+            ), 2),
         ]);
     }
 

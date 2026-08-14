@@ -156,4 +156,26 @@ class CashBookTest extends TestCase
 
         $this->assertEqualsWithDelta(80_000, $this->book('2026-08-03', 'bank')['expense'], 0.01);
     }
+
+    /** «Общее» = наличные + банк: суммы и операции складываются. */
+    public function test_combined_view_sums_cash_and_bank(): void
+    {
+        $this->receipt(1_000_000, '2026-08-03', 'cash');
+        $this->spend(200_000, '2026-08-03', 'cash');
+        $this->receipt(500_000, '2026-08-03', 'bank');
+        $this->spend(80_000, '2026-08-03', 'bank');
+
+        $cash = $this->book('2026-08-03');
+        $bank = $this->book('2026-08-03', 'bank');
+        $all = $this->book('2026-08-03', 'all');
+
+        $this->assertEqualsWithDelta($cash['income'] + $bank['income'], $all['income'], 0.01);
+        $this->assertEqualsWithDelta($cash['expense'] + $bank['expense'], $all['expense'], 0.01);
+        $this->assertEqualsWithDelta($cash['closing'] + $bank['closing'], $all['closing'], 0.01);
+        $this->assertCount(count($cash['operations']) + count($bank['operations']), $all['operations']);
+
+        // У каждой операции видно, нал это или банк.
+        $methods = collect($all['operations'])->pluck('method')->unique()->sort()->values();
+        $this->assertEqualsCanonicalizing(['bank', 'cash'], $methods->all());
+    }
 }
