@@ -302,45 +302,51 @@ const deactivate = async (u) => {
                 <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{{ g.users.length }}</span>
                 <div class="h-px flex-1 bg-slate-200"></div>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <!-- Список, а не карточки: справочник сканируют глазами сверху вниз,
+                 и одна строка на человека читается быстрее сетки плиток. -->
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div v-for="u in g.users" :key="u.id"
-                    class="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md"
-                    :class="{ 'opacity-60': !u.is_active }"
+                    class="group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 transition last:border-b-0 hover:bg-slate-50 sm:px-4"
+                    :class="{ 'opacity-50': !u.is_active }"
                     @click="router.visit(route('users.show', u.id))">
-                    <div class="flex items-start gap-3">
-                        <Avatar :name="u.name" :src="u.avatar" :size="44" />
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-1.5">
-                                <span v-if="headIds.has(u.id)" title="Руководитель отдела">⭐</span>
-                                <p class="truncate font-semibold text-slate-900">{{ u.name }}</p>
-                                <span v-if="!u.is_active" class="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Отключён</span>
-                            </div>
-                            <div class="mt-1 flex flex-wrap items-center gap-1.5">
-                                <span class="inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1"
-                                    :class="roleColors[u.role] ?? roleColors.employee">
-                                    {{ roleLabels[u.role] ?? u.role ?? '—' }}
-                                </span>
-                                <span v-if="daysToBirthday(u) === 0" class="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-semibold text-pink-600 ring-1 ring-pink-200">🎂 сегодня!</span>
-                                <span v-else-if="daysToBirthday(u) !== null && daysToBirthday(u) <= 7" class="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-semibold text-pink-600 ring-1 ring-pink-200">🎂 через {{ daysToBirthday(u) }} дн.</span>
-                            </div>
+                    <Avatar :name="u.name" :src="u.avatar" :size="34" class="shrink-0" />
+
+                    <!-- Имя и роль: главное, что ищут в списке -->
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                            <span v-if="headIds.has(u.id)" title="Руководитель отдела">⭐</span>
+                            <span class="truncate font-medium text-slate-900" :title="tenure(u) ? 'В компании ' + tenure(u) : ''">{{ u.name }}</span>
+                            <span v-if="daysToBirthday(u) === 0" class="shrink-0 text-pink-500" title="День рождения сегодня">🎂</span>
+                            <span v-else-if="daysToBirthday(u) !== null && daysToBirthday(u) <= 7" class="shrink-0 text-pink-400" :title="'День рождения через ' + daysToBirthday(u) + ' дн.'">🎂</span>
+                            <span v-if="!u.is_active" class="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Отключён</span>
+                        </div>
+                        <!-- Контакты и цеха — второй строкой, приглушённо -->
+                        <div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-400">
+                            <a :href="`mailto:${u.email}`" class="truncate hover:text-indigo-600" @click.stop>{{ u.email }}</a>
+                            <a v-if="u.phone" :href="`tel:${u.phone}`" class="whitespace-nowrap hover:text-indigo-600" @click.stop>{{ u.phone }}</a>
+                            <span v-if="u.workshops?.length" class="hidden truncate sm:inline">🏭 {{ u.workshops.join(' + ') }}</span>
                         </div>
                     </div>
-                    <div class="mt-3 space-y-1 text-sm">
-                        <a :href="`mailto:${u.email}`" class="block truncate text-slate-500 hover:text-indigo-600" @click.stop>✉️ {{ u.email }}</a>
-                        <a v-if="u.phone" :href="`tel:${u.phone}`" class="block text-slate-500 hover:text-indigo-600" @click.stop>📞 {{ u.phone }}</a>
-                        <p v-if="tenure(u)" class="text-xs text-slate-400">🗓 в компании {{ tenure(u) }}</p>
-                        <p v-if="u.workshops?.length" class="text-xs text-slate-400">🏭 {{ u.workshops.join(' + ') }}</p>
+
+                    <span class="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 sm:inline-block"
+                        :class="roleColors[u.role] ?? roleColors.employee">
+                        {{ roleLabels[u.role] ?? u.role ?? '—' }}
+                    </span>
+
+                    <div class="hidden shrink-0 gap-1 lg:flex">
+                        <span v-for="cid in u.company_ids" :key="cid" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                            {{ companyNames[cid] }}
+                        </span>
                     </div>
-                    <div class="mt-3 flex items-center justify-between gap-2">
-                        <div class="flex flex-wrap gap-1">
-                            <span v-for="cid in u.company_ids" :key="cid" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-                                {{ companyNames[cid] }}
-                            </span>
-                        </div>
-                        <div v-if="can.manage" class="flex shrink-0 items-center gap-2 text-xs opacity-0 transition group-hover:opacity-100">
-                            <button class="font-semibold text-indigo-600 hover:underline" @click.stop="openEdit(u)">Изменить</button>
-                            <button v-if="u.is_active" class="font-semibold text-red-500 hover:underline" @click.stop="deactivate(u)">Откл.</button>
-                        </div>
+
+                    <!-- Действия проявляются на строке, не занимая место постоянно -->
+                    <div v-if="can.manage" class="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        <button class="rounded p-1.5 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600" title="Изменить" @click.stop="openEdit(u)">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                        </button>
+                        <button v-if="u.is_active" class="rounded p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="Отключить" @click.stop="deactivate(u)">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
+                        </button>
                     </div>
                 </div>
             </div>
