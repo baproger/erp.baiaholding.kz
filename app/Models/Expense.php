@@ -16,7 +16,7 @@ class Expense extends Model
 
     protected $fillable = [
         'expenseable_type', 'expenseable_id', 'company_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
-        'responsible_user_id', 'description', 'file_path', 'type', 'status',
+        'responsible_user_id', 'employee_id', 'employee_payout', 'description', 'file_path', 'type', 'status',
         'payment_method', 'confirmed_by', 'confirmed_at',
     ];
 
@@ -42,6 +42,12 @@ class Expense extends Model
     public function expenseable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /** Сотрудник, которому выдали деньги (аванс / долг). */
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'employee_id');
     }
 
     public function category(): BelongsTo

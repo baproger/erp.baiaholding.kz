@@ -224,6 +224,10 @@ class PayrollController extends Controller
                 'description' => 'Аванс сотруднику: '.$employee->name
                     .(! empty($data['note']) ? ' — '.$data['note'] : ''),
                 'responsible_user_id' => $employee->id,
+                // Явная связь «кому выдали»: responsible_user_id у расхода по
+                // сделке значит «кто потратил», поэтому смыслы разведены.
+                'employee_id' => $employee->id,
+                'employee_payout' => 'advance',
                 'status' => 'confirmed',
                 'payment_method' => $data['payment_method'] ?? 'cash',
                 'confirmed_by' => $request->user()->id,
@@ -280,6 +284,8 @@ class PayrollController extends Controller
             'description' => 'Долг сотруднику: '.$employee->name
                 .(! empty($data['note']) ? ' — '.$data['note'] : ''),
             'responsible_user_id' => $employee->id,
+            'employee_id' => $employee->id,
+            'employee_payout' => 'debt',
             'status' => 'confirmed',
             'payment_method' => $data['payment_method'],
             'confirmed_by' => $request->user()->id,

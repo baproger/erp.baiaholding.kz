@@ -390,4 +390,47 @@ class EmployeeDebtTest extends TestCase
             collect($props['rows'])->sum('bonus_month'), $props['totals']['bonus_month'], 0.01
         );
     }
+
+    /**
+     * Расход по выплате сотруднику хранит ЯВНУЮ связь с человеком, а не только
+     * его имя в описании: переименуют — связь останется, можно фильтровать.
+     */
+    public function test_employee_payout_expense_links_to_the_person(): void
+    {
+        $debt = $this->giveDebt(300000, 50000);
+        $expense = Expense::findOrFail($debt->expense_id);
+
+        $this->assertSame($this->manager->id, $expense->employee_id);
+        $this->assertSame('debt', $expense->employee_payout);
+        $this->assertSame($this->manager->name, $expense->employee->name);
+
+        // Переименование сотрудника не рвёт связь (в описании имя устареет).
+        $this->manager->update(['name' => 'Новое Имя']);
+        $this->assertSame('Новое Имя', $expense->fresh()->employee->name);
+
+        // Аванс помечается своим видом.
+        $this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->post(route('payroll.adjustments.store'), [
+                'user_id' => $this->manager->id, 'type' => 'advance',
+                'amount' => 70000, 'date' => now()->toDateString(), 'payment_method' => 'cash',
+            ])->assertSessionHasNoErrors();
+
+        $advance = Expense::where('employee_payout', 'advance')->latest('id')->firstOrFail();
+        $this->assertSame($this->manager->id, $advance->employee_id);
+    }
+
+    /** Кассовая книга показывает, кому и за что выдали. */
+    public function test_cash_book_shows_who_got_the_payout(): void
+    {
+        $this->giveDebt(300000, 50000); // выдан наличными
+
+        $ops = collect($this->actingAs($this->financist)->withSession(['company_id' => $this->company->id])
+            ->get(route('cashBook.index', ['date' => now()->toDateString()]))
+            ->assertOk()->viewData('page')['props']['operations']);
+
+        $row = $ops->firstWhere('payout', 'Долг');
+        $this->assertNotNull($row, 'Выдача долга должна быть в кассовой книге.');
+        $this->assertSame($this->manager->id, $row['employee']['id']);
+        $this->assertSame($this->manager->name, $row['employee']['name']);
+    }
 }

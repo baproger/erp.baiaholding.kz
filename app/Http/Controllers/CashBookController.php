@@ -144,6 +144,8 @@ class CashBookController extends Controller
                 'title' => 'Оплата по счёту '.($p->invoice?->number ?? '—'),
                 'note' => $p->note ?: $p->reference,
                 'tag' => 'Оплата сделки',
+                'employee' => null,
+                'payout' => null,
                 'deal_id' => $p->invoice?->invoiceable_type === 'deal' ? $p->invoice->invoiceable_id : null,
                 'at' => optional($p->created_at)->toIso8601String(),
             ]);
@@ -157,13 +159,16 @@ class CashBookController extends Controller
                 'title' => $r->source ?: ($kind === 'cash' ? 'Поступление в кассу' : 'Поступление на счёт'),
                 'note' => $r->note,
                 'tag' => 'Поступление',
+                'employee' => null,
+                'payout' => null,
                 'deal_id' => null,
                 'at' => optional($r->created_at)->toIso8601String(),
             ]);
 
         $expenses = $this->expenses($kind, $companyId)->whereDate('date', $on)
-            ->with('category:id,name')
-            ->get(['id', 'amount', 'description', 'category_id', 'type', 'expenseable_type', 'expenseable_id', 'date', 'created_at'])
+            ->with(['category:id,name', 'employee:id,name'])
+            ->get(['id', 'amount', 'description', 'category_id', 'type', 'expenseable_type', 'expenseable_id',
+                'employee_id', 'employee_payout', 'date', 'created_at'])
             ->map(fn ($e) => [
                 'id' => 'exp-'.$e->id,
                 'kind' => 'out',
@@ -178,6 +183,14 @@ class CashBookController extends Controller
                     default => 'Расход',
                 },
                 'deal_id' => $e->expenseable_type === 'deal' ? $e->expenseable_id : null,
+                // Выплата сотруднику: кому и за что — ссылкой, а не текстом
+                // в описании (имя там устаревает при переименовании).
+                'employee' => $e->employee ? ['id' => $e->employee->id, 'name' => $e->employee->name] : null,
+                'payout' => match ($e->employee_payout) {
+                    'advance' => 'Аванс',
+                    'debt' => 'Долг',
+                    default => null,
+                },
                 'at' => optional($e->created_at)->toIso8601String(),
             ]);
 

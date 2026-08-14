@@ -113,8 +113,15 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
                             <span v-else class="truncate font-medium text-slate-800">{{ op.title }}</span>
                             <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
                                 :class="op.kind === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">{{ op.tag }}</span>
+                            <!-- Выплата сотруднику: кому и за что — ссылкой на карточку -->
+                            <span v-if="op.payout" class="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{{ op.payout }}</span>
                         </div>
-                        <div v-if="op.note" class="mt-0.5 truncate text-xs text-slate-400">{{ op.note }}</div>
+                        <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+                            <Link v-if="op.employee" :href="route('users.show', op.employee.id)" class="font-medium text-indigo-600 hover:underline" @click.stop>
+                                ☻ {{ op.employee.name }}
+                            </Link>
+                            <span v-if="op.note" class="truncate">{{ op.note }}</span>
+                        </div>
                     </div>
 
                     <span class="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums"
