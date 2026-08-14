@@ -20,7 +20,9 @@ const props = defineProps({
 const day = ref(props.date);
 const kindSel = ref(props.kind);
 const setDay = () => router.get(route('cashBook.index'),
-    { date: day.value || undefined, kind: kindSel.value === 'bank' ? 'bank' : undefined },
+    // Передаём ЛЮБОЙ режим кроме наличных (они — умолчание сервера).
+    // Раньше здесь проверялось только 'bank', и «Общее» молча падало в кассу.
+    { date: day.value || undefined, kind: kindSel.value !== 'cash' ? kindSel.value : undefined },
     { preserveState: true, preserveScroll: true, replace: true });
 useStickyFilters('cash-book', { day, kindSel }, setDay);
 const isBank = computed(() => props.kind === 'bank');
