@@ -428,7 +428,7 @@ class AnalyticsController extends Controller
             'period' => $period,
             'topManagers' => $topManagers,
             'filters' => ['from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId, 'search' => $search],
-            'managers' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'managers' => User::where('is_active', true)->ofCompany($companyId)->orderBy('name')->get(['id', 'name']),
             'stageOptions' => $stages->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : '')])->values(),
         ]);
     }

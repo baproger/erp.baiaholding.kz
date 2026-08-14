@@ -99,7 +99,7 @@ class DealController extends Controller
             'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to'),
             'isLeadership' => $request->user()->hasAnyRole(['admin', 'director', 'financist']),
             // Роль/отдел — для фильтра: менеджеры сверху, остальные по отделам.
-            'users' => User::where('is_active', true)->with(['roles:id,name', 'department:id,name'])
+            'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->with(['roles:id,name', 'department:id,name'])
                 ->orderBy('name')->get(['id', 'name', 'department_id'])
                 ->map(fn ($u) => [
                     'id' => $u->id, 'name' => $u->name,
@@ -263,7 +263,7 @@ class DealController extends Controller
             ],
             'chatId' => $dealChat->id,
             'workshops' => \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null),
-            'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get(['id', 'name']),
             'stages' => DealStage::with('translations')->where('is_active', true)
                 ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
                 ->orderBy('order')->get()

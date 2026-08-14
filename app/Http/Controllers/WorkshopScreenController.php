@@ -132,7 +132,7 @@ class WorkshopScreenController extends Controller
             'action' => \App\Models\PreDeal::ACTION_LABELS[$p->action] ?? $p->action,
         ])->values();
 
-        $managers = \App\Models\User::role('manager')->where('is_active', true)->get(['id', 'name', 'avatar'])
+        $managers = \App\Models\User::role('manager')->where('is_active', true)->ofCompany($companyId)->get(['id', 'name', 'avatar'])
             ->map(function (\App\Models\User $u) use ($lots, $plan, $checksByUser, $checkItems, $funnelByUser, $emptyFunnel) {
                 $m = $lots[$u->id] ?? null;
                 $total = (int) ($m->total ?? 0);

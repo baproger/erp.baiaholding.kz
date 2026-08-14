@@ -238,7 +238,7 @@ class ReportController extends Controller
             'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId],
             // Для фильтра: менеджеры отдельно, остальные — по отделам (сворачиваются).
             // МОПу выбирать не из кого — отчёт и так только по его сделкам.
-            'managers' => \App\Models\User::where('is_active', true)
+            'managers' => \App\Models\User::where('is_active', true)->ofCompany($companyId)
                 ->when(! $isLeadership, fn ($q) => $q->whereKey($user->id))
                 ->with(['roles:id,name', 'department:id,name'])
                 ->orderBy('name')->get(['id', 'name', 'department_id'])

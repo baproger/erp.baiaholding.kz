@@ -211,4 +211,49 @@ class DepartmentCompanyTest extends TestCase
         // Одноимённого отдела в ASU нет — отдел снимаем, а не оставляем чужой.
         $this->assertNull($employee->fresh()->department_id);
     }
+
+    /**
+     * Изоляция фирм в СПИСКАХ сотрудников: работающий только в ASU не должен
+     * появляться в BAIA — ни на странице «Сотрудники», ни в селектах.
+     */
+    public function test_employee_of_one_company_is_not_listed_in_the_other(): void
+    {
+        $baia = Company::where('code', 'BAIA')->firstOrFail();
+        $asu = Company::where('code', 'ASU')->firstOrFail();
+
+        $admin = $this->user('admin', [$baia->id, $asu->id]);
+        $asuOnly = $this->user('manager', [$asu->id]);
+        $baiaOnly = $this->user('manager', [$baia->id]);
+
+        $names = fn ($companyId) => collect($this->actingAs($admin)->withSession(['company_id' => $companyId])
+            ->get(route('users.index'))->viewData('page')['props']['users'])->pluck('name');
+
+        $inBaia = $names($baia->id);
+        $this->assertTrue($inBaia->contains($baiaOnly->name));
+        $this->assertFalse($inBaia->contains($asuOnly->name), 'Сотрудник ASU не должен быть в списке BAIA.');
+
+        $inAsu = $names($asu->id);
+        $this->assertTrue($inAsu->contains($asuOnly->name));
+        $this->assertFalse($inAsu->contains($baiaOnly->name));
+
+        // Режим «Все компании» — видно обоих.
+        $inAll = $names(0);
+        $this->assertTrue($inAll->contains($asuOnly->name));
+        $this->assertTrue($inAll->contains($baiaOnly->name));
+    }
+
+    public function test_deal_pickers_are_scoped_to_the_current_company(): void
+    {
+        $baia = Company::where('code', 'BAIA')->firstOrFail();
+        $asu = Company::where('code', 'ASU')->firstOrFail();
+
+        $admin = $this->user('admin', [$baia->id, $asu->id]);
+        $asuOnly = $this->user('manager', [$asu->id]);
+
+        $picker = collect($this->actingAs($admin)->withSession(['company_id' => $baia->id])
+            ->get(route('deals.index'))->viewData('page')['props']['users'])->pluck('name');
+
+        $this->assertFalse($picker->contains($asuOnly->name),
+            'В выборе ответственного по сделке BAIA не должно быть сотрудников ASU.');
+    }
 }

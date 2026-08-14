@@ -27,7 +27,7 @@ class ProfileController extends Controller
             'me' => $this->userData($user),
             'isAdmin' => $isAdmin,
             'employees' => $isAdmin
-                ? \App\Models\User::where('is_active', true)->orderBy('name')->get()->map(fn ($u) => $this->userData($u))->values()
+                ? \App\Models\User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get()->map(fn ($u) => $this->userData($u))->values()
                 : [],
             'departments' => \App\Models\Department::where('is_active', true)
                 ->forCompany(\App\Support\CurrentCompany::id() ?: null)

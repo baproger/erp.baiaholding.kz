@@ -67,6 +67,25 @@ class User extends Authenticatable
     }
 
     /**
+     * Сотрудники ОДНОЙ фирмы: работающий только в ASU не должен появляться
+     * в списках BAIA (просьба владельца 15.08.2026). Применяется ко всем
+     * спискам и селектам сотрудников.
+     *
+     * null (режим «Все компании» у админа/бухгалтера) — не сужаем.
+     * Сотрудник без единой фирмы виден везде: иначе новая карточка потеряется
+     * до того, как ей проставят фирму.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<User>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<User>
+     */
+    public function scopeOfCompany($query, ?int $companyId)
+    {
+        return $query->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
+            ->whereHas('companies', fn ($cc) => $cc->where('companies.id', $c))
+            ->orWhereDoesntHave('companies')));
+    }
+
+    /**
      * Изоляция фирм: принадлежит ли пользователь компании сущности.
      * null = сущность без компании (легаси/тесты) — доступна всем.
      */

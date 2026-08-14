@@ -18,9 +18,13 @@ class UserController extends Controller
     {
         $this->authorize('viewAny', User::class);
 
+        // Изоляция фирм: работающий только в ASU не показывается в BAIA.
+        // В режиме «Все компании» (админ/бухгалтер) видны обе.
+        $companyId = \App\Support\CurrentCompany::id() ?: null;
+
         // Без пагинации: страница группирует сотрудников по отделам,
         // поиск и фильтры — мгновенные на клиенте.
-        $users = User::query()
+        $users = User::query()->ofCompany($companyId)
             ->with(['department:id,name,code,company_id', 'roles:id,name', 'companies:companies.id,name'])
             ->orderBy('name')
             ->get()
@@ -50,10 +54,14 @@ class UserController extends Controller
 
         return Inertia::render('Users/Index', [
             'users' => $users,
-            'departments' => Department::where('is_active', true)->orderBy('company_id')->orderBy('name')
+            'departments' => Department::where('is_active', true)->forCompany($companyId)
+                ->orderBy('company_id')->orderBy('name')
                 ->get(['id', 'company_id', 'name', 'code', 'head_user_id']),
             'roles' => Role::orderBy('name')->pluck('name'),
-            'companies' => \App\Models\Company::where('is_active', true)->orderBy('id')->get(['id', 'name']),
+            // Секции строятся по этим фирмам: в режиме одной фирмы — только она.
+            'companies' => \App\Models\Company::where('is_active', true)
+                ->when($companyId, fn ($q, $c) => $q->whereKey($c))
+                ->orderBy('id')->get(['id', 'name']),
             'can' => ['manage' => $request->user()->can('create', User::class)],
             // Цеха холдинга (у BAIA два) — чекбоксы доступа в форме сотрудника.
             'workshopOptions' => \App\Models\Company::where('is_active', true)->pluck('id')

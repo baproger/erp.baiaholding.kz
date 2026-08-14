@@ -30,7 +30,7 @@ class ClientController extends Controller
         return Inertia::render('Clients/Index', [
             'clients' => $clients,
             'filters' => $request->only('search', 'type'),
-            'users' => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get(['id', 'name']),
             'can' => [
                 'create' => $request->user()->can('create', Client::class),
                 'update' => $request->user()->can('update', Client::class),
