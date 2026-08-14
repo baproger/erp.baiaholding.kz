@@ -27,6 +27,7 @@ class AuditController extends Controller
     /** Русские названия полей. */
     private const FIELD_LABELS = [
         'status' => 'Статус', 'deal_stage_id' => 'Этап', 'project_stage_id' => 'Этап цеха',
+        'confirmed_by' => 'Кто подтвердил', 'confirmed_at' => 'Когда подтверждён', 'type' => 'Вид',
         'amount' => 'Сумма', 'budget' => 'Сумма договора', 'payment_method' => 'Способ оплаты',
         'bonus_rate_override' => 'Ручной % бонуса', 'responsible_user_id' => 'Ответственный',
         'assignee_id' => 'Исполнитель', 'department_id' => 'Отдел', 'client_id' => 'Клиент',
@@ -97,7 +98,7 @@ class AuditController extends Controller
             ->withQueryString();
 
         // Сырые id внешних ключей → имена (этап, сотрудник, клиент…).
-        $logs->setCollection(\App\Support\AuditFormatter::humanize($logs->getCollection(), [
+        $maps = [
             'deal_stage_id' => \App\Models\DealStage::pluck('name', 'id'),
             'project_stage_id' => \App\Models\ProjectStage::pluck('name', 'id'),
             'responsible_user_id' => \App\Models\User::pluck('name', 'id'),
@@ -108,16 +109,24 @@ class AuditController extends Controller
             'category_id' => \App\Models\ExpenseCategory::pluck('name', 'id'),
             'material_id' => \App\Models\Material::pluck('name', 'id'),
             'company_id' => \App\Models\Company::pluck('name', 'id'),
-        ]));
+            'confirmed_by' => \App\Models\User::pluck('name', 'id'),
+            // Виды расхода: в снимке «delivery» читателю ничего не говорит.
+            'type' => collect(['delivery' => '🚚 Доставка', 'purchase' => '📦 Закуп', 'assembly' => '🔧 Сборка', 'direct' => 'Прямой']),
+        ];
+        $logs->setCollection(\App\Support\AuditFormatter::humanize($logs->getCollection(), $maps));
 
         // Связанная СДЕЛКА каждой строки: расход/счёт/платёж/заказ цеха/лот/задача →
         // ссылка «BAIA-088», чтобы видно было, по какой сделке действие (батчем, без N+1).
+        // withTrashed у мягко удаляемых (расход, счёт): связь нужна ИМЕННО
+        // у удалённых записей — иначе в строке «Удаление» колонка «Сделка»
+        // пустеет. Платёж/заказ/задача удаляются насовсем — там связь берём
+        // из снимка записи в самом логе.
         $col = $logs->getCollection();
         $ids = fn (string $t) => $col->where('table_name', $t)->pluck('record_id')->filter()->unique()->values();
         $dealByRecord = [
             'deals' => $ids('deals')->mapWithKeys(fn ($id) => [$id => $id]),
-            'expenses' => \App\Models\Expense::whereIn('id', $ids('expenses'))->where('expenseable_type', 'deal')->pluck('expenseable_id', 'id'),
-            'invoices' => \App\Models\Invoice::whereIn('id', $ids('invoices'))->where('invoiceable_type', 'deal')->pluck('invoiceable_id', 'id'),
+            'expenses' => \App\Models\Expense::withTrashed()->whereIn('id', $ids('expenses'))->where('expenseable_type', 'deal')->pluck('expenseable_id', 'id'),
+            'invoices' => \App\Models\Invoice::withTrashed()->whereIn('id', $ids('invoices'))->where('invoiceable_type', 'deal')->pluck('invoiceable_id', 'id'),
             'payments' => \App\Models\Payment::whereIn('payments.id', $ids('payments'))
                 ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')->where('invoices.invoiceable_type', 'deal')
                 ->pluck('invoices.invoiceable_id', 'payments.id'),
@@ -131,7 +140,7 @@ class AuditController extends Controller
             ->get(['id', 'number', 'deleted_at'])->keyBy('id');
 
         // Всё остальное — по-русски: таблица, поле, значения, даты, деньги.
-        $logs->setCollection($logs->getCollection()->map(function ($log) use ($dealByRecord, $dealInfo) {
+        $logs->setCollection($logs->getCollection()->map(function ($log) use ($dealByRecord, $dealInfo, $maps) {
             $dealId = $dealByRecord[$log->table_name][$log->record_id] ?? null;
             $deal = $dealId ? $dealInfo[$dealId] ?? null : null;
 
@@ -155,9 +164,13 @@ class AuditController extends Controller
                 default => null,
             } : null,
             'action' => $log->action,
-            'field' => $log->field_name ? (self::FIELD_LABELS[$log->field_name] ?? $log->field_name) : null,
+            'field' => $log->field_name && $log->field_name !== AuditLog::SNAPSHOT
+                ? (self::FIELD_LABELS[$log->field_name] ?? $log->field_name) : null,
             'old' => $this->formatValue($log->field_name, $log->old_value),
             'new' => $this->formatValue($log->field_name, $log->new_value),
+            // Снимок записи (создание/удаление): что именно появилось или
+            // исчезло — по полям, по-русски. Ради него и ведём аудит.
+            'snapshot' => $this->snapshot($log, $maps),
             ];
         }));
 
@@ -172,6 +185,43 @@ class AuditController extends Controller
     }
 
     /** Значение по-русски: словарь, дата — d.m.Y, деньги — с разрядами. */
+    /**
+     * Снимок записи из лога → читаемый список «поле: значение».
+     * Пишется при создании и удалении; для удаления это единственный след
+     * того, ЧТО именно исчезло, поэтому показываем целиком.
+     *
+     * @return array<int, array{label: string, value: string}>|null
+     */
+    private function snapshot(AuditLog $log, array $maps = []): ?array
+    {
+        if ($log->field_name !== AuditLog::SNAPSHOT) {
+            return null;
+        }
+
+        $raw = json_decode((string) ($log->old_value ?? $log->new_value), true);
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        return collect($raw)
+            ->reject(fn ($v, $field) => in_array($field, self::SNAPSHOT_HIDE, true))
+            ->map(function ($value, $field) use ($maps) {
+                $raw = (string) (is_scalar($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE));
+
+                return [
+                    'label' => self::FIELD_LABELS[$field] ?? $field,
+                    // Сначала словарь id→имя (фирма, этап, сотрудник), потом
+                    // общее форматирование (деньги, даты, статусы).
+                    'value' => (string) ($maps[$field][$raw] ?? $this->formatValue($field, $raw)),
+                ];
+            })
+            ->values()->all();
+    }
+
+    /** Служебные поля: в отчёте «что удалили» они только шумят. */
+    private const SNAPSHOT_HIDE = ['expenseable_type', 'expenseable_id', 'invoiceable_type', 'invoiceable_id',
+        'taskable_type', 'taskable_id', 'file_path', 'avatar', 'contract_path'];
+
     private function formatValue(?string $field, ?string $v): ?string
     {
         if ($v === null || $v === '') {

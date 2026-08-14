@@ -16,8 +16,15 @@ trait Auditable
 
     public static function bootAuditable(): void
     {
-        static::created(fn ($model) => $model->writeAudit('created'));
-        static::deleted(fn ($model) => $model->writeAudit('deleted'));
+        // Снимок ВСЕЙ записи при создании и удалении: иначе в Аудите видно
+        // лишь «что-то произошло с записью #116», а что именно — нет, и
+        // удалённые деньги не восстановить даже глазами.
+        static::created(fn ($model) => $model->writeAudit(
+            'created', AuditLog::SNAPSHOT, null, $model->auditSnapshot()
+        ));
+        static::deleted(fn ($model) => $model->writeAudit(
+            'deleted', AuditLog::SNAPSHOT, $model->auditSnapshot(), null
+        ));
         static::updated(function ($model) {
             foreach ($model->getChanges() as $field => $new) {
                 if (in_array($field, $model->auditExclude, true)) {
@@ -26,6 +33,22 @@ trait Auditable
                 $model->writeAudit('updated', $field, Arr::get($model->getOriginal(), $field), $new);
             }
         });
+    }
+
+    /**
+     * Снимок записи для аудита: все поля, кроме служебных и секретов.
+     * Пустые значения выбрасываем — в отчёте о том, ЧТО удалили, десяток
+     * прочерков только мешает читать.
+     *
+     * @return array<string, mixed>
+     */
+    protected function auditSnapshot(): array
+    {
+        return collect($this->getAttributes())
+            ->except(array_merge($this->auditExclude, ['id']))
+            ->reject(fn ($v) => $v === null || $v === '' || $v === [])
+            ->map(fn ($v) => is_scalar($v) ? $v : json_encode($v, JSON_UNESCAPED_UNICODE))
+            ->all();
     }
 
     protected function writeAudit(string $action, ?string $field = null, $old = null, $new = null): void
@@ -40,8 +63,10 @@ trait Auditable
             'record_id' => $this->getKey(),
             'action' => $action,
             'field_name' => $field,
-            'old_value' => is_scalar($old) || $old === null ? $old : json_encode($old),
-            'new_value' => is_scalar($new) || $new === null ? $new : json_encode($new),
+            // JSON_UNESCAPED_UNICODE: иначе русские названия в снимке
+            // превращаются в \uXXXX и отчёт нечитаем.
+            'old_value' => is_scalar($old) || $old === null ? $old : json_encode($old, JSON_UNESCAPED_UNICODE),
+            'new_value' => is_scalar($new) || $new === null ? $new : json_encode($new, JSON_UNESCAPED_UNICODE),
             'created_at' => now(),
         ]);
     }

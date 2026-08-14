@@ -86,11 +86,26 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
                             <span v-else class="text-slate-300">—</span>
                         </td>
                         <td class="px-4 py-3 font-medium" :class="actionColor[log.action]">{{ actionLabel[log.action] ?? log.action }}</td>
-                        <td class="px-4 py-3 text-slate-600">{{ log.field ?? '—' }}</td>
+                        <td class="px-4 py-3 text-slate-600">
+                            <span v-if="log.field">{{ log.field }}</span>
+                            <!-- Создание/удаление: менялась вся запись целиком -->
+                            <span v-else-if="log.snapshot?.length" class="text-[11px] font-semibold uppercase tracking-wide"
+                                :class="log.action === 'deleted' ? 'text-rose-500' : 'text-emerald-600'">
+                                вся запись · {{ log.snapshot.length }} полей
+                            </span>
+                            <span v-else class="text-slate-300">—</span>
+                        </td>
                         <td class="px-4 py-3 text-xs text-slate-500">
                             <!-- «не было» — поле раньше не заполнялось; «убрано» — значение очистили -->
                             <span v-if="log.field"><span :class="log.old ? 'text-red-500' : 'text-slate-300 italic'">{{ log.old ?? 'не было' }}</span> → <span :class="log.new ? 'text-green-600' : 'text-slate-300 italic'">{{ log.new ?? 'убрано' }}</span></span>
-                            <span v-else>—</span>
+                            <!-- Снимок: что именно исчезло (или с чем появилось) -->
+                            <div v-else-if="log.snapshot?.length" class="flex flex-wrap gap-1">
+                                <span v-for="f in log.snapshot" :key="f.label"
+                                    class="rounded px-1.5 py-0.5" :class="log.action === 'deleted' ? 'bg-rose-50 text-rose-700 line-through decoration-rose-300' : 'bg-emerald-50 text-emerald-700'">
+                                    {{ f.label }}: <b class="font-semibold">{{ f.value }}</b>
+                                </span>
+                            </div>
+                            <span v-else class="text-slate-300">—</span>
                         </td>
                     </tr>
                     <tr v-if="!logs.data.length"><td colspan="8" class="px-4 py-8 text-center text-slate-400">Записей нет — измените фильтры</td></tr>

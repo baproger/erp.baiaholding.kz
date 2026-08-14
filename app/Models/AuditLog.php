@@ -7,6 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditLog extends Model
 {
+    /**
+     * Метка «в значении лежит СНИМОК всей записи», а не одно поле.
+     * Ставится при создании и удалении: там менять нечего, важно «с чем
+     * появилась запись» и «что именно исчезло».
+     */
+    public const SNAPSHOT = '*';
+
     public const UPDATED_AT = null;
 
     protected $fillable = [
