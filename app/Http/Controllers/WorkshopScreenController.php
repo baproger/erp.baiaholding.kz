@@ -99,7 +99,6 @@ class WorkshopScreenController extends Controller
         // отметка «что менеджер сделал по лоту».
         $actionSteps = collect(\App\Models\PreDeal::ACTIONS)
             ->map(fn ($a) => ['action' => $a, 'label' => \App\Models\PreDeal::ACTION_LABELS[$a]]);
-        $checkItems = $actionSteps->count();
         $monthLots = \App\Models\PreDeal::query()
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
             ->whereDate('created_at', '>=', $mStart)->whereDate('created_at', '<=', $mEnd)
@@ -108,7 +107,7 @@ class WorkshopScreenController extends Controller
             ->get(['id', 'user_id', 'action', 'product', 'customer', 'margin', 'status', 'created_at']);
         // «Проработан» лот, по которому менеджер сделал хоть что-то, кроме
         // простой отметки участия, — звонок или КП.
-        $checksByUser = $monthLots->groupBy('user_id')
+        $contactedByUser = $monthLots->groupBy('user_id')
             ->map(fn ($rows) => $rows->whereIn('action', \App\Models\PreDeal::SHORT_ACTIONS)->count());
         // Персональная воронка менеджера: лоты → по каждому действию → выиграл.
         $funnelFor = function ($rows) use ($actionSteps) {
@@ -133,7 +132,7 @@ class WorkshopScreenController extends Controller
         ])->values();
 
         $managers = \App\Models\User::role('manager')->where('is_active', true)->ofCompany($companyId)->get(['id', 'name', 'avatar'])
-            ->map(function (\App\Models\User $u) use ($lots, $plan, $checksByUser, $checkItems, $funnelByUser, $emptyFunnel) {
+            ->map(function (\App\Models\User $u) use ($lots, $plan, $contactedByUser, $funnelByUser, $emptyFunnel) {
                 $m = $lots[$u->id] ?? null;
                 $total = (int) ($m->total ?? 0);
                 $won = (int) ($m->won ?? 0);
@@ -145,9 +144,8 @@ class WorkshopScreenController extends Controller
                     'deals' => (int) ($m->deals ?? 0),          // из них стало сделками
                     'conversion' => $total > 0 ? (int) round($won / $total * 100) : 0,
                     'plan_pct' => min(100, (int) round($total / $plan * 100)),
-                    // Чек-лист: сделано галочек / всего возможных (лоты × пункты).
-                    'checks_done' => (int) ($checksByUser[$u->id] ?? 0),
-                    'checks_total' => $total * $checkItems,
+                    // Лоты, по которым был звонок или КП (☎ в рейтинге).
+                    'contacted' => (int) ($contactedByUser[$u->id] ?? 0),
                     // Персональная воронка: лоты → КП/Звонок… → выиграл.
                     'funnel' => $funnelByUser[$u->id] ?? $emptyFunnel,
                 ];
@@ -161,12 +159,11 @@ class WorkshopScreenController extends Controller
             'monthLabel' => \Illuminate\Support\Carbon::parse($mStart)->locale('ru')->translatedFormat('F Y'),
             'managers' => $managers,
             'leader' => $managers->first(),
-            // Лоты месяца с чек-листами — видно, кто реально работает по лотам.
+            // Лоты месяца с действием по каждому — видно, кто реально работает.
             'lots' => $lotRows,
-            // Воронка отдела КРУПНО: Участвовал (лоты) → этапы чек-листа
-            // (Звонок, КП… — любые пункты из «⚙ Чек-лист») → Выигранные.
-            // План лотов и чек-листа общий (каждый лот проходит каждый шаг),
-            // у выигранных — свой план (sales_plan_won_monthly).
+            // Воронка отдела КРУПНО: Участвовал (лоты) → каждое ДЕЙСТВИЕ лота
+            // (Участие, Звонок, КП) → Выигранные. План лотов и действий общий
+            // (sales_plan_monthly), у выигранных — свой (sales_plan_won_monthly).
             'funnel' => collect([[
                 'label' => 'Участвовал (лоты)',
                 'count' => $monthLots->count(),

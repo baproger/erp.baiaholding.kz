@@ -101,6 +101,51 @@ class EmployeeExpenseRequestTest extends TestCase
         $this->actingAs($this->worker)->get(route('expenses.board'))->assertForbidden();
     }
 
+    public function test_pending_notification_links_accountant_to_the_board(): void
+    {
+        // У заявки компании нет сделки — раньше уведомление приходило без
+        // ссылки; теперь оно ведёт бухгалтера на «Расходы» (проверка заявок).
+        $this->fileRequest($this->worker)->assertSessionHasNoErrors();
+
+        $n = $this->financist->notifications()->first();
+        $this->assertNotNull($n, 'Бухгалтер должен получить уведомление о заявке.');
+        $this->assertSame(route('expenses.board', absolute: false), $n->data['url']);
+    }
+
+    public function test_manager_can_file_a_company_expense_request(): void
+    {
+        // Регрессия: проверка «менеджер — только свои сделки» перекрывала и
+        // заявку компании (без сделки), менеджер получал 403.
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+        $manager->companies()->attach(Company::where('code', 'BAIA')->firstOrFail()->id);
+
+        $this->fileRequest($manager)->assertSessionHasNoErrors();
+
+        $e = Expense::firstOrFail();
+        $this->assertSame('pending', $e->status);
+        $this->assertSame($manager->id, (int) $e->responsible_user_id);
+        $this->assertNull($e->payment_method);
+    }
+
+    public function test_manager_cannot_edit_someone_elses_company_request(): void
+    {
+        $manager = User::factory()->create();
+        $manager->assignRole('manager');
+        $manager->companies()->attach(Company::where('code', 'BAIA')->firstOrFail()->id);
+
+        $this->fileRequest($this->worker)->assertSessionHasNoErrors();
+        $e = Expense::firstOrFail();
+
+        $this->actingAs($manager)->put(route('expenses.update', $e->id), [
+            'amount' => 1,
+            'date' => now()->toDateString(),
+            'category_id' => $this->category->id,
+        ])->assertForbidden();
+
+        $this->assertSame(15000.0, (float) $e->fresh()->amount);
+    }
+
     public function test_accountant_sees_the_request_and_confirming_pays_it(): void
     {
         $this->fileRequest($this->worker)->assertSessionHasNoErrors();

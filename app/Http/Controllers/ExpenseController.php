@@ -22,8 +22,11 @@ class ExpenseController extends Controller
         $companyId = $entity instanceof Project ? $entity->deal?->company_id : $entity?->company_id;
         abort_unless($entity === null || $user->worksInCompany($companyId ? (int) $companyId : null), 403);
 
-        if ($user->hasRole('manager') && ! $user->hasAnyRole(['admin', 'director', 'financist'])) {
-            abort_unless($entity && $entity->responsible_user_id === $user->id, 403);
+        // Менеджер: расход по сделке/заказу — только по СВОЕЙ сделке. Расход
+        // компании ($entity === null) сюда не попадает: заявку бухгалтеру
+        // подаёт любой сотрудник, менеджер — тоже.
+        if ($entity !== null && $user->hasRole('manager') && ! $user->hasAnyRole(['admin', 'director', 'financist'])) {
+            abort_unless($entity->responsible_user_id === $user->id, 403);
         }
     }
 
@@ -74,6 +77,23 @@ class ExpenseController extends Controller
         // Автор проставляется автоматически — заполнить расход за другого нельзя.
         $data['responsible_user_id'] = $request->user()->id;
         $data['type'] ??= 'direct';
+
+        // Защита от повторной отправки формы: тот же автор, та же сумма,
+        // описание и привязка меньше минуты назад — почти наверняка дубль.
+        // Складские списания не трогаем: у них своя механика и остаток.
+        if (empty($data['material_id'])) {
+            $dupe = Expense::where('responsible_user_id', $request->user()->id)
+                ->where('amount', $data['amount'] ?? 0)
+                ->where('description', $data['description'] ?? null)
+                ->where('expenseable_type', $entity ? $data['expenseable_type'] : null)
+                ->where('expenseable_id', $entity?->id)
+                ->where('created_at', '>=', now()->subMinute())->exists();
+            if ($dupe) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'Точно такой же расход уже добавлен только что — похоже на повторную отправку. Если это не дубль, подождите минуту.',
+                ]);
+            }
+        }
 
         // Расход КОМПАНИИ (без сделки): аренда/комуслуги/интернет/бензин и т.п.
         // Вводит только бухгалтер/админ, категория обязательна, склад — нельзя.
@@ -126,6 +146,9 @@ class ExpenseController extends Controller
             $data['amount'] = (float) $data['amount'];
 
             // Внутреннее списание — подтверждение бухгалтера не требуется.
+            // Способ оплаты обнуляем: деньги за материал ушли при ЗАКУПЕ на
+            // склад (расход прихода), списание кассу второй раз не трогает.
+            $data['payment_method'] = null;
             $data['status'] = 'confirmed';
             $data['description'] = trim(($data['description'] ?? '')) !== ''
                 ? $data['description']
@@ -268,6 +291,11 @@ class ExpenseController extends Controller
     {
         $this->authorize('update', $expense);
         $this->assertOwnership($request->user(), $expense->expenseable);
+        // Заявка компании (без сделки): пока она pending — это черновик АВТОРА,
+        // чужую заявку правит только бухгалтер/админ.
+        if (! $expense->expenseable_type && ! $request->user()->hasAnyRole(['admin', 'financist'])) {
+            abort_unless($expense->responsible_user_id === $request->user()->id, 403);
+        }
 
         $data = $request->validated();
         unset($data['file']);
@@ -310,6 +338,11 @@ class ExpenseController extends Controller
     {
         $this->authorize('view', $expense);
         $this->assertOwnership(request()->user(), $expense->expenseable);
+        // Чек заявки компании — автору, сотруднику из выплаты (аванс/долг)
+        // и руководству; чужие заявки сотрудникам не показываем.
+        if (! $expense->expenseable_type && ! request()->user()->hasAnyRole(['admin', 'director', 'financist'])) {
+            abort_unless(in_array(request()->user()->id, [$expense->responsible_user_id, $expense->employee_id], true), 403);
+        }
 
         abort_unless($expense->file_path && Storage::disk('local')->exists($expense->file_path), 404);
 

@@ -1,8 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 
+// type="number" даёт числовое значение — String здесь ронял бы Vue warn.
 const model = defineModel({
-    type: String,
+    type: [String, Number],
     required: true,
 });
 

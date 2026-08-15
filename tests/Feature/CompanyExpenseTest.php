@@ -55,14 +55,21 @@ class CompanyExpenseTest extends TestCase
         ])->assertSessionHasErrors('category_id');
     }
 
-    public function test_manager_cannot_create_company_expense(): void
+    public function test_manager_files_company_expense_as_pending_request(): void
     {
+        // С 15.08.2026 заявку «Расход компании» подаёт ЛЮБОЙ сотрудник,
+        // менеджер тоже: она уходит бухгалтеру pending и без способа оплаты.
         $mgr = $this->user('manager');
         $cat = ExpenseCategory::firstOrCreate(['name' => 'Бензин / ГСМ'], ['is_active' => true]);
 
         $this->actingAs($mgr)->post(route('expenses.store'), [
             'category_id' => $cat->id, 'amount' => 1000, 'date' => now()->toDateString(),
-        ])->assertForbidden();
+        ])->assertSessionHasNoErrors();
+
+        $e = Expense::firstOrFail();
+        $this->assertEquals('pending', $e->status);
+        $this->assertNull($e->payment_method);
+        $this->assertNull($e->confirmed_by);
     }
 
     public function test_finance_page_shows_summary(): void

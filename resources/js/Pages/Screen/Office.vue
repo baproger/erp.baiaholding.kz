@@ -5,7 +5,6 @@ import Avatar from '@/Components/Avatar.vue';
 
 const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] }, funnel: { type: Array, default: () => [] } });
 
-// Чек-лист: доля закрытых галочек — видно, работает менеджер по лотам или нет.
 // Цвет действия по лоту: участие — нейтральное, звонок и КП — активная работа.
 const actionClass = (a) => a === 'Звонок' ? 'bg-sky-100 text-sky-700'
     : a === 'КП (ватсап)' ? 'bg-violet-100 text-violet-700'
@@ -95,10 +94,10 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                             </div>
                             <div class="mt-1 flex items-center justify-end gap-1.5 text-xs text-slate-400">
                                 <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
-                                <!-- Чек-лист: закрыто галочек из возможных по его лотам -->
+                                <!-- Лоты, по которым менеджер сделал звонок или КП -->
                                 <span class="rounded-full px-1.5 py-0.5 font-bold tabular-nums"
-                                    :class="m.checks_done > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'"
-                                    title="Лоты, по которым был звонок или КП">☎ {{ m.checks_done }}</span>
+                                    :class="m.contacted > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'"
+                                    title="Лоты, по которым был звонок или КП">☎ {{ m.contacted }}</span>
                             </div>
                         </div>
                     </div>
@@ -106,11 +105,11 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                 </div>
         </div>
 
-        <!-- Лоты месяца с чек-листами: видно, кто реально работает по лотам -->
+        <!-- Лоты месяца с действием по каждому: видно, кто реально работает по лотам -->
         <div class="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div class="flex items-baseline justify-between border-b border-slate-100 px-5 py-3.5">
-                <span class="text-base font-bold text-slate-900">Лоты месяца — чек-листы</span>
-                <span class="text-xs text-slate-400">☑ галочки лота («КП», «Позвонил»…) — работа менеджера по лоту</span>
+                <span class="text-base font-bold text-slate-900">Лоты месяца</span>
+                <span class="text-xs text-slate-400">действие по лоту (Участие / Звонок / КП) — работа менеджера</span>
             </div>
             <div class="divide-y divide-slate-50">
                 <div v-for="(l, i) in lots" :key="i" class="flex items-center gap-4 px-5 py-2.5">
