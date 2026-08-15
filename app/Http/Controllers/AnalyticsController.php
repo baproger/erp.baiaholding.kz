@@ -231,7 +231,14 @@ class AnalyticsController extends Controller
         $byCat = (clone $expFull)->whereNotNull('category_id')
             ->groupBy('category_id')->selectRaw('category_id, sum(amount) s')->pluck('s', 'category_id');
         $catNames = \App\Models\ExpenseCategory::whereIn('id', $byCat->keys())->pluck('name', 'id');
-        $categoryRows = $byCat->map(fn ($s, $id) => ['name' => $catNames[$id] ?? '—', 'sum' => (float) $s])
+        // Категория выдач сотрудникам не входит в итог — эти деньги уже в
+        // строке «Зарплата» (см. тот же расчёт на Финансах).
+        $salaryCatIds = \App\Models\ExpenseCategory::where('name', \App\Models\ExpenseCategory::EMPLOYEE)->pluck('id');
+        $categoryRows = $byCat->map(fn ($s, $id) => [
+            'name' => ($catNames[$id] ?? '—').($salaryCatIds->contains($id) ? ' (учтено в «Зарплате»)' : ''),
+            'sum' => (float) $s,
+            'counted' => ! $salaryCatIds->contains($id),
+        ])
             ->sortByDesc('sum')->values();
         $dealExpensesSum = (float) (clone $expFull)->whereNull('category_id')->sum('amount');
         // Разбивка расходов по сделкам/цеху по видам: склад / доставка / закуп / прочие.
@@ -254,7 +261,7 @@ class AnalyticsController extends Controller
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->sum('amount');
         $payrollTotal = round((float) $salaryRows->sum('payout'), 2);
         // Все расходы компании: категории + по сделкам/цеху + ЗП (оклады+бонусы) + налог.
-        $expensesFull = round($categoryRows->sum('sum') + $dealExpensesSum + $payrollTotal + $companyTotals['tax'], 2);
+        $expensesFull = round($categoryRows->where('counted', true)->sum('sum') + $dealExpensesSum + $payrollTotal + $companyTotals['tax'], 2);
         $companyMoney = [
             'cash' => $balances['cash'],
             'bank' => $balances['bank'],

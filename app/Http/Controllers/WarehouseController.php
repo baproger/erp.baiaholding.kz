@@ -110,6 +110,9 @@ class WarehouseController extends Controller
             'price' => ['nullable', 'numeric', 'min:0'],
             'date' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:255'],
+            // Оплата закупа: нал/банк → создаётся расход компании и деньги
+            // уходят из кассы; пусто — только остаток (закуп проведён иначе).
+            'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
         ]);
 
         $companyId = CurrentCompany::id() ?: null;
@@ -140,6 +143,28 @@ class WarehouseController extends Controller
             // расход по материалам в сделке (количество × цена).
             if (isset($data['price'])) {
                 $material->update(['price' => $data['price']]);
+            }
+
+            // Деньги за закуп: расход компании (confirmed, нал/банк) — касса/банк
+            // уменьшаются В МОМЕНТ ЗАКУПА. Списание со склада в сделку кассу уже
+            // не трогает (внутреннее движение запаса) — иначе те же деньги
+            // уходили бы дважды.
+            if (! empty($data['payment_method']) && (float) ($data['price'] ?? 0) > 0) {
+                \App\Models\Expense::create([
+                    'company_id' => $material->company_id,
+                    'category_id' => \App\Models\ExpenseCategory::firstOrCreate(
+                        ['name' => 'Закуп материалов'], ['is_active' => true])->id,
+                    'amount' => round((float) $data['quantity'] * (float) $data['price'], 2),
+                    'date' => $data['date'] ?? now()->toDateString(),
+                    'description' => 'Приход склада: '.$material->name.' × '
+                        .rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.').' '.$material->unit,
+                    'responsible_user_id' => $request->user()->id,
+                    'status' => 'confirmed',
+                    'confirmed_by' => $request->user()->id,
+                    'confirmed_at' => now(),
+                    'payment_method' => $data['payment_method'],
+                    'type' => 'direct',
+                ]);
             }
         });
 

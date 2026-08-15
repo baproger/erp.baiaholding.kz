@@ -33,6 +33,10 @@ class ExpenseCategoryController extends Controller
     public function update(Request $request, ExpenseCategory $category): RedirectResponse
     {
         $this->authorizeManage($request);
+        // Служебная категория выдач сотрудникам: на её имя завязаны авансы,
+        // долги и исключение из итога «Расходы» — переименование сломало бы учёт.
+        abort_if($category->name === ExpenseCategory::EMPLOYEE, 422,
+            'Категория «'.ExpenseCategory::EMPLOYEE.'» служебная — её нельзя переименовать.');
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('expense_categories', 'name')->ignore($category->id)->where('is_active', true)],
         ]);
@@ -48,6 +52,8 @@ class ExpenseCategoryController extends Controller
     public function destroy(Request $request, ExpenseCategory $category): RedirectResponse
     {
         $this->authorizeManage($request);
+        abort_if($category->name === ExpenseCategory::EMPLOYEE, 422,
+            'Категория «'.ExpenseCategory::EMPLOYEE.'» служебная — её нельзя удалить.');
         if (Expense::where('category_id', $category->id)->exists()) {
             $category->update(['is_active' => false]);
 

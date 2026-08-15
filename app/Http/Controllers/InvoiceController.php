@@ -109,8 +109,9 @@ class InvoiceController extends Controller
         ];
 
         // Дебиторка для финансиста: выставлено / оплачено / остаток к оплате.
-        $invoiced = (float) (clone $invBase)->sum('amount');
-        $invoicePaid = (float) \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->select('id'))->sum('amount');
+        // Отменённые счета — не долг: исключаем, как и FinanceService::summaryFor.
+        $invoiced = (float) (clone $invBase)->where('status', '!=', 'cancelled')->sum('amount');
+        $invoicePaid = (float) \App\Models\Payment::whereIn('invoice_id', (clone $invBase)->where('status', '!=', 'cancelled')->select('id'))->sum('amount');
         $invoiceTotals = [
             'invoiced' => $invoiced,
             'paid' => $invoicePaid,
@@ -199,9 +200,19 @@ class InvoiceController extends Controller
         // расходов (иначе деактивация категории «теряла» бы её суммы из итога).
         $categories = \App\Models\ExpenseCategory::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $catNames = \App\Models\ExpenseCategory::whereIn('id', $byCategory->keys())->pluck('name', 'id');
+        // «Расходы по сотрудникам» (авансы, долги, выплата ЗП) — это выдача
+        // зарплаты, которая в итоге УЖЕ сидит строкой «Зарплата» (payrollTotal):
+        // в сумму не включаем, иначе те же деньги считались бы дважды.
+        // Кассу они уменьшают честно (FinanceService считает все confirmed).
+        $salaryCatIds = \App\Models\ExpenseCategory::where('name', \App\Models\ExpenseCategory::EMPLOYEE)->pluck('id');
         $categoryRows = $byCategory
-            ->map(fn ($sum, $id) => ['name' => $catNames[$id] ?? '—', 'sum' => (float) $sum])
+            ->map(fn ($sum, $id) => [
+                'name' => ($catNames[$id] ?? '—').($salaryCatIds->contains($id) ? ' (учтено в строке «Зарплата»)' : ''),
+                'sum' => (float) $sum,
+                'counted' => ! $salaryCatIds->contains($id),
+            ])
             ->sortByDesc('sum')->values();
+        $categorySum = round($categoryRows->where('counted', true)->sum('sum'), 2);
         // Расходы по сделкам/цеху (закуп + прочие без категории).
         $dealExpenses = (float) $monthly($confirmedNoPeriod())->whereNull('category_id')->sum('amount');
         $payrollTotal = round((float) $payrollRows->sum('payout'), 2); // оклады + бонусы
@@ -212,7 +223,7 @@ class InvoiceController extends Controller
             $payrollTotal = 0.0;
             $taxRow = 0.0;
         }
-        $expensesTotal = round($categoryRows->sum('sum') + $dealExpenses + $payrollTotal + $taxRow, 2);
+        $expensesTotal = round($categorySum + $dealExpenses + $payrollTotal + $taxRow, 2);
 
         // Остатки касса/банк считает FinanceService::companyBalances (ниже):
         // касса — общая на холдинг, банк — по своей фирме.

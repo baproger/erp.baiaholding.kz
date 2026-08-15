@@ -407,9 +407,12 @@ const delExpense = async (e) => {
                 </button>
                 <div v-show="debtOpen[acc.type]" class="border-t border-slate-100 px-5 py-3">
                     <!-- Дебиторка: автоматическая часть по счетам сделок -->
-                    <div v-if="acc.type === 'receivable'" class="mb-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                        <span class="text-slate-500">По счетам сделок (автоматически)</span>
-                        <span class="font-semibold tabular-nums text-slate-700">{{ money(summary.receivables) }}</span>
+                    <div v-if="acc.type === 'receivable'" class="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500">По счетам сделок (автоматически)</span>
+                            <span class="font-semibold tabular-nums text-slate-700">{{ money(summary.receivables) }}</span>
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">⚠ Вручную вносите только долги БЕЗ выставленного счёта — долг по счёту уже посчитан автоматически, повторная запись задвоит плитку «Дебиторка».</p>
                     </div>
                     <div class="divide-y divide-slate-50">
                         <div v-for="d in acc.list" :key="d.id" class="flex items-center justify-between gap-3 py-2.5 text-sm">

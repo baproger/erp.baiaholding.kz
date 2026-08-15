@@ -28,7 +28,7 @@ const money = (v) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }
 // Приход: существующий материал или новая позиция.
 const showModal = ref(false);
 const mode = ref('existing'); // existing | new
-const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', price: '', date: '', note: '' });
+const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', price: '', date: '', note: '', payment_method: '' });
 const openReceipt = () => {
     form.reset(); form.unit = 'штук';
     mode.value = props.materials.length ? 'existing' : 'new';
@@ -305,6 +305,18 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                     <div>
                         <InputLabel value="Заметка" />
                         <TextInput v-model="form.note" class="mt-1 w-full" placeholder="Поставщик, накладная…" />
+                    </div>
+                    <div class="col-span-2">
+                        <InputLabel value="Оплата закупа" />
+                        <!-- Нал/банк создаёт подтверждённый расход компании (кол-во × цена)
+                             и уменьшает кассу/банк; «не списывать» — только остаток склада. -->
+                        <div class="mt-1 flex gap-2">
+                            <button v-for="opt in [['', 'Не списывать деньги'], ['cash', 'Наличные'], ['bank', 'Банк']]" :key="opt[0]" type="button"
+                                @click="form.payment_method = opt[0]"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                                :class="form.payment_method === opt[0] ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">{{ opt[1] }}</button>
+                        </div>
+                        <p v-if="form.payment_method" class="mt-1 text-xs text-slate-400">Будет создан расход «Закуп материалов» на сумму закупа — деньги уйдут из {{ form.payment_method === 'cash' ? 'кассы' : 'банка' }}.</p>
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">

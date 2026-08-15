@@ -8,6 +8,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ExpenseCategory extends Model
 {
+    /**
+     * Служебная категория выдач сотрудникам (авансы, долги, выплата ЗП).
+     * В итог «Расходы» не входит (зарплата там строкой «Зарплата»), кассу
+     * уменьшает; переименовывать/удалять её нельзя — на имя завязан код.
+     */
+    public const EMPLOYEE = 'Расходы по сотрудникам';
+
     protected $fillable = ['name', 'parent_id', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];

@@ -211,7 +211,7 @@ class PayrollController extends Controller
         if ($data['type'] === 'advance') {
             $employee = User::find($data['user_id']);
             $category = \App\Models\ExpenseCategory::firstOrCreate(
-                ['name' => 'Расходы по сотрудникам'],
+                ['name' => \App\Models\ExpenseCategory::EMPLOYEE],
                 ['is_active' => true]
             );
             $expense = \App\Models\Expense::create([
@@ -272,7 +272,7 @@ class PayrollController extends Controller
         $companyId = \App\Support\CurrentCompany::id() ?: $employee->companies()->value('companies.id');
 
         $category = \App\Models\ExpenseCategory::firstOrCreate(
-            ['name' => 'Расходы по сотрудникам'],
+            ['name' => \App\Models\ExpenseCategory::EMPLOYEE],
             ['is_active' => true]
         );
         $expense = \App\Models\Expense::create([

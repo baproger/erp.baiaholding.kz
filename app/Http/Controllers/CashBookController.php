@@ -114,9 +114,15 @@ class CashBookController extends Controller
             ? $q->where('payment_method', 'cash')
             : $q->where(fn ($w) => $w->where('payment_method', '!=', 'cash')->orWhereNull('payment_method'));
 
+        // Скоуп фирмы — тот же, что у плитки «Банк» (FinanceService): счета
+        // сделок И заказов цеха этой фирмы, иначе книга не сойдётся с плиткой.
         return $q->when($companyId, fn ($qq, $c) => $qq->whereHas('invoice', fn ($i) => $i
-            ->where('invoiceable_type', 'deal')
-            ->whereIn('invoiceable_id', \App\Models\Deal::where('company_id', $c)->select('id'))));
+            ->where(fn ($w) => $w
+                ->where(fn ($d) => $d->where('invoiceable_type', 'deal')
+                    ->whereIn('invoiceable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+                ->orWhere(fn ($p) => $p->where('invoiceable_type', 'project')
+                    ->whereIn('invoiceable_id', \App\Models\Project::whereIn(
+                        'deal_id', \App\Models\Deal::where('company_id', $c)->select('id'))->select('id'))))));
     }
 
     private function receipts(string $kind, ?int $companyId)
@@ -132,7 +138,15 @@ class CashBookController extends Controller
             ? $q->where('payment_method', 'cash')
             : $q->where('payment_method', '!=', 'cash')->whereNotNull('payment_method');
 
-        return $q->when($companyId, fn ($qq, $c) => $qq->where('company_id', $c));
+        // Скоуп фирмы — как у плитки «Банк»: расходы компании + расходы по её
+        // сделкам и заказам цеха (у расхода из карточки сделки company_id пуст).
+        return $q->when($companyId, fn ($qq, $c) => $qq->where(fn ($w) => $w
+            ->where('company_id', $c)
+            ->orWhere(fn ($d) => $d->where('expenseable_type', 'deal')
+                ->whereIn('expenseable_id', \App\Models\Deal::where('company_id', $c)->select('id')))
+            ->orWhere(fn ($p) => $p->where('expenseable_type', 'project')
+                ->whereIn('expenseable_id', \App\Models\Project::whereIn(
+                    'deal_id', \App\Models\Deal::where('company_id', $c)->select('id'))->select('id')))));
     }
 
     /**
