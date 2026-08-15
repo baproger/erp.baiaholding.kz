@@ -24,6 +24,8 @@ class DealStageChanged extends Notification
             'title' => 'Сделка перешла на новый этап',
             'message' => "{$this->deal->number}: {$this->stageName}",
             'deal_id' => $this->deal->id,
+            'deal_number' => $this->deal->number,
+            'url' => route('deals.show', $this->deal->id, absolute: false),
         ];
     }
 }

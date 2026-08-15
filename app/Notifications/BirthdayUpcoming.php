@@ -34,6 +34,7 @@ class BirthdayUpcoming extends Notification
                 ? "{$this->userName} — поздравьте!"
                 : "{$this->userName} — {$this->date}",
             'user_id' => $this->userId,
+            'url' => route('users.show', $this->userId, absolute: false),
         ];
     }
 }

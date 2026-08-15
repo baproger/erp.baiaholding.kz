@@ -24,12 +24,13 @@ class ExpensePending extends Notification
     {
         // Ссылка на сделку/заказ, к которому относится расход — чтобы бухгалтер
         // сразу открыл нужную карточку и подтвердил (вкладка Финансы).
+        // Расход КОМПАНИИ (без сделки) — на «Расходы»: там заявка ждёт проверки.
         $entity = $this->expense->expenseable;
         $isProject = $entity instanceof \App\Models\Project;
         $number = $entity?->number;
         $url = $entity
             ? ($isProject ? route('projects.show', $entity->id, false) : route('deals.show', $entity->id, false))
-            : null;
+            : route('expenses.board', absolute: false);
 
         return [
             'type' => 'expense_pending',
