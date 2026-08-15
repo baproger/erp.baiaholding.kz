@@ -200,7 +200,7 @@ class ChatController extends Controller
         return response()->json(['messages' => $messages, 'reads' => $reads]);
     }
 
-    public function sendMessage(Request $request, Chat $chat): RedirectResponse
+    public function sendMessage(Request $request, Chat $chat): RedirectResponse|JsonResponse
     {
         $this->authorizeParticipant($request, $chat);
 
@@ -266,7 +266,12 @@ class ChatController extends Controller
                 ->sendToUsers($recipientIds, '💬 '.$chatName, $author.': '.$text, route('chat.index', absolute: false)));
         }
 
-        return back();
+        // Отправка идёт axios'ом (без Inertia-визита): лёгкий JSON вместо
+        // редиректа — страница не перекачивает все пропсы после каждого
+        // сообщения. back() остаётся для обычной формы (и старых клиентов).
+        return $request->wantsJson()
+            ? response()->json(['ok' => true, 'id' => $msg->id])
+            : back();
     }
 
     /** Отметить чат прочитанным до последнего сообщения (серверный учёт). */

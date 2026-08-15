@@ -16,7 +16,25 @@ let audioCtx = null;
 // Тумблер 🔔 общий со страницей чата (localStorage chat_sound).
 const soundOn = () => localStorage.getItem('chat_sound') !== 'off';
 
-const ding = () => {
+// Разблокировка звука: браузер разрешает WebAudio только ПОСЛЕ жеста
+// пользователя (autoplay policy) — до первого клика resume() молча
+// отклоняется, и «дзынь» не звучит. Первым же кликом/клавишей создаём
+// контекст, будим его и проигрываем беззвучный тик: после этого звук
+// играет и по таймеру поллинга, и из фоновой вкладки.
+const unlockAudio = () => {
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+    try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const src = audioCtx.createBufferSource();
+        src.buffer = audioCtx.createBuffer(1, 1, 22050);
+        src.connect(audioCtx.destination);
+        src.start(0);
+    } catch (e) { /* нет WebAudio — переживём без звука */ }
+};
+
+export const ding = () => {
     if (!soundOn()) return;
     try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -112,12 +130,16 @@ const start = () => {
     fgTimer = setInterval(() => { if (!document.hidden) poll(); }, 10000);
     bgTimer = setInterval(() => { if (document.hidden) poll(); }, 30000);
     window.addEventListener('pointerdown', askPermissionOnce);
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
 };
 
 const stop = () => {
     clearInterval(fgTimer); clearInterval(bgTimer);
     fgTimer = bgTimer = null;
     window.removeEventListener('pointerdown', askPermissionOnce);
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
 };
 
 export function useChatAlerts() {

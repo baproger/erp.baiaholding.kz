@@ -7,7 +7,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { confirmDialog } from '@/composables/useConfirm';
-import { syncChatState } from '@/composables/useChatAlerts';
+import { syncChatState, ding } from '@/composables/useChatAlerts';
 
 const props = defineProps({
     chats: Array, users: Array, canCreateGroup: Boolean,
@@ -75,23 +75,8 @@ const notifyBrowser = (title, body) => {
     } catch (e) { /* ignore */ }
 };
 
-let audioCtx = null;
-const ding = () => {
-    if (!soundOn.value) return;
-    try {
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
-        o.connect(g); g.connect(audioCtx.destination);
-        o.type = 'sine';
-        o.frequency.setValueAtTime(880, audioCtx.currentTime);
-        o.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.08);
-        g.gain.setValueAtTime(0.001, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-        o.start(); o.stop(audioCtx.currentTime + 0.4);
-    } catch (e) { /* браузер мог запретить звук до первого клика */ }
-};
+// «Дзынь» общий с useChatAlerts (один разблокированный AudioContext на всю
+// систему); тумблер 🔔 он читает сам из localStorage (chat_sound).
 
 // ---- Живые бейджи: лёгкий поллинг непрочитанных и последних сообщений ----
 const live = reactive({});   // chat_id -> { unread, last }
@@ -240,22 +225,39 @@ const selectChat = async (chat) => {
     activeChat.value = chat;
     listOpen.value = false;
     showEmoji.value = false;
+    sendError.value = '';
     markSeen(chat);
     await loadMessages(true);
 };
 
-const send = () => {
+// Отправка axios'ом, а не Inertia-визитом: сервер отвечает лёгким JSON,
+// страница НЕ перекачивает все пропсы чата после каждого сообщения
+// (раньше из-за этого на каждой отправке шла «загрузка» всей страницы).
+const sending = ref(false);
+const sendError = ref('');
+const uploadPct = ref(0);
+const send = async () => {
     // Режим редактирования своего сообщения.
     if (editingMsg.value) { saveEditMsg(); return; }
-    if ((!form.message.trim() && !form.file) || !activeChat.value) return;
+    if ((!form.message.trim() && !form.file) || !activeChat.value || sending.value) return;
     showEmoji.value = false;
-    form.reply_to_id = replyTo.value?.id ?? null;
+    const fd = new FormData();
+    fd.append('message', form.message);
+    if (replyTo.value?.id) fd.append('reply_to_id', replyTo.value.id);
     // Упоминания: отправляем id тех, чьё @имя реально осталось в тексте.
-    form.mention_ids = mentioned.value.filter((m) => form.message.includes('@' + m.name)).map((m) => m.id);
-    form.post(route('chat.send', activeChat.value.id), {
-        preserveScroll: true, preserveState: true, forceFormData: true,
-        onSuccess: () => { form.reset('message', 'reply_to_id', 'mention_ids'); form.file = null; replyTo.value = null; mentioned.value = []; resizeInput(); loadMessages(); },
-    });
+    mentioned.value.filter((m) => form.message.includes('@' + m.name)).forEach((m) => fd.append('mention_ids[]', m.id));
+    if (form.file) fd.append('file', form.file);
+    sending.value = true; sendError.value = ''; uploadPct.value = 0;
+    try {
+        await window.axios.post(route('chat.send', activeChat.value.id), fd, {
+            onUploadProgress: (e) => { if (e.total) uploadPct.value = Math.round(e.loaded / e.total * 100); },
+        });
+        form.reset('message', 'reply_to_id', 'mention_ids'); form.file = null; replyTo.value = null; mentioned.value = []; resizeInput(); loadMessages();
+    } catch (e) {
+        // Текст НЕ сбрасываем — сообщение не потеряется; показываем причину.
+        const errors = e.response?.data?.errors;
+        sendError.value = (errors && Object.values(errors)[0]?.[0]) || 'Не удалось отправить — попробуйте ещё раз.';
+    } finally { sending.value = false; uploadPct.value = 0; }
 };
 
 // ---- Упоминания @имя ----
@@ -741,9 +743,10 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                         <span class="flex-shrink-0 text-slate-400">{{ fmtSize(form.file.size) }}</span>
                         <button @click="form.file = null" class="flex-shrink-0 text-slate-400 hover:text-rose-500">✕</button>
                     </div>
-                    <div v-if="form.progress" class="mb-2 h-1 overflow-hidden rounded-full bg-slate-100">
-                        <div class="h-1 bg-indigo-500 transition-all" :style="{ width: form.progress.percentage + '%' }"></div>
+                    <div v-if="sending && form.file" class="mb-2 h-1 overflow-hidden rounded-full bg-slate-100">
+                        <div class="h-1 bg-indigo-500 transition-all" :style="{ width: uploadPct + '%' }"></div>
                     </div>
+                    <div v-if="sendError" class="mb-2 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600">{{ sendError }}</div>
                     <div class="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100">
                         <button @click="showEmoji = !showEmoji" title="Эмодзи" class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 hover:bg-slate-100">😊</button>
                         <input ref="fileInput" type="file" class="hidden" @change="onFilePicked" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar,.txt,.csv" />
@@ -759,9 +762,9 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                         </div>
                         <textarea ref="textarea" v-model="form.message" @keydown.enter="onEnter" @input="onComposerInput" rows="1" placeholder="Напишите сообщение…  (@ — упомянуть, Enter — отправить)"
                             class="max-h-[140px] flex-1 resize-none border-0 bg-transparent py-2 text-sm text-slate-800 placeholder-slate-400 focus:ring-0"></textarea>
-                        <button @click="send" :disabled="form.processing || (!form.message.trim() && !form.file)"
+                        <button @click="send" :disabled="sending || (!form.message.trim() && !form.file)"
                             class="send-btn flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm transition-all hover:bg-indigo-700 disabled:opacity-40">
-                            <svg v-if="!form.processing" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>
+                            <svg v-if="!sending" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>
                             <svg v-else class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-30"/><path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3"/></svg>
                         </button>
 
