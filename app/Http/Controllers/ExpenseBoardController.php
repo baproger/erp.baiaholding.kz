@@ -44,7 +44,7 @@ class ExpenseBoardController extends Controller
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
             ->whereDate('date', '>=', $start)->whereDate('date', '<=', $end)
-            ->with(['responsible:id,name', 'category:id,name', 'employee:id,name'])
+            ->with(['responsible:id,name', 'category:id,name', 'employee:id,name', 'confirmedBy:id,name'])
             ->orderByDesc('date')->orderByDesc('id')
             ->get()
             ->map(fn ($e) => $this->row($e));
@@ -75,6 +75,9 @@ class ExpenseBoardController extends Controller
             'status' => $e->status,
             'payment_method' => $e->payment_method,
             'author' => $e->responsible ? ['id' => $e->responsible->id, 'name' => $e->responsible->name] : null,
+            // Кто подтвердил (оплатил): бухгалтер по имени; пусто у confirmed
+            // без подтверждающего — это провела сама система (склад и т.п.).
+            'confirmer' => $e->confirmedBy ? ['id' => $e->confirmedBy->id, 'name' => $e->confirmedBy->name] : null,
             // Выплата сотруднику (аванс/долг) — видно, кому и за что.
             'employee' => $e->employee ? ['id' => $e->employee->id, 'name' => $e->employee->name] : null,
             'payout' => match ($e->employee_payout) {

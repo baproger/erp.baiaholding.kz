@@ -129,7 +129,11 @@ const openNotification = (n) => {
     markRead(n.id);
     if (n.data?.url) router.get(n.data.url);
 };
-const markAllRead = () => router.patch(route('notifications.readAll'), {}, { preserveScroll: true });
+const markAllRead = () => router.patch(route('notifications.readAll'), {}, { preserveScroll: true, preserveState: true });
+// Открыл колокольчик — значит УВИДЕЛ уведомления: короткая пауза, чтобы
+// человек успел прочитать, и красный счётчик гаснет сам (как в мессенджерах).
+// Ссылки «Открыть» работают независимо от прочитанности.
+const onBellOpen = () => { if (notifications.value.unread > 0) setTimeout(markAllRead, 1500); };
 const setLocale = (l) => router.patch(route('locale.update'), { locale: l }, { preserveScroll: true });
 // Иконка/цвет уведомления по смыслу заголовка (просрочка, назначение, этап).
 const notifMeta = (n) => {
@@ -288,7 +292,7 @@ const clockDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: '2
 
                     <Dropdown align="right" width="80">
                         <template #trigger>
-                            <button class="relative rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100">
+                            <button class="relative rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100" @click="onBellOpen">
                                 <span class="text-lg">🔔</span>
                                 <span v-if="notifications.unread > 0" class="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">{{ notifications.unread > 9 ? '9+' : notifications.unread }}</span>
                             </button>

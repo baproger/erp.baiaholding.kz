@@ -140,25 +140,47 @@ const del = async (e) => {
             <div class="mt-0.5 text-xs text-slate-400">Всё оплачено</div>
         </div>
 
-        <!-- Оплаченные за месяц -->
-        <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-600">
-                Оплачено · {{ monthLabel }}
+        <!-- Оплаченные за месяц: стеклянная карточка, строгие колонки -->
+        <div class="mt-5 overflow-hidden rounded-2xl border border-white/60 bg-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-slate-200/60 backdrop-blur-xl">
+            <div class="flex items-center justify-between border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-white/40 px-5 py-3 backdrop-blur">
+                <span class="text-xs font-bold uppercase tracking-wide text-slate-600">Оплачено · {{ monthLabel }}</span>
+                <span class="rounded-full bg-emerald-100/80 px-2.5 py-0.5 text-xs font-bold tabular-nums text-emerald-700">{{ money(totals.confirmed) }}</span>
             </div>
-            <div v-if="confirmed.length" class="divide-y divide-slate-50">
-                <div v-for="e in confirmed" :key="e.id" class="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                    <span class="w-24 shrink-0 text-xs text-slate-400">{{ formatDate(e.date) }}</span>
+            <div v-if="confirmed.length" class="divide-y divide-slate-100/70">
+                <div v-for="e in confirmed" :key="e.id" class="group flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors hover:bg-white/80">
+                    <!-- Дата -->
+                    <span class="w-16 shrink-0 text-xs font-medium tabular-nums text-slate-400">{{ formatDate(e.date) }}</span>
+                    <!-- Что и категория -->
                     <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm text-slate-800">{{ e.description || 'Расход' }}</div>
-                        <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
-                            <span>{{ e.category ?? '—' }}</span>
-                            <Link v-if="e.employee" :href="route('users.show', e.employee.id)" class="text-indigo-600 hover:underline">☻ {{ e.employee.name }}</Link>
-                            <span v-if="e.payout" class="rounded bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">{{ e.payout }}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="truncate text-sm font-medium text-slate-800">{{ e.description || 'Расход' }}</span>
+                            <span v-if="e.payout" class="shrink-0 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-bold text-amber-700">{{ e.payout }}</span>
+                        </div>
+                        <div class="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400">
+                            <span>{{ e.category ?? 'Без категории' }}</span>
+                            <Link v-if="e.employee" :href="route('users.show', e.employee.id)" class="text-indigo-500 hover:underline">· {{ e.employee.name }}</Link>
                         </div>
                     </div>
-                    <a v-if="e.has_file" :href="route('expenses.receipt', e.id)" target="_blank" class="shrink-0 text-xs font-semibold text-indigo-600 hover:underline">чек ↗</a>
-                    <span class="shrink-0 text-xs text-slate-400">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
-                    <span class="w-28 shrink-0 text-right font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</span>
+                    <!-- Путь денег одной строкой: кто подал → кто подтвердил -->
+                    <div class="flex shrink-0 items-center gap-1">
+                        <Link v-if="e.author" :href="route('users.show', e.author.id)"
+                            class="max-w-28 truncate rounded-full bg-indigo-50/80 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 ring-1 ring-indigo-200/60 transition hover:bg-indigo-100">{{ e.author.name }}</Link>
+                        <span v-else class="rounded-full bg-slate-100/80 px-2.5 py-1 text-[11px] text-slate-400">—</span>
+                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        <Link v-if="e.confirmer" :href="route('users.show', e.confirmer.id)"
+                            class="max-w-28 truncate rounded-full bg-emerald-50/80 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 ring-1 ring-emerald-200/60 transition hover:bg-emerald-100">✓ {{ e.confirmer.name }}</Link>
+                        <span v-else class="rounded-full bg-slate-100/80 px-2.5 py-1 text-[11px] text-slate-400">⚙ система</span>
+                    </div>
+                    <!-- Чек и способ оплаты: одинаковые пилюли -->
+                    <div class="flex w-40 shrink-0 items-center justify-end gap-1.5">
+                        <a v-if="e.has_file" :href="route('expenses.receipt', e.id)" target="_blank"
+                            class="rounded-full border border-indigo-200/70 bg-indigo-50/70 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-100">чек ↗</a>
+                        <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                            :class="e.payment_method === 'cash' ? 'bg-emerald-50/80 text-emerald-600 ring-1 ring-emerald-200/60' : 'bg-sky-50/80 text-sky-600 ring-1 ring-sky-200/60'">
+                            {{ e.payment_method === 'cash' ? '💵 нал' : '🏦 банк' }}</span>
+                    </div>
+                    <!-- Сумма -->
+                    <span class="w-28 shrink-0 text-right text-sm font-bold tabular-nums text-slate-800">{{ money(e.amount) }}</span>
                 </div>
             </div>
             <div v-else class="px-4 py-10 text-center text-sm text-slate-400">За {{ monthLabel }} оплаченных расходов нет</div>

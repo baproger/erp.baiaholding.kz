@@ -268,9 +268,12 @@ class ExpenseController extends Controller
         ]);
 
         // Закрываем задачи «Подтвердить расход #N …» у бухгалтеров.
-        \App\Models\Task::where('title', 'like', 'Подтвердить расход #'.$expense->id.' %')
-            ->where('status', '!=', 'done')
-            ->get()->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
+        $gateTasks = \App\Models\Task::where('title', 'like', 'Подтвердить расход #'.$expense->id.' %')
+            ->where('status', '!=', 'done')->get();
+        $gateTasks->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
+        // Действие выполнено — гасим красный счётчик у всех бухгалтеров.
+        \App\Support\NotificationResolver::expense($expense->id);
+        \App\Support\NotificationResolver::tasks($gateTasks->pluck('id'));
 
         // Автору — уведомление о подтверждении.
         $expense->responsible?->notify(new \App\Notifications\ExpenseConfirmed($expense));
@@ -368,6 +371,8 @@ class ExpenseController extends Controller
             }
             $expense->delete();
         });
+        // Расхода больше нет — «ждёт подтверждения» гасим у всех бухгалтеров.
+        \App\Support\NotificationResolver::expense($expense->id);
 
         \App\Support\FinanceAudit::notifyDeleted(
             'Расход на '.number_format((float) $expense->amount, 0, '.', ' ').' ₸'.($expense->description ? ' («'.\Illuminate\Support\Str::limit($expense->description, 60).'»)' : ''),

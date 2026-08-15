@@ -312,8 +312,10 @@ class DealController extends Controller
             'Галочку ставит только '.(self::GATE_ROLE_LABELS[$gateRole] ?? $gateRole).' или админ.'
         );
 
-        $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')
-            ->get()->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
+        $gateTasks = $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')->get();
+        $gateTasks->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
+        // Гейт закрыт — гасим красный счётчик уведомлений об этих задачах.
+        \App\Support\NotificationResolver::tasks($gateTasks->pluck('id'));
 
         return back()->with('success', 'Галочка поставлена — сделку можно переводить дальше.');
     }

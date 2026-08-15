@@ -165,5 +165,10 @@ class EmployeeExpenseRequestTest extends TestCase
         $this->assertSame('confirmed', $e->status);
         $this->assertSame('cash', $e->payment_method);
         $this->assertSame($this->financist->id, (int) $e->confirmed_by);
+
+        // Действие выполнено — красный счётчик гаснет: «Расход ждёт
+        // подтверждения» помечен прочитанным у бухгалтера автоматически.
+        $this->assertSame(0, $this->financist->unreadNotifications()
+            ->where('data->expense_id', $e->id)->count());
     }
 }

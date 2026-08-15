@@ -92,6 +92,12 @@ class TaskController extends Controller
         $task->completed_at = $validated['status'] === 'done' ? now() : null;
         $task->save();
 
+        // Задача закрыта — «Вам назначена задача»/«просрочена» больше не
+        // требуют действий: гасим красный счётчик у получателей.
+        if ($task->status === 'done') {
+            \App\Support\NotificationResolver::task($task->id);
+        }
+
         return back()->with('success', 'Статус задачи обновлён.');
     }
 
