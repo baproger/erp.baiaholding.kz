@@ -30,6 +30,19 @@ class CashReceiptController extends Controller
 
         $data['company_id'] = CurrentCompany::id() ?: null;
         $data['created_by'] = $request->user()->id;
+
+        // Защита от повторной отправки формы: точно такое же поступление,
+        // созданное меньше минуты назад, — почти наверняка дубль (в базе
+        // уже находились пары с разницей в 8 секунд).
+        $dupe = CashReceipt::where('amount', $data['amount'])->where('method', $data['method'])
+            ->where('source', $data['source'])->where('company_id', $data['company_id'])
+            ->where('created_at', '>=', now()->subMinute())->exists();
+        if ($dupe) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'amount' => 'Такое же поступление уже добавлено только что — похоже на повторную отправку. Если это не дубль, подождите минуту.',
+            ]);
+        }
+
         CashReceipt::create($data);
 
         return back()->with('success', 'Поступление добавлено.');

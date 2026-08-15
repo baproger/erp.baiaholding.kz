@@ -67,6 +67,40 @@ class FinanceModuleTest extends TestCase
         $this->assertEquals('paid', $invoice->fresh()->status);
     }
 
+    public function test_payment_cannot_exceed_invoice_remainder(): void
+    {
+        // Регрессия: повторная отправка формы записывала второй платёж по уже
+        // оплаченному счёту — «оплачено» и доход задваивались.
+        $u = $this->admin();
+        $deal = $this->deal();
+
+        $this->actingAs($u)->post(route('invoices.store'), [
+            'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id,
+            'amount' => 100000, 'status' => 'sent',
+        ])->assertRedirect();
+        $invoice = Invoice::first();
+
+        $this->actingAs($u)->post(route('payments.store'), [
+            'invoice_id' => $invoice->id, 'amount' => 100000, 'payment_date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors();
+
+        // Повтор того же платежа — счёт уже оплачен полностью.
+        $this->actingAs($u)->post(route('payments.store'), [
+            'invoice_id' => $invoice->id, 'amount' => 100000, 'payment_date' => now()->toDateString(),
+        ])->assertSessionHasErrors('amount');
+        $this->assertEquals(1, $invoice->payments()->count());
+
+        // Частичная переплата тоже не проходит.
+        $this->actingAs($u)->post(route('invoices.store'), [
+            'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id,
+            'amount' => 50000, 'status' => 'sent',
+        ])->assertRedirect();
+        $second = Invoice::orderByDesc('id')->first();
+        $this->actingAs($u)->post(route('payments.store'), [
+            'invoice_id' => $second->id, 'amount' => 50001, 'payment_date' => now()->toDateString(),
+        ])->assertSessionHasErrors('amount');
+    }
+
     public function test_margin_calculation(): void
     {
         $u = $this->admin();

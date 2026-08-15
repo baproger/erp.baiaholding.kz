@@ -33,6 +33,19 @@ class PaymentController extends Controller
         $this->assertOwnership($request->user(), $invoice->invoiceable);
 
         DB::transaction(function () use ($request, $finance) {
+            // Переплата запрещена: платёж не может превысить остаток по счёту.
+            // Это же отсекает случайный ПОВТОРНЫЙ платёж (двойная отправка
+            // формы) — по оплаченному счёту второй платёж не пройдёт.
+            // Блокировка строки — от гонки двух одновременных отправок.
+            $invoice = Invoice::whereKey($request->integer('invoice_id'))->lockForUpdate()->firstOrFail();
+            $remaining = round((float) $invoice->amount - (float) $invoice->payments()->sum('amount'), 2);
+            if ((float) $request->validated()['amount'] > $remaining + 0.005) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => $remaining <= 0
+                        ? 'Счёт уже оплачен полностью — возможно, платёж отправлен повторно.'
+                        : 'Платёж больше остатка по счёту: осталось '.number_format($remaining, 0, '.', ' ').' ₸.',
+                ]);
+            }
             $payment = Payment::create($request->validated());
             $finance->recalcInvoiceStatus($payment->invoice);
         });

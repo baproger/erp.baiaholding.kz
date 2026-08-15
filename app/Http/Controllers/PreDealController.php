@@ -276,6 +276,22 @@ class PreDealController extends Controller
             return back()->with('error', 'Маржа '.$preDeal->margin.'% ниже порога '.rtrim(rtrim(number_format(PreDeal::minMargin(), 2, '.', ''), '0'), '.').'% — сделка отклонена.');
         }
 
+        // Всё создание — одной транзакцией с блокировкой лота: двойной клик по
+        // «Выиграл» (или два параллельных запроса) без этого успевал прочитать
+        // status=new оба раза и создавал ДВЕ сделки с двумя комплектами расходов.
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($preDeal, $numbers) {
+            $locked = PreDeal::whereKey($preDeal->id)->lockForUpdate()->first();
+            if ($locked->status === 'confirmed') {
+                return back()->with('error', 'Лот уже подтверждён.');
+            }
+
+            return $this->createDealFromLot($locked, $numbers);
+        });
+    }
+
+    /** Тело «Выиграл»: сделка + pending-расходы лота (вызывается под блокировкой). */
+    private function createDealFromLot(PreDeal $preDeal, DealNumberService $numbers): RedirectResponse
+    {
         $companyId = $preDeal->company_id ? (int) $preDeal->company_id : null;
         $company = $companyId ? \App\Models\Company::find($companyId) : null;
         $customer = $preDeal->customer ?: $preDeal->product;
