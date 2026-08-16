@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
+import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -212,8 +212,16 @@ const delExpense = async (e) => {
 
 <template>
     <Head title="Финансы" />
-    <AppLayout>
-        <template #header>{{ $t('page.finance', 'Финансы') }}</template>
+    <FinanceLayout title="Финансы" subtitle="обзор: деньги компании" active="finance.index" wide>
+        <template #actions>
+            <span v-if="monthActive" class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">Сводка за {{ monthLabel }}</span>
+            <span v-else class="text-[11px] text-slate-400">Сводка за всё время</span>
+            <span class="text-xs text-slate-400">Месяц:</span>
+            <input v-model="finMonth" @change="applyFinMonth" type="month"
+                class="rounded-lg border-slate-300 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+            <button v-if="monthActive" @click="resetFinMonth"
+                class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">за всё время</button>
+        </template>
 
         <!-- ================= ДДС: ручная сводка финансиста (первый блок) ================= -->
         <div class="mb-4">
@@ -222,67 +230,56 @@ const delExpense = async (e) => {
 
         <!-- Верхний ряд: договоры · дебиторка · касса · банк.
              «Кредиторка (мы должны)» скрыта по просьбе владельца (24.07.2026). -->
-        <div class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Общая сумма договоров</div>
-                <div class="mt-1 text-xl font-bold tabular-nums text-slate-800">{{ money(summary.contracts) }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-slate-800">{{ money(summary.contracts) }}</div>
             </div>
-            <div class="rounded-xl border p-5 shadow-sm" :class="summary.receivablesTotal > 0 ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'">
+            <div class="rounded-xl border p-4 shadow-sm" :class="summary.receivablesTotal > 0 ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'">
                 <div class="text-[11px] uppercase tracking-wide" :class="summary.receivablesTotal > 0 ? 'text-rose-500' : 'text-slate-400'">Дебиторка (нам должны)</div>
-                <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.receivablesTotal > 0 ? 'text-rose-600' : 'text-slate-800'">{{ money(summary.receivablesTotal) }}</div>
-                <div class="mt-0.5 text-[11px]" :class="summary.receivablesTotal > 0 ? 'text-rose-400' : 'text-slate-400'">счета {{ money(summary.receivables) }} · вручную {{ money(summary.receivablesManual) }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="summary.receivablesTotal > 0 ? 'text-rose-600' : 'text-slate-800'">{{ money(summary.receivablesTotal) }}</div>
+                <div class="mt-0.5 text-[11px]" :class="summary.receivablesTotal > 0 ? 'text-rose-500' : 'text-slate-400'">счета {{ money(summary.receivables) }} · вручную {{ money(summary.receivablesManual) }}</div>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="flex items-center justify-between">
                     <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в кассе</div>
                     <button v-if="isAdmin" @click="openCashFix" title="Корректировка кассы (инвентаризация): задать фактический остаток"
-                        class="text-slate-300 hover:text-indigo-500">✎</button>
+                        class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600">✎</button>
                 </div>
-                <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.cash >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(summary.cash) }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="summary.cash >= 0 ? 'text-emerald-600' : 'text-rose-600'">{{ money(summary.cash) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">
                     наличные ОБЩИЕ по холдингу (BAIA + ASU)
                     <span v-if="summary.cashCorrection" class="text-amber-500" :title="'Корректировка: ' + money(summary.cashCorrection)">· скорректировано</span>
                 </div>
                 <div v-if="cashFixOpen" class="mt-2 flex items-center gap-1.5">
                     <input v-model="cashFixInput" type="number" step="0.01" placeholder="Фактический остаток"
-                        class="w-32 rounded-lg border-slate-200 py-1 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
-                    <button @click="saveCashFix" class="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-700">ОК</button>
-                    <button @click="cashFixOpen = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                        class="w-32 rounded-md border-slate-300 py-1 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                    <button @click="saveCashFix" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">ОК</button>
+                    <button @click="cashFixOpen = false" class="rounded p-1 text-slate-300 transition-colors hover:text-slate-600">✕</button>
                 </div>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Остаток в банке</div>
-                <div class="mt-1 text-xl font-bold tabular-nums" :class="summary.bank >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(summary.bank) }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="summary.bank >= 0 ? 'text-emerald-600' : 'text-rose-600'">{{ money(summary.bank) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">безнал своей компании: поступило − потрачено</div>
             </div>
         </div>
 
         <!-- Доход − ВСЕ расходы = Чистая прибыль (минимализм, как в тетради) -->
-        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span v-if="monthActive" class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">Сводка за {{ monthLabel }}</span>
-            <span v-else class="text-xs font-medium text-slate-400">Сводка за всё время</span>
-            <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">Месяц:</span>
-                <input v-model="finMonth" @change="applyFinMonth" type="month"
-                    class="rounded-lg border-slate-300 py-1.5 text-sm shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
-                <button v-if="monthActive" @click="resetFinMonth"
-                    class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100">за всё время</button>
-            </div>
-        </div>
-        <div class="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">Доход <span class="normal-case text-slate-300">— итог Сводного отчёта</span></div>
-                <div class="mt-1 text-2xl font-bold tabular-nums text-emerald-600">{{ money(summary.dealsIncome) }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ money(summary.dealsIncome) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">по сделкам: остаток − бонус (как в отчёте){{ monthActive ? ' · сделки за ' + monthLabel + ' (по дате договора)' : '' }}</div>
                 <div class="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
                     Оборот {{ monthActive ? 'за ' + monthLabel : '(движение денег)' }}: <b class="tabular-nums text-slate-600">{{ money(summary.income) }}</b>
                     · счета {{ money(summary.incomeInvoices) }} · поступления {{ money(summary.incomeManual) }}
                 </div>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="flex items-baseline justify-between">
                     <span class="text-[11px] uppercase tracking-wide text-slate-400">Расходы — {{ monthActive ? monthLabel : 'всего' }}</span>
-                    <span class="text-xl font-bold tabular-nums text-rose-600">−{{ money(summary.expensesTotal) }}</span>
+                    <span class="whitespace-nowrap text-xl font-bold tabular-nums text-rose-600">−{{ money(summary.expensesTotal) }}</span>
                 </div>
                 <div class="mt-2 space-y-1 text-sm">
                     <div v-if="!monthActive" class="flex justify-between"><span class="text-slate-500">Зарплата (оклады + бонусы)</span><span class="tabular-nums text-slate-700">{{ money(summary.payroll) }}</span></div>
@@ -294,26 +291,26 @@ const delExpense = async (e) => {
                     </div>
                 </div>
             </div>
-            <div class="rounded-xl p-5 shadow-md" style="background-color: #1A3B5C">
+            <div class="rounded-xl p-4 shadow-md" style="background-color: #1A3B5C">
                 <div class="text-[11px] uppercase tracking-wide text-white/60">{{ monthActive ? 'Итог за ' + monthLabel : 'Чистая прибыль' }}</div>
-                <div class="mt-1 text-2xl font-bold tabular-nums" :class="summary.net >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(summary.net) }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="summary.net >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(summary.net) }}</div>
                 <div class="mt-0.5 text-[11px] text-white/60">{{ monthActive ? 'оборот − расходы за месяц (без ЗП и налога)' : 'оборот − все расходы' }}</div>
             </div>
         </div>
 
         <!-- ================= Поступления денег ================= -->
         <div class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
-                <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                <div class="flex flex-wrap items-center gap-3">
                     <h3 class="text-sm font-semibold text-slate-900">Поступления денег</h3>
-                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">сегодня <b class="tabular-nums">{{ money(todaySum) }}</b></span>
-                    <span class="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 sm:inline-flex">{{ monthActive ? monthLabel : 'всего' }} <b class="ml-1 tabular-nums">{{ money(summary.incomeManual) }}</b></span>
+                    <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">сегодня <b class="tabular-nums">{{ money(todaySum) }}</b></span>
+                    <span class="hidden rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 sm:inline-flex">{{ monthActive ? monthLabel : 'всего' }} <b class="ml-1 tabular-nums">{{ money(summary.incomeManual) }}</b></span>
                 </div>
                 <button v-if="canManage" @click="openReceipt"
-                    class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">+ Поступление</button>
+                    class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">+ Поступление</button>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
+                <table class="min-w-full whitespace-nowrap text-sm">
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                         <tr>
                             <th class="px-6 py-2.5">Дата</th>
@@ -326,20 +323,20 @@ const delExpense = async (e) => {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="r in receiptsToday" :key="r.id" class="hover:bg-slate-50">
-                            <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
-                            <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
-                            <td class="px-4 py-3">
-                                <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="r.method === 'cash' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
+                        <tr v-for="r in receiptsToday" :key="r.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                            <td class="px-6 py-2.5 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
+                            <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
+                            <td class="px-4 py-2.5">
+                                <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="r.method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
                             </td>
-                            <td class="max-w-56 truncate px-4 py-3 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
-                            <td class="max-w-56 truncate px-4 py-3 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
-                            <td class="px-4 py-3 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
-                            <td v-if="canManage" class="px-4 py-3 text-right">
-                                <button class="text-slate-300 transition hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
+                            <td class="max-w-56 truncate px-4 py-2.5 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
+                            <td class="max-w-56 truncate px-4 py-2.5 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
+                            <td class="px-4 py-2.5 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
+                            <td v-if="canManage" class="whitespace-nowrap px-4 py-2.5 text-right">
+                                <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
                             </td>
                         </tr>
-                        <tr v-if="!receiptsToday.length"><td colspan="7" class="px-6 py-8 text-center text-sm text-slate-400">Сегодня поступлений не было — «+ Поступление»</td></tr>
+                        <tr v-if="!receiptsToday.length"><td colspan="7" class="px-6 py-10 text-center text-sm text-slate-400">Сегодня поступлений не было — «+ Поступление»</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -348,129 +345,135 @@ const delExpense = async (e) => {
             <div class="border-t border-slate-100">
                 <button type="button" @click="pastOpen = !pastOpen" class="flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left">
                     <div class="flex min-w-0 items-center gap-2">
-                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="pastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200" :class="pastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                         <span class="text-sm font-semibold text-slate-900">Прошлые поступления</span>
                     </div>
-                    <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-600">{{ receiptsPastStats?.count ?? 0 }} · {{ money(receiptsPastStats?.sum) }}</span>
+                    <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">{{ receiptsPastStats?.count ?? 0 }} · {{ money(receiptsPastStats?.sum) }}</span>
                 </button>
-                <div v-show="pastOpen" class="border-t border-slate-100">
-                    <div class="flex flex-wrap items-center gap-2 px-6 py-3">
-                        <input v-model="rcSearch" @keyup.enter="applyRcFilters" type="text" placeholder="Поиск: откуда / комментарий"
-                            class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-emerald-500 focus:ring-emerald-500" />
-                        <input v-model="rcFrom" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период с" />
-                        <span class="text-xs text-slate-400">—</span>
-                        <input v-model="rcTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период по" />
-                        <button @click="applyRcFilters" class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-900">Найти</button>
-                        <button v-if="filters?.rc_search || filters?.rc_from || filters?.rc_to" @click="resetRcFilters"
-                            class="rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100">Сбросить</button>
+                <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 -translate-y-1"
+                    leave-active-class="transition duration-150 ease-in" leave-to-class="opacity-0 -translate-y-1">
+                    <div v-show="pastOpen" class="border-t border-slate-100">
+                        <div class="flex flex-wrap items-center gap-2 px-6 py-3">
+                            <input v-model="rcSearch" @keyup.enter="applyRcFilters" type="text" placeholder="Поиск: откуда / комментарий"
+                                class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                            <input v-model="rcFrom" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период с" />
+                            <span class="text-xs text-slate-400">—</span>
+                            <input v-model="rcTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период по" />
+                            <button @click="applyRcFilters" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">Найти</button>
+                            <button v-if="filters?.rc_search || filters?.rc_from || filters?.rc_to" @click="resetRcFilters"
+                                class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full whitespace-nowrap text-sm">
+                                <tbody class="divide-y divide-slate-50">
+                                    <tr v-for="r in receiptsPast" :key="r.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                        <td class="px-6 py-2.5 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
+                                        <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
+                                        <td class="px-4 py-2.5">
+                                            <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="r.method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
+                                        </td>
+                                        <td class="max-w-56 truncate px-4 py-2.5 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
+                                        <td class="max-w-56 truncate px-4 py-2.5 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
+                                        <td class="px-4 py-2.5 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
+                                        <td v-if="canManage" class="whitespace-nowrap px-4 py-2.5 text-right">
+                                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="!receiptsPast.length"><td colspan="7" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых поступлений не найдено</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
-                            <tbody class="divide-y divide-slate-50">
-                                <tr v-for="r in receiptsPast" :key="r.id" class="hover:bg-slate-50">
-                                    <td class="px-6 py-3 text-slate-500">{{ formatDate(r.date) }}<span class="block text-[10px] text-slate-400">внесено {{ formatDateTime(r.created_at) }}</span></td>
-                                    <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">+ {{ money(r.amount) }}</td>
-                                    <td class="px-4 py-3">
-                                        <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="r.method === 'cash' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'">{{ r.method === 'cash' ? 'наличные' : 'банк (счёт)' }}</span>
-                                    </td>
-                                    <td class="max-w-56 truncate px-4 py-3 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
-                                    <td class="max-w-56 truncate px-4 py-3 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
-                                    <td class="px-4 py-3 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
-                                    <td v-if="canManage" class="px-4 py-3 text-right">
-                                        <button class="text-slate-300 transition hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
-                                    </td>
-                                </tr>
-                                <tr v-if="!receiptsPast.length"><td colspan="7" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых поступлений не найдено</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                </Transition>
             </div>
         </div>
 
         <!-- ================= Задолженности (аккордеоны) =================
              Кредиторка скрыта по просьбе владельца (24.07.2026) — вернуть:
              добавить обратно строку { type: 'payable', … } в массив. -->
-        <div class="mt-6 grid grid-cols-1 items-start gap-4">
+        <div class="mt-6 grid grid-cols-1 items-start gap-3">
             <div v-for="acc in [
                     { type: 'receivable', title: 'Дебиторская задолженность — кто нам должен', list: debts.receivables, total: summary.receivablesTotal, color: 'rose' },
                 ]" :key="acc.type" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <!-- Шапка-аккордеон: клик сворачивает/разворачивает -->
                 <button type="button" @click="debtOpen[acc.type] = !debtOpen[acc.type]"
-                    class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left">
+                    class="flex w-full items-center justify-between gap-3 px-6 py-4 text-left">
                     <div class="flex min-w-0 items-center gap-2">
-                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="debtOpen[acc.type] ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200" :class="debtOpen[acc.type] ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                         <span class="truncate text-sm font-semibold text-slate-900">{{ acc.title }}</span>
                     </div>
-                    <span class="flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums"
-                        :class="acc.total > 0 ? (acc.color === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700') : 'bg-slate-100 text-slate-400'">{{ money(acc.total) }}</span>
+                    <span class="flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums"
+                        :class="acc.total > 0 ? (acc.color === 'rose' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-700') : 'bg-slate-100 text-slate-500'">{{ money(acc.total) }}</span>
                 </button>
-                <div v-show="debtOpen[acc.type]" class="border-t border-slate-100 px-5 py-3">
-                    <!-- Дебиторка: автоматическая часть по счетам сделок -->
-                    <div v-if="acc.type === 'receivable'" class="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                        <div class="flex items-center justify-between">
-                            <span class="text-slate-500">По счетам сделок (автоматически)</span>
-                            <span class="font-semibold tabular-nums text-slate-700">{{ money(summary.receivables) }}</span>
+                <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 -translate-y-1"
+                    leave-active-class="transition duration-150 ease-in" leave-to-class="opacity-0 -translate-y-1">
+                    <div v-show="debtOpen[acc.type]" class="border-t border-slate-100 px-6 py-3">
+                        <!-- Дебиторка: автоматическая часть по счетам сделок -->
+                        <div v-if="acc.type === 'receivable'" class="mb-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-500">По счетам сделок (автоматически)</span>
+                                <span class="font-semibold tabular-nums text-slate-700">{{ money(summary.receivables) }}</span>
+                            </div>
+                            <p class="mt-1 text-[11px] text-slate-400">⚠ Вручную вносите только долги БЕЗ выставленного счёта — долг по счёту уже посчитан автоматически, повторная запись задвоит плитку «Дебиторка».</p>
                         </div>
-                        <p class="mt-1 text-[11px] text-slate-400">⚠ Вручную вносите только долги БЕЗ выставленного счёта — долг по счёту уже посчитан автоматически, повторная запись задвоит плитку «Дебиторка».</p>
-                    </div>
-                    <div class="divide-y divide-slate-50">
-                        <div v-for="d in acc.list" :key="d.id" class="flex items-center justify-between gap-3 py-2.5 text-sm">
-                            <div class="min-w-0">
-                                <div class="truncate font-medium text-slate-800">{{ d.counterparty }}</div>
-                                <div class="text-[11px] text-slate-400">
-                                    <template v-if="d.date">{{ formatDate(d.date) }} · </template>{{ d.note || '—' }}<template v-if="d.creator?.name"> · {{ d.creator.name }}</template> · внесено {{ formatDateTime(d.created_at) }}
+                        <div class="divide-y divide-slate-50">
+                            <div v-for="d in acc.list" :key="d.id" class="flex items-center justify-between gap-3 py-2.5 text-sm">
+                                <div class="min-w-0">
+                                    <div class="truncate font-medium text-slate-800">{{ d.counterparty }}</div>
+                                    <div class="text-[11px] text-slate-400">
+                                        <template v-if="d.date">{{ formatDate(d.date) }} · </template>{{ d.note || '—' }}<template v-if="d.creator?.name"> · {{ d.creator.name }}</template> · внесено {{ formatDateTime(d.created_at) }}
+                                    </div>
+                                </div>
+                                <div class="flex flex-shrink-0 items-center gap-2">
+                                    <span class="whitespace-nowrap font-semibold tabular-nums" :class="acc.color === 'rose' ? 'text-rose-600' : 'text-amber-600'">{{ money(d.amount) }}</span>
+                                    <template v-if="canManage">
+                                        <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать" @click="openDebt(acc.type, d)">
+                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                        </button>
+                                        <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить (СЕО и директор получат уведомление)" @click="delDebt(d)">
+                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                                        </button>
+                                    </template>
                                 </div>
                             </div>
-                            <div class="flex flex-shrink-0 items-center gap-2">
-                                <span class="font-semibold tabular-nums" :class="acc.color === 'rose' ? 'text-rose-600' : 'text-amber-600'">{{ money(d.amount) }}</span>
-                                <template v-if="canManage">
-                                    <button class="rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Редактировать" @click="openDebt(acc.type, d)">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                                    </button>
-                                    <button class="rounded p-1 text-slate-300 transition hover:text-rose-600" title="Удалить (СЕО и директор получат уведомление)" @click="delDebt(d)">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                                    </button>
-                                </template>
-                            </div>
+                            <div v-if="!acc.list.length" class="py-3 text-center text-xs text-slate-400">Записей нет</div>
                         </div>
-                        <div v-if="!acc.list.length" class="py-3 text-center text-xs text-slate-300">Записей нет</div>
+                        <button v-if="canManage" type="button" @click="openDebt(acc.type)"
+                            class="mt-2 w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs font-medium text-slate-500 transition-colors duration-150 hover:border-indigo-400 hover:text-indigo-600">+ Добавить запись</button>
                     </div>
-                    <button v-if="canManage" type="button" @click="openDebt(acc.type)"
-                        class="mt-2 w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs font-medium text-slate-500 transition hover:border-indigo-400 hover:text-indigo-600">+ Добавить запись</button>
-                </div>
+                </Transition>
             </div>
         </div>
 
         <!-- ================= Расходы ================= -->
         <div class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
-                <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                <div class="flex flex-wrap items-center gap-3">
                     <h3 class="text-sm font-semibold text-slate-900">Расходы</h3>
-                    <span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">сегодня <b class="tabular-nums">{{ money(expTodaySum) }}</b></span>
+                    <span class="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-600">сегодня <b class="tabular-nums">{{ money(expTodaySum) }}</b></span>
                     <button v-if="canManage" @click="openCompanyExpense"
-                        class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700">+ Расход компании</button>
+                        class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">+ Расход компании</button>
                     <button v-if="canManage" @click="openCats"
-                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" title="Категории расходов компании">⚙ Категории</button>
+                        class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50" title="Категории расходов компании">⚙ Категории</button>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 text-sm">
                     <label class="flex items-center gap-1 text-xs text-slate-400">с
-                        <input v-model="expFrom" @change="applyExpFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                        <input v-model="expFrom" @change="applyExpFilters" type="date" class="rounded-lg border-slate-300 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                     </label>
                     <label class="flex items-center gap-1 text-xs text-slate-400">по
-                        <input v-model="expTo" @change="applyExpFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                        <input v-model="expTo" @change="applyExpFilters" type="date" class="rounded-lg border-slate-300 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                     </label>
-                    <select v-model="expKind" @change="applyExpFilters" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                    <select v-model="expKind" @change="applyExpFilters" class="rounded-lg border-slate-300 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                         <option value="">Все виды</option>
                         <option value="material">Материальные (склад)</option>
                         <option value="other">Прочие</option>
                     </select>
-                    <select v-model="expMethod" @change="applyExpFilters" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                    <select v-model="expMethod" @change="applyExpFilters" class="rounded-lg border-slate-300 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                         <option value="">Любая оплата</option>
                         <option value="cash">Наличные</option>
                         <option value="bank">Банк (счёт)</option>
                     </select>
-                    <select v-model="expStatus" @change="applyExpFilters" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                    <select v-model="expStatus" @change="applyExpFilters" class="rounded-lg border-slate-300 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                         <option value="">Все статусы</option>
                         <option value="pending">Ждёт бухгалтера</option>
                         <option value="confirmed">Подтверждён</option>
@@ -482,140 +485,145 @@ const delExpense = async (e) => {
                  Нал + банк = прочие: у материальных списаний способа оплаты нет. -->
             <div class="grid grid-cols-2 gap-3 px-6 py-4 lg:grid-cols-5">
                 <button type="button" @click="setTile('', '', '')"
-                    class="rounded-xl bg-slate-900 p-3 text-left transition hover:opacity-90"
+                    class="rounded-xl p-4 text-left shadow-md transition-opacity duration-150 hover:opacity-90" style="background-color: #1A3B5C"
                     :class="tileActive('', '', '') ? 'ring-2 ring-slate-900 ring-offset-2' : ''">
-                    <div class="text-[11px] font-medium text-slate-300">Все расходы ({{ expenseTotals.all_count }})</div>
-                    <div class="mt-0.5 text-base font-bold tabular-nums text-white">{{ money(expenseTotals.all) }}</div>
+                    <div class="text-[11px] uppercase tracking-wide text-white/60">Все расходы ({{ expenseTotals.all_count }})</div>
+                    <div class="mt-1 whitespace-nowrap text-base font-bold tabular-nums text-white">{{ money(expenseTotals.all) }}</div>
                 </button>
                 <button type="button" @click="setTile('material', '', 'confirmed')"
-                    class="rounded-xl bg-indigo-50 p-3 text-left transition hover:bg-indigo-100"
+                    class="rounded-xl bg-indigo-50 p-4 text-left transition-colors duration-150 hover:bg-indigo-100"
                     :class="tileActive('material', '', 'confirmed') ? 'ring-2 ring-indigo-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-indigo-700">Материальные (склад)</div>
-                    <div class="mt-0.5 text-base font-bold tabular-nums text-indigo-700">{{ money(expenseTotals.material) }}</div>
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700">Материальные (склад)</div>
+                    <div class="mt-1 whitespace-nowrap text-base font-bold tabular-nums text-indigo-700">{{ money(expenseTotals.material) }}</div>
                 </button>
                 <button type="button" @click="setTile('other', 'cash', 'confirmed')"
-                    class="rounded-xl bg-emerald-50 p-3 text-left transition hover:bg-emerald-100"
+                    class="rounded-xl bg-emerald-50 p-4 text-left transition-colors duration-150 hover:bg-emerald-100"
                     :class="tileActive('other', 'cash', 'confirmed') ? 'ring-2 ring-emerald-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-emerald-700">Прочие расходы (нал)</div>
-                    <div class="mt-0.5 text-base font-bold tabular-nums text-emerald-700">{{ money(expenseTotals.cash) }}</div>
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700">Прочие расходы (нал)</div>
+                    <div class="mt-1 whitespace-nowrap text-base font-bold tabular-nums text-emerald-700">{{ money(expenseTotals.cash) }}</div>
                 </button>
                 <button type="button" @click="setTile('other', 'bank', 'confirmed')"
-                    class="rounded-xl bg-sky-50 p-3 text-left transition hover:bg-sky-100"
+                    class="rounded-xl bg-sky-50 p-4 text-left transition-colors duration-150 hover:bg-sky-100"
                     :class="tileActive('other', 'bank', 'confirmed') ? 'ring-2 ring-sky-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-sky-700">Прочие расходы (банк)</div>
-                    <div class="mt-0.5 text-base font-bold tabular-nums text-sky-700">{{ money(expenseTotals.bank) }}</div>
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700">Прочие расходы (банк)</div>
+                    <div class="mt-1 whitespace-nowrap text-base font-bold tabular-nums text-sky-700">{{ money(expenseTotals.bank) }}</div>
                 </button>
                 <button type="button" @click="setTile('', '', 'pending')"
-                    class="rounded-xl bg-amber-50 p-3 text-left transition hover:bg-amber-100"
+                    class="rounded-xl bg-amber-50 p-4 text-left transition-colors duration-150 hover:bg-amber-100"
                     :class="tileActive('', '', 'pending') ? 'ring-2 ring-amber-400 ring-offset-1' : ''">
-                    <div class="text-[11px] font-medium text-amber-700">Ждёт бухгалтера ({{ expenseTotals.pending_count }})</div>
-                    <div class="mt-0.5 text-base font-bold tabular-nums text-amber-700">{{ money(expenseTotals.pending_sum) }}</div>
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-amber-700">Ждёт бухгалтера ({{ expenseTotals.pending_count }})</div>
+                    <div class="mt-1 whitespace-nowrap text-base font-bold tabular-nums text-amber-700">{{ money(expenseTotals.pending_sum) }}</div>
                 </button>
             </div>
 
-            <table class="min-w-full divide-y divide-slate-100 text-sm">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr>
-                        <th class="px-6 py-3">Сумма</th>
-                        <th class="px-4 py-3">Описание</th>
-                        <th class="px-4 py-3">Сделка / заказ</th>
-                        <th class="px-4 py-3">Вид</th>
-                        <th class="px-4 py-3">Оплата</th>
-                        <th class="px-4 py-3">Статус</th>
-                        <th class="px-4 py-3">Автор</th>
-                        <th class="px-4 py-3">Дата</th>
-                        <th v-if="canManage" class="px-4 py-3"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr v-for="e in expensesToday" :key="e.id" class="transition-colors hover:bg-slate-50">
-                        <td class="px-6 py-3 font-semibold tabular-nums text-slate-900">{{ money(e.amount) }}</td>
-                        <td class="max-w-[220px] truncate px-4 py-3 text-slate-500">{{ e.description || '—' }}</td>
-                        <td class="px-4 py-3">
-                            <Link v-if="e.expenseable_id" :href="expLink(e)" class="font-medium text-indigo-600 hover:underline">{{ e.expenseable?.number ?? '—' }}</Link>
-                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ e.category?.name ?? 'Компания' }}</span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">склад</span>
-                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">прочий</span>
-                        </td>
-                        <td class="px-4 py-3 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
-                        <td class="px-4 py-3">
-                            <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
-                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Ждёт бухгалтера</span>
-                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Черновик</span>
-                        </td>
-                        <td class="px-4 py-3 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
-                        <td class="px-4 py-3 text-xs text-slate-400">{{ formatDate(e.date) }}<span class="block text-[10px] text-slate-300">внесено {{ formatDateTime(e.created_at) }}</span></td>
-                        <td v-if="canManage" class="px-4 py-3 text-right whitespace-nowrap">
-                            <button class="rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                            </button>
-                            <button class="rounded p-1 text-slate-300 transition hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                            </button>
-                        </td>
-                    </tr>
-                    <tr v-if="!expensesToday.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-10 text-center text-slate-400">Сегодня расходов не было</td></tr>
-                </tbody>
-            </table>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                        <tr>
+                            <th class="px-6 py-2.5">Сумма</th>
+                            <th class="px-4 py-2.5">Описание</th>
+                            <th class="px-4 py-2.5">Сделка / заказ</th>
+                            <th class="px-4 py-2.5">Вид</th>
+                            <th class="px-4 py-2.5">Оплата</th>
+                            <th class="px-4 py-2.5">Статус</th>
+                            <th class="px-4 py-2.5">Автор</th>
+                            <th class="px-4 py-2.5">Дата</th>
+                            <th v-if="canManage" class="px-4 py-2.5"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        <tr v-for="e in expensesToday" :key="e.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                            <td class="whitespace-nowrap px-6 py-2.5 font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</td>
+                            <td class="max-w-[220px] truncate px-4 py-2.5 text-slate-500">{{ e.description || '—' }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5">
+                                <Link v-if="e.expenseable_id" :href="expLink(e)" class="font-medium text-indigo-600 hover:underline">{{ e.expenseable?.number ?? '—' }}</Link>
+                                <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">{{ e.category?.name ?? 'Компания' }}</span>
+                            </td>
+                            <td class="whitespace-nowrap px-4 py-2.5">
+                                <span v-if="e.material" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">склад</span>
+                                <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">прочий</span>
+                            </td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5">
+                                <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Подтверждён</span>
+                                <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">Ждёт бухгалтера</span>
+                                <span v-else class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">Черновик</span>
+                            </td>
+                            <td class="px-4 py-2.5 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-400">{{ formatDate(e.date) }}<span class="block text-[10px] text-slate-300">внесено {{ formatDateTime(e.created_at) }}</span></td>
+                            <td v-if="canManage" class="whitespace-nowrap px-4 py-2.5 text-right">
+                                <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                </button>
+                                <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr v-if="!expensesToday.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-10 text-center text-sm text-slate-400">Сегодня расходов не было</td></tr>
+                    </tbody>
+                </table>
+            </div>
 
             <!-- Прошлые расходы: аккордеон с поиском и периодом -->
             <div class="border-t border-slate-100">
                 <button type="button" @click="expPastOpen = !expPastOpen" class="flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left">
                     <div class="flex min-w-0 items-center gap-2">
-                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="expPastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                        <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200" :class="expPastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                         <span class="text-sm font-semibold text-slate-900">Прошлые расходы</span>
                     </div>
-                    <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-600">{{ expensesPastStats?.count ?? 0 }} · {{ money(expensesPastStats?.sum) }}</span>
+                    <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">{{ expensesPastStats?.count ?? 0 }} · {{ money(expensesPastStats?.sum) }}</span>
                 </button>
-                <div v-show="expPastOpen" class="border-t border-slate-100">
-                    <div class="flex flex-wrap items-center gap-2 px-6 py-3">
-                        <input v-model="xpSearch" @keyup.enter="applyXpFilters" type="text" placeholder="Поиск: описание / категория"
-                            class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-rose-500 focus:ring-rose-500" />
-                        <input v-model="xpFrom" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период с" />
-                        <span class="text-xs text-slate-400">—</span>
-                        <input v-model="xpTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm" title="Период по" />
-                        <button @click="applyXpFilters" class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-900">Найти</button>
-                        <button v-if="filters?.xp_search || filters?.xp_from || filters?.xp_to" @click="resetXpFilters"
-                            class="rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100">Сбросить</button>
+                <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 -translate-y-1"
+                    leave-active-class="transition duration-150 ease-in" leave-to-class="opacity-0 -translate-y-1">
+                    <div v-show="expPastOpen" class="border-t border-slate-100">
+                        <div class="flex flex-wrap items-center gap-2 px-6 py-3">
+                            <input v-model="xpSearch" @keyup.enter="applyXpFilters" type="text" placeholder="Поиск: описание / категория"
+                                class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                            <input v-model="xpFrom" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период с" />
+                            <span class="text-xs text-slate-400">—</span>
+                            <input v-model="xpTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период по" />
+                            <button @click="applyXpFilters" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">Найти</button>
+                            <button v-if="filters?.xp_search || filters?.xp_from || filters?.xp_to" @click="resetXpFilters"
+                                class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-sm">
+                                <tbody class="divide-y divide-slate-50">
+                                    <tr v-for="e in expensesPast" :key="e.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                        <td class="whitespace-nowrap px-6 py-2.5 font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</td>
+                                        <td class="max-w-[220px] truncate px-4 py-2.5 text-slate-500">{{ e.description || '—' }}</td>
+                                        <td class="whitespace-nowrap px-4 py-2.5">
+                                            <Link v-if="e.expenseable_id" :href="expLink(e)" class="font-medium text-indigo-600 hover:underline">{{ e.expenseable?.number ?? '—' }}</Link>
+                                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">{{ e.category?.name ?? 'Компания' }}</span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-2.5">
+                                            <span v-if="e.material" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">склад</span>
+                                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">прочий</span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
+                                        <td class="whitespace-nowrap px-4 py-2.5">
+                                            <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Подтверждён</span>
+                                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">Ждёт бухгалтера</span>
+                                            <span v-else class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">Черновик</span>
+                                        </td>
+                                        <td class="px-4 py-2.5 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
+                                        <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-400">{{ formatDate(e.date) }}<span class="block text-[10px] text-slate-300">внесено {{ formatDateTime(e.created_at) }}</span></td>
+                                        <td v-if="canManage" class="whitespace-nowrap px-4 py-2.5 text-right">
+                                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                            </button>
+                                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="!expensesPast.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых расходов не найдено</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-slate-100 text-sm">
-                            <tbody class="divide-y divide-slate-100">
-<tr v-for="e in expensesPast" :key="e.id" class="transition-colors hover:bg-slate-50">
-                        <td class="px-6 py-3 font-semibold tabular-nums text-slate-900">{{ money(e.amount) }}</td>
-                        <td class="max-w-[220px] truncate px-4 py-3 text-slate-500">{{ e.description || '—' }}</td>
-                        <td class="px-4 py-3">
-                            <Link v-if="e.expenseable_id" :href="expLink(e)" class="font-medium text-indigo-600 hover:underline">{{ e.expenseable?.number ?? '—' }}</Link>
-                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ e.category?.name ?? 'Компания' }}</span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">склад</span>
-                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">прочий</span>
-                        </td>
-                        <td class="px-4 py-3 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
-                        <td class="px-4 py-3">
-                            <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
-                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Ждёт бухгалтера</span>
-                            <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Черновик</span>
-                        </td>
-                        <td class="px-4 py-3 text-xs text-slate-500">{{ e.responsible?.name ?? '—' }}<span v-if="e.confirmed_by?.name" class="block text-[10px] text-slate-400">подтв.: {{ e.confirmed_by.name }}</span></td>
-                        <td class="px-4 py-3 text-xs text-slate-400">{{ formatDate(e.date) }}<span class="block text-[10px] text-slate-300">внесено {{ formatDateTime(e.created_at) }}</span></td>
-                        <td v-if="canManage" class="px-4 py-3 text-right whitespace-nowrap">
-                            <button class="rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                            </button>
-                            <button class="rounded p-1 text-slate-300 transition hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                            </button>
-                        </td>
-                    </tr>
-                                                    <tr v-if="!expensesPast.length"><td :colspan="canManage ? 9 : 8" class="px-6 py-6 text-center text-slate-400">Прошлых расходов не найдено</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                </Transition>
             </div>
         </div>
 
@@ -623,81 +631,88 @@ const delExpense = async (e) => {
              странице; здесь остаются только Счета на всю ширину. -->
         <div class="mt-6">
             <!-- Счета -->
-            <div class="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-200">
-                <div class="flex flex-wrap items-center justify-between gap-2 border-b px-6 py-4">
-                    <span class="text-sm font-semibold text-slate-900">Счета</span>
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                    <h3 class="text-sm font-semibold text-slate-900">Счета</h3>
                     <!-- Дебиторка: выставлено / оплачено / клиенты должны -->
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        <span class="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600">выставлено <b class="tabular-nums">{{ money(invoiceTotals.invoiced) }}</b></span>
-                        <span class="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-700">оплачено <b class="tabular-nums">{{ money(invoiceTotals.paid) }}</b></span>
-                        <span class="rounded-full px-2.5 py-1 font-medium" :class="invoiceTotals.debt > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'">долг клиентов <b class="tabular-nums">{{ money(invoiceTotals.debt) }}</b></span>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">выставлено <b class="tabular-nums">{{ money(invoiceTotals.invoiced) }}</b></span>
+                        <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">оплачено <b class="tabular-nums">{{ money(invoiceTotals.paid) }}</b></span>
+                        <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="invoiceTotals.debt > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-400'">долг клиентов <b class="tabular-nums">{{ money(invoiceTotals.debt) }}</b></span>
                     </div>
                 </div>
                 <!-- Сегодняшние счета -->
-                <table class="min-w-full divide-y divide-slate-100 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                        <tr>
-                            <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Сделка</th><th class="px-4 py-3">Клиент</th><th class="px-4 py-3">Сумма</th>
-                            <th class="px-4 py-3">Оплачено</th><th class="px-4 py-3">Статус</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="inv in invoicesToday" :key="inv.id" class="hover:bg-slate-50">
-                            <td class="px-4 py-3 font-medium text-slate-900">{{ inv.number }}</td>
-                            <td class="px-4 py-3">
-                                <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
-                                    class="text-indigo-600 hover:underline">{{ inv.link.label }}</Link>
-                                <span v-else-if="inv.link" class="text-slate-400">{{ inv.link.label }}</span>
-                                <span v-else class="text-slate-400">—</span>
-                            </td>
-                            <td class="px-4 py-3 text-slate-500">{{ inv.client?.name ?? '—' }}</td>
-                            <td class="px-4 py-3">{{ money(inv.amount) }}</td>
-                            <td class="px-4 py-3 text-green-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
-                            <td class="px-4 py-3"><StatusBadge :status="inv.status" /></td>
-                        </tr>
-                        <tr v-if="!invoicesToday.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Сегодня счетов нет</td></tr>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                            <tr>
+                                <th class="px-6 py-2.5">Номер</th><th class="px-4 py-2.5">Сделка</th><th class="px-4 py-2.5">Клиент</th><th class="px-4 py-2.5 text-right">Сумма</th>
+                                <th class="px-4 py-2.5 text-right">Оплачено</th><th class="px-4 py-2.5">Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="inv in invoicesToday" :key="inv.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                <td class="whitespace-nowrap px-6 py-2.5 font-medium text-slate-900">{{ inv.number }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5">
+                                    <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
+                                        class="font-medium text-indigo-600 hover:underline">{{ inv.link.label }}</Link>
+                                    <span v-else-if="inv.link" class="text-slate-400">{{ inv.link.label }}</span>
+                                    <span v-else class="text-slate-400">—</span>
+                                </td>
+                                <td class="px-4 py-2.5 text-slate-500">{{ inv.client?.name ?? '—' }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(inv.amount) }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5"><StatusBadge :status="inv.status" /></td>
+                            </tr>
+                            <tr v-if="!invoicesToday.length"><td colspan="6" class="px-6 py-10 text-center text-sm text-slate-400">Сегодня счетов нет</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <!-- Прошлые счета: аккордеон с поиском по номеру -->
                 <div class="border-t border-slate-100">
                     <button type="button" @click="invPastOpen = !invPastOpen" class="flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left">
                         <div class="flex min-w-0 items-center gap-2">
-                            <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform" :class="invPastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                            <svg class="h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200" :class="invPastOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                             <span class="text-sm font-semibold text-slate-900">Прошлые счета</span>
                         </div>
-                        <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold tabular-nums text-slate-600">{{ invoicesPastStats?.count ?? 0 }} · {{ money(invoicesPastStats?.sum) }}</span>
+                        <span class="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">{{ invoicesPastStats?.count ?? 0 }} · {{ money(invoicesPastStats?.sum) }}</span>
                     </button>
-                    <div v-show="invPastOpen" class="border-t border-slate-100">
-                        <div class="flex flex-wrap items-center gap-2 px-6 py-3">
-                            <input v-model="invSearch" @keyup.enter="applyInvFilters" type="text" placeholder="Поиск по номеру счёта"
-                                class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                            <button @click="applyInvFilters" class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-900">Найти</button>
-                            <button v-if="filters?.search" @click="resetInvFilters"
-                                class="rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100">Сбросить</button>
+                    <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 -translate-y-1"
+                        leave-active-class="transition duration-150 ease-in" leave-to-class="opacity-0 -translate-y-1">
+                        <div v-show="invPastOpen" class="border-t border-slate-100">
+                            <div class="flex flex-wrap items-center gap-2 px-6 py-3">
+                                <input v-model="invSearch" @keyup.enter="applyInvFilters" type="text" placeholder="Поиск по номеру счёта"
+                                    class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                                <button @click="applyInvFilters" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">Найти</button>
+                                <button v-if="filters?.search" @click="resetInvFilters"
+                                    class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full text-sm">
+                                    <tbody class="divide-y divide-slate-50">
+                                        <tr v-for="inv in invoicesPast" :key="inv.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                            <td class="whitespace-nowrap px-6 py-2.5">
+                                                <span class="font-medium text-slate-900">{{ inv.number }}</span>
+                                                <span class="block text-[10px] text-slate-400">{{ formatDate(inv.date) }}</span>
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-2.5">
+                                                <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
+                                                    class="font-medium text-indigo-600 hover:underline">{{ inv.link.label }}</Link>
+                                                <span v-else-if="inv.link" class="text-slate-400">{{ inv.link.label }}</span>
+                                                <span v-else class="text-slate-400">—</span>
+                                            </td>
+                                            <td class="px-4 py-2.5 text-slate-500">{{ inv.client?.name ?? '—' }}</td>
+                                            <td class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(inv.amount) }}</td>
+                                            <td class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
+                                            <td class="whitespace-nowrap px-4 py-2.5"><StatusBadge :status="inv.status" /></td>
+                                        </tr>
+                                        <tr v-if="!invoicesPast.length"><td colspan="6" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых счетов не найдено</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <table class="min-w-full divide-y divide-slate-100 text-sm">
-                            <tbody class="divide-y divide-slate-50">
-                                <tr v-for="inv in invoicesPast" :key="inv.id" class="hover:bg-slate-50">
-                                    <td class="px-4 py-3">
-                                        <span class="font-medium text-slate-900">{{ inv.number }}</span>
-                                        <span class="block text-[10px] text-slate-400">{{ formatDate(inv.date) }}</span>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <Link v-if="inv.link && inv.link.id" :href="route(inv.link.type === 'project' ? 'projects.show' : 'deals.show', inv.link.id)"
-                                            class="text-indigo-600 hover:underline">{{ inv.link.label }}</Link>
-                                        <span v-else-if="inv.link" class="text-slate-400">{{ inv.link.label }}</span>
-                                        <span v-else class="text-slate-400">—</span>
-                                    </td>
-                                    <td class="px-4 py-3 text-slate-500">{{ inv.client?.name ?? '—' }}</td>
-                                    <td class="px-4 py-3">{{ money(inv.amount) }}</td>
-                                    <td class="px-4 py-3 text-green-600">{{ money(inv.payments_sum_amount ?? 0) }}</td>
-                                    <td class="px-4 py-3"><StatusBadge :status="inv.status" /></td>
-                                </tr>
-                                <tr v-if="!invoicesPast.length"><td colspan="6" class="px-6 py-6 text-center text-sm text-slate-400">Прошлых счетов не найдено</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    </Transition>
                 </div>
             </div>
         </div>
@@ -788,11 +803,11 @@ const delExpense = async (e) => {
                     </div>
                     <div class="sm:col-span-2 flex gap-2">
                         <button type="button" @click="rForm.method = 'cash'"
-                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                            :class="rForm.method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">В кассу (наличные)</button>
+                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors duration-150"
+                            :class="rForm.method === 'cash' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">В кассу (наличные)</button>
                         <button type="button" @click="rForm.method = 'bank'"
-                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                            :class="rForm.method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500'">На счёт (банк)</button>
+                            class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors duration-150"
+                            :class="rForm.method === 'bank' ? 'border-sky-500 bg-sky-50 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">На счёт (банк)</button>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Откуда поступили *</label>
@@ -837,11 +852,11 @@ const delExpense = async (e) => {
                     <div class="sm:col-span-2">
                         <div class="flex gap-2">
                             <button type="button" @click="cForm.payment_method = 'cash'"
-                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                                :class="cForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Наличные</button>
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors duration-150"
+                                :class="cForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">Наличные</button>
                             <button type="button" @click="cForm.payment_method = 'bank'"
-                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
-                                :class="cForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors duration-150"
+                                :class="cForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-50 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">Банк (счёт)</button>
                         </div>
                         <!-- Списывается с поступлений: остатки кассы/счёта -->
                         <div class="mt-1.5 text-[11px]" :class="cOverBalance() ? 'font-semibold text-rose-600' : 'text-slate-400'">
@@ -856,7 +871,7 @@ const delExpense = async (e) => {
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Чек / квитанция (фото или PDF, необязательно)</label>
                         <input type="file" accept="image/*,.pdf" @change="onCReceipt"
-                            class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
+                            class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-600" />
                         <div v-if="cForm.errors.file" class="mt-1 text-xs text-red-600">{{ cForm.errors.file }}</div>
                     </div>
                 </div>
@@ -869,19 +884,19 @@ const delExpense = async (e) => {
         <!-- Категории «Расход компании»: управление списком -->
         <Modal :show="showCats" max-width="md" @close="showCats = false">
             <div class="p-6">
-                <h3 class="mb-1 text-base font-semibold text-slate-900">Категории расходов компании</h3>
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">Категории расходов компании</h2>
                 <p class="mb-4 text-xs text-slate-400">Переименуйте прямо в поле (сохранение — Enter или клик мимо), ✕ — удалить.</p>
                 <div class="max-h-72 space-y-2 overflow-y-auto pr-1">
                     <div v-for="c in categories" :key="c.id" class="flex items-center gap-2">
                         <input v-model="catNames[c.id]" @keyup.enter="saveCat(c)" @blur="saveCat(c)" type="text"
-                            class="flex-1 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                        <button @click="delCat(c)" class="rounded p-1.5 text-slate-300 transition hover:text-rose-600" title="Удалить категорию">✕</button>
+                            class="flex-1 rounded-md border-slate-300 text-sm shadow-sm" />
+                        <button @click="delCat(c)" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить категорию">✕</button>
                     </div>
                     <div v-if="!categories.length" class="py-4 text-center text-sm text-slate-400">Категорий пока нет</div>
                 </div>
                 <div class="mt-4 flex gap-2">
                     <input v-model="newCat" @keyup.enter="addCat" type="text" placeholder="Новая категория…"
-                        class="flex-1 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                        class="flex-1 rounded-md border-slate-300 text-sm shadow-sm" />
                     <PrimaryButton type="button" @click="addCat">Добавить</PrimaryButton>
                 </div>
                 <div class="mt-4 text-right">
@@ -889,5 +904,5 @@ const delExpense = async (e) => {
                 </div>
             </div>
         </Modal>
-    </AppLayout>
+    </FinanceLayout>
 </template>
