@@ -148,7 +148,8 @@ const del = async (e) => {
                 <div v-if="confirmed.length" class="divide-y divide-slate-50">
                     <div v-for="e in confirmed" :key="e.id" class="group flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-3 transition-colors duration-150 hover:bg-slate-50/60">
                         <!-- Дата -->
-                        <span class="w-16 shrink-0 whitespace-nowrap text-xs tabular-nums text-slate-500">{{ formatDate(e.date) }}</span>
+                        <!-- Компактная дата: длинная («14 августа 2026 г.») не влезает в колонку и наезжает на описание -->
+                        <span class="w-20 shrink-0 whitespace-nowrap text-xs tabular-nums text-slate-500">{{ new Date(e.date).toLocaleDateString('ru-RU') }}</span>
                         <!-- Что и категория -->
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2">
