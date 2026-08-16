@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import Modal from '@/Components/Modal.vue';
@@ -212,6 +213,7 @@ const delExpense = async (e) => {
 
 <template>
     <Head title="Финансы" />
+    <AppLayout>
     <FinanceLayout title="Финансы" subtitle="обзор: деньги компании" active="finance.index" wide>
         <template #actions>
             <span v-if="monthActive" class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">Сводка за {{ monthLabel }}</span>
@@ -905,4 +907,5 @@ const delExpense = async (e) => {
             </div>
         </Modal>
     </FinanceLayout>
+    </AppLayout>
 </template>
