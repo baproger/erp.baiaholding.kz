@@ -141,6 +141,21 @@ class PayrollController extends Controller
             return $r;
         });
 
+        // Переключатель фирмы (шапка): выбрана конкретная компания — ведомость,
+        // секции и плитки сужаются до неё; «Все» — обе фирмы, как раньше.
+        // Сотрудник без фирмы виден везде (иначе новая карточка потеряется).
+        $currentCompany = \App\Support\CurrentCompany::id() ?: null;
+        if ($currentCompany) {
+            $rows = $rows->filter(fn ($r) => $r['company_ids'] === []
+                || in_array($currentCompany, $r['company_ids'], true))->values();
+        }
+        // В плитки деньги «двойного» сотрудника входят только по его основной
+        // фирме — то же правило, что в итогах секций (нет двойного счёта).
+        $counted = $currentCompany
+            ? $rows->filter(fn ($r) => $r['primary_company_id'] === null
+                || (int) $r['primary_company_id'] === $currentCompany)
+            : $rows;
+
         return Inertia::render('Payroll/Index', [
             'rows' => $rows,
             'leadership' => $leadership,
@@ -149,26 +164,28 @@ class PayrollController extends Controller
             'normHours' => $normHours,
             'deptNorms' => $deptNorms,
             'taxRate' => $taxRate * 100,
-            'companies' => \App\Models\Company::where('is_active', true)->orderBy('id')->get(['id', 'name']),
+            'companies' => \App\Models\Company::where('is_active', true)
+                ->when($currentCompany, fn ($q, $c) => $q->where('id', $c))
+                ->orderBy('id')->get(['id', 'name']),
             // Отделы всех фирм: по ним ведомость раскладывает сотрудника
             // в отдел ЕГО фирмы (у «двойного» department_id указывает на одну).
             'departments' => \App\Models\Department::where('is_active', true)
                 ->orderBy('company_id')->orderBy('name')->get(['id', 'company_id', 'name', 'code']),
             'totals' => [
-                'budget' => (float) $rows->sum('budget'),
-                'tax' => (float) $rows->sum('tax'),
-                'expense' => (float) $rows->sum('expense'),
-                'bonus' => (float) $rows->sum('bonus'),
-                'bonus_month' => (float) $rows->sum('bonus_month'),
-                'salary' => (float) $rows->sum('salary'),
-                'base' => (float) $rows->sum('base'),
-                'payout' => (float) $rows->sum('payout'),
-                'deductions' => (float) $rows->sum('deductions'),
-                'additions' => (float) $rows->sum('additions'),
-                'debt_charge' => (float) $rows->sum('debt_charge'),
-                'debt_remaining' => (float) $rows->sum('debt_remaining'),
-                'final' => (float) $rows->sum('final'),
-                'company' => (float) $rows->sum('company'),
+                'budget' => (float) $counted->sum('budget'),
+                'tax' => (float) $counted->sum('tax'),
+                'expense' => (float) $counted->sum('expense'),
+                'bonus' => (float) $counted->sum('bonus'),
+                'bonus_month' => (float) $counted->sum('bonus_month'),
+                'salary' => (float) $counted->sum('salary'),
+                'base' => (float) $counted->sum('base'),
+                'payout' => (float) $counted->sum('payout'),
+                'deductions' => (float) $counted->sum('deductions'),
+                'additions' => (float) $counted->sum('additions'),
+                'debt_charge' => (float) $counted->sum('debt_charge'),
+                'debt_remaining' => (float) $counted->sum('debt_remaining'),
+                'final' => (float) $counted->sum('final'),
+                'company' => (float) $counted->sum('company'),
             ],
         ]);
     }
