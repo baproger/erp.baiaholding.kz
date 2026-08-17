@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
+import Avatar from '@/Components/Avatar.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { onMounted, onUnmounted } from 'vue';
 import { formatDuration } from '@/utils/format';
@@ -88,6 +89,11 @@ const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(
                                 <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">{{ p.deal?.number || p.number }}</span>
                             </div>
                             <div v-if="p.deal?.address" class="mt-1 text-[11px] leading-snug text-slate-400">📍 {{ p.deal.address }}</div>
+                            <!-- Ответственный — сразу видно, кто ведёт заказ -->
+                            <div v-if="p.responsible" class="mt-1.5 flex items-center gap-1.5">
+                                <Avatar :name="p.responsible.name" :src="p.responsible.avatar" :size="18" />
+                                <span class="truncate text-[11px] font-medium text-slate-600">{{ p.responsible.name }}</span>
+                            </div>
                             <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-slate-400">
                                 <span title="Сколько заказ находится в цехе">⏱ в цехе <span class="font-medium text-slate-600">{{ inWorkshop(p) ?? '—' }}</span></span>
                                 <span v-if="onStage(p)">на этапе {{ onStage(p) }}</span>
@@ -110,6 +116,7 @@ const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(
                         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                             <tr>
                                 <th class="px-6 py-2.5">Номер</th><th class="px-4 py-2.5">Компания</th><th class="px-4 py-2.5">Клиент</th>
+                                <th class="px-4 py-2.5">Ответственный</th>
                                 <th class="px-4 py-2.5">Этап</th><th v-if="canSeeMoney" class="px-4 py-2.5 text-right">Бюджет</th><th class="px-4 py-2.5">Статус</th>
                             </tr>
                         </thead>
@@ -118,6 +125,13 @@ const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(
                                 <td class="whitespace-nowrap px-6 py-2.5 text-slate-500">{{ p.number }}</td>
                                 <td class="px-4 py-2.5 font-medium text-slate-900">{{ p.deal?.company_name || p.name }}</td>
                                 <td class="px-4 py-2.5 text-slate-500">{{ p.client?.name ?? '—' }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5">
+                                    <span v-if="p.responsible" class="flex items-center gap-1.5">
+                                        <Avatar :name="p.responsible.name" :src="p.responsible.avatar" :size="20" />
+                                        <span class="text-xs font-medium text-slate-600">{{ p.responsible.name }}</span>
+                                    </span>
+                                    <span v-else class="text-xs text-slate-300">—</span>
+                                </td>
                                 <td class="px-4 py-2.5"><StatusBadge :status="p.stage?.name" :color="p.stage?.color" /></td>
                                 <td v-if="canSeeMoney" class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(p.budget) }}</td>
                                 <td class="px-4 py-2.5"><StatusBadge :status="p.status" /></td>
