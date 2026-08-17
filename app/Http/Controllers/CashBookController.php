@@ -192,7 +192,7 @@ class CashBookController extends Controller
         $expenses = $this->expenses($kind, $companyId)->whereDate('date', $on)
             ->with(['category:id,name', 'employee:id,name'])
             ->get(['id', 'amount', 'description', 'category_id', 'type', 'expenseable_type', 'expenseable_id',
-                'employee_id', 'employee_payout', 'date', 'created_at'])
+                'employee_id', 'employee_payout', 'date', 'created_at', 'company_id'])
             ->map(fn ($e) => [
                 'id' => 'exp-'.$e->id,
                 'kind' => 'out',
@@ -203,7 +203,7 @@ class CashBookController extends Controller
                 'tag' => $e->category?->name ?? match ($e->type) {
                     'delivery' => 'Доставка',
                     'purchase' => 'Закуп',
-                    'assembly' => 'Сборка',
+                    'assembly' => \App\Support\CompanyTerms::assembly($e->company_id ? (int) $e->company_id : null),
                     default => 'Расход',
                 },
                 'deal_id' => $e->expenseable_type === 'deal' ? $e->expenseable_id : null,

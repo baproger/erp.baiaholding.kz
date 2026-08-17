@@ -111,7 +111,7 @@ class AuditController extends Controller
             'company_id' => \App\Models\Company::pluck('name', 'id'),
             'confirmed_by' => \App\Models\User::pluck('name', 'id'),
             // Виды расхода: в снимке «delivery» читателю ничего не говорит.
-            'type' => collect(['delivery' => '🚚 Доставка', 'purchase' => '📦 Закуп', 'assembly' => '🔧 Сборка', 'direct' => 'Прямой']),
+            'type' => collect(['delivery' => '🚚 Доставка', 'purchase' => '📦 Закуп', 'assembly' => '🔧 '.\App\Support\CompanyTerms::assembly(), 'direct' => 'Прямой']),
         ];
         $logs->setCollection(\App\Support\AuditFormatter::humanize($logs->getCollection(), $maps));
 

@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
+import { assemblyLabel } from '@/utils/companyTerms';
 
 const props = defineProps({ rows: Array, byManager: { type: Array, default: () => [] }, byStage: { type: Array, default: () => [] }, isLeadership: { type: Boolean, default: true }, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array });
 
@@ -290,7 +291,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
         <!-- Легенда подсветки строк -->
         <div class="mt-6 flex flex-wrap items-center gap-4 px-1 text-[11px] text-slate-400">
             <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-emerald-200 to-emerald-50"></span> Оплата успешно · Акт · ЭСФ</span>
-            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-amber-200 to-amber-50"></span> Логистика · Сборка</span>
+            <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-amber-200 to-amber-50"></span> Логистика · {{ assemblyLabel() }}</span>
             <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-white ring-1 ring-inset ring-slate-200"></span> В работе</span>
         </div>
 
@@ -309,7 +310,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Закуп (склад)</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">🚚 Доставка</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">📦 Закуп</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">🔧 Сборка</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">🔧 {{ assemblyLabel() }}</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Прочие</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right" title="Доля партнёра: % от суммы договора">Партнёр</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Налог</th>

@@ -4,6 +4,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
+import { assemblyLabel } from '@/utils/companyTerms';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -219,7 +220,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 <th class="px-4 py-2.5 text-right">Закуп</th>
                                 <th class="px-4 py-2.5 text-right">Партнёр</th>
                                 <th class="px-4 py-2.5 text-right">Доставка</th>
-                                <th class="px-4 py-2.5 text-right">Сборка</th>
+                                <th class="px-4 py-2.5 text-right">{{ assemblyLabel() }}</th>
                                 <th class="px-4 py-2.5 text-right">Комиссия</th>
                                 <th class="px-4 py-2.5 text-right">Налог</th>
                                 <th class="px-4 py-2.5 text-right">Остаток</th>
@@ -362,7 +363,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <div v-if="!isShort"><InputLabel value="Закуп цена" /><TextInput v-model="form.purchase_price" type="number" min="0" class="mt-1 w-full" /></div>
                     <div v-if="!isShort"><InputLabel value="Доля партнёра, %" /><TextInput v-model="form.partner_pct" type="number" min="0" max="100" step="0.1" class="mt-1 w-full" /></div>
                     <div v-if="!isShort"><InputLabel value="Доставка, грузчики" /><TextInput v-model="form.delivery" type="number" min="0" class="mt-1 w-full" /></div>
-                    <div v-if="!isShort"><InputLabel value="Сборка" /><TextInput v-model="form.assembly" type="number" min="0" class="mt-1 w-full" /></div>
+                    <div v-if="!isShort"><InputLabel :value="assemblyLabel()" /><TextInput v-model="form.assembly" type="number" min="0" class="mt-1 w-full" /></div>
                     <div v-if="!isShort"><InputLabel value="Комиссия (ГЗ, Омаркет, Самрук)" /><TextInput v-model="form.commission" type="number" min="0" class="mt-1 w-full" /></div>
                     <div class="sm:col-span-2">
                         <InputLabel value="Комментарий" />

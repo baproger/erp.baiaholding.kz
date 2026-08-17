@@ -321,7 +321,7 @@ class PreDealController extends Controller
         // деньги физически ещё не потрачены, поэтому на маржу сделки и на
         // кассу они не влияют, пока бухгалтер не подтвердит их чеком
         // (просьба владельца 09.08.2026 — раньше подтверждались автоматом).
-        foreach ([['delivery', '🚚 Доставка'], ['assembly', '🔧 Сборка']] as [$type, $label]) {
+        foreach ([['delivery', '🚚 Доставка'], ['assembly', '🔧 '.\App\Support\CompanyTerms::assembly($companyId)]] as [$type, $label]) {
             $amount = (float) $preDeal->{$type};
             if ($amount > 0) {
                 \App\Models\Expense::create([
