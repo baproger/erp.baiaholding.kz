@@ -452,15 +452,23 @@ const donut = computed(() => {
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                                <tr><th class="px-5 py-2.5">Класс</th><th class="px-5 py-2.5">Сделка</th><th class="px-5 py-2.5">Доход</th><th class="px-5 py-2.5">Доля</th><th class="px-5 py-2.5">Накопл.</th></tr>
+                                <tr><th class="px-5 py-2.5">Класс</th><th class="px-5 py-2.5">Сделка</th><th class="px-5 py-2.5 text-right">Доход</th><th class="px-5 py-2.5 text-right">Доля</th><th class="px-5 py-2.5 text-right">Накопл.</th></tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
-                                <tr v-for="row in abc" :key="row.number" class="hover:bg-slate-50">
+                                <tr v-for="row in abc" :key="row.number" class="transition-colors duration-150 hover:bg-slate-50/60">
                                     <td class="px-5 py-2.5"><span class="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white" :class="{ A: 'bg-emerald-600', B: 'bg-amber-500', C: 'bg-slate-400' }[row.class]">{{ row.class }}</span></td>
-                                    <td class="px-5 py-2.5"><span class="text-slate-400">{{ row.number }}</span> <span class="text-slate-700">{{ row.name }}</span></td>
-                                    <td class="px-5 py-2.5 font-medium tabular-nums text-slate-900">{{ money(row.value) }}</td>
-                                    <td class="px-5 py-2.5 tabular-nums text-slate-500">{{ row.share }}%</td>
-                                    <td class="px-5 py-2.5 tabular-nums text-slate-400">{{ row.cumulative }}%</td>
+                                    <td class="max-w-52 px-5 py-2.5">
+                                        <div class="truncate font-medium text-slate-800" :title="row.name">{{ row.name }}</div>
+                                        <div class="text-[11px] text-slate-400">{{ row.number }}</div>
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(row.value) }}</td>
+                                    <td class="whitespace-nowrap px-5 py-2.5 text-right">
+                                        <span class="inline-flex items-center justify-end gap-2">
+                                            <span class="h-1 w-12 overflow-hidden rounded-full bg-slate-100"><span class="block h-1 rounded-full bg-indigo-400" :style="{ width: Math.min(100, row.share) + '%' }"></span></span>
+                                            <span class="w-11 tabular-nums text-slate-600">{{ row.share }}%</span>
+                                        </span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-5 py-2.5 text-right text-xs tabular-nums text-slate-400">{{ row.cumulative }}%</td>
                                 </tr>
                                 <tr v-if="!abc.length"><td colspan="5" class="px-5 py-8 text-center text-slate-400">Пока нет оплат</td></tr>
                             </tbody>

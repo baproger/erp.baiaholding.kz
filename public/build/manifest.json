@@ -1,22 +1,26 @@
 {
-  "_AppLayout-BYGNrdED.js": {
-    "file": "assets/AppLayout-BYGNrdED.js",
+  "_AppLayout-CRsfW2e8.css": {
+    "file": "assets/AppLayout-CRsfW2e8.css",
+    "src": "_AppLayout-CRsfW2e8.css"
+  },
+  "_AppLayout-DUN7BKRN.js": {
+    "file": "assets/AppLayout-DUN7BKRN.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js",
-      "_Modal-qf75mRK_.js",
+      "_Modal-DvVFJqSd.js",
       "__plugin-vue_export-helper-BDNMzG2s.js"
     ],
     "css": [
       "assets/AppLayout-CRsfW2e8.css"
     ]
   },
-  "_AppLayout-CRsfW2e8.css": {
-    "file": "assets/AppLayout-CRsfW2e8.css",
-    "src": "_AppLayout-CRsfW2e8.css"
+  "_AuthSplitLayout-Cn3inLpX.css": {
+    "file": "assets/AuthSplitLayout-Cn3inLpX.css",
+    "src": "_AuthSplitLayout-Cn3inLpX.css"
   },
-  "_AuthSplitLayout-C2CHOEF8.js": {
-    "file": "assets/AuthSplitLayout-C2CHOEF8.js",
+  "_AuthSplitLayout-QqlIJmOG.js": {
+    "file": "assets/AuthSplitLayout-QqlIJmOG.js",
     "name": "AuthSplitLayout",
     "imports": [
       "resources/js/app.js",
@@ -26,90 +30,82 @@
       "assets/AuthSplitLayout-Cn3inLpX.css"
     ]
   },
-  "_AuthSplitLayout-Cn3inLpX.css": {
-    "file": "assets/AuthSplitLayout-Cn3inLpX.css",
-    "src": "_AuthSplitLayout-Cn3inLpX.css"
-  },
-  "_Avatar-CiVcDn9U.js": {
-    "file": "assets/Avatar-CiVcDn9U.js",
+  "_Avatar-DZiF5H47.js": {
+    "file": "assets/Avatar-DZiF5H47.js",
     "name": "Avatar",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_DangerButton-DkRyq8S1.js": {
-    "file": "assets/DangerButton-DkRyq8S1.js",
+  "_DangerButton-DVEgMxJL.js": {
+    "file": "assets/DangerButton-DVEgMxJL.js",
     "name": "DangerButton",
     "imports": [
       "resources/js/app.js",
       "__plugin-vue_export-helper-BDNMzG2s.js"
     ]
   },
-  "_FinanceLayout-B-UxU0cl.js": {
-    "file": "assets/FinanceLayout-B-UxU0cl.js",
+  "_FinanceLayout-CAwctrPP.js": {
+    "file": "assets/FinanceLayout-CAwctrPP.js",
     "name": "FinanceLayout",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_GuestLayout-DH-2Xpww.js": {
-    "file": "assets/GuestLayout-DH-2Xpww.js",
+  "_GuestLayout-CBl9sztI.js": {
+    "file": "assets/GuestLayout-CBl9sztI.js",
     "name": "GuestLayout",
     "imports": [
       "resources/js/app.js",
       "__plugin-vue_export-helper-BDNMzG2s.js"
     ]
   },
-  "_HistoryPanel-DyvZGwrz.js": {
-    "file": "assets/HistoryPanel-DyvZGwrz.js",
+  "_HistoryPanel-CNqeuo9K.js": {
+    "file": "assets/HistoryPanel-CNqeuo9K.js",
     "name": "HistoryPanel",
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_deadline-D_ckIbMa.js",
       "_format-u8qIuRle.js",
-      "_companyTerms-Ce-hjNmR.js"
+      "_companyTerms-GREFnky5.js"
     ]
   },
-  "_InputError-1xFx7HZR.js": {
-    "file": "assets/InputError-1xFx7HZR.js",
+  "_InputError-BPpyZVIP.js": {
+    "file": "assets/InputError-BPpyZVIP.js",
     "name": "InputError",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_Modal-qf75mRK_.js": {
-    "file": "assets/Modal-qf75mRK_.js",
+  "_Modal-DvVFJqSd.js": {
+    "file": "assets/Modal-DvVFJqSd.js",
     "name": "Modal",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_PageLayout-CI1ElCNR.js": {
-    "file": "assets/PageLayout-CI1ElCNR.js",
+  "_PageLayout-DCVrJUEG.js": {
+    "file": "assets/PageLayout-DCVrJUEG.js",
     "name": "PageLayout",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_Pagination-C3BsUa5T.js": {
-    "file": "assets/Pagination-C3BsUa5T.js",
+  "_Pagination-DtvuyDmm.js": {
+    "file": "assets/Pagination-DtvuyDmm.js",
     "name": "Pagination",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_PrimaryButton-tGAGJiUN.css": {
-    "file": "assets/PrimaryButton-tGAGJiUN.css",
-    "src": "_PrimaryButton-tGAGJiUN.css"
-  },
-  "_PrimaryButton-yGpXe_VI.js": {
-    "file": "assets/PrimaryButton-yGpXe_VI.js",
+  "_PrimaryButton-ChWgHWPD.js": {
+    "file": "assets/PrimaryButton-ChWgHWPD.js",
     "name": "PrimaryButton",
     "imports": [
       "resources/js/app.js",
@@ -119,22 +115,26 @@
       "assets/PrimaryButton-tGAGJiUN.css"
     ]
   },
-  "_SecondaryButton-CVmkoHAs.js": {
-    "file": "assets/SecondaryButton-CVmkoHAs.js",
+  "_PrimaryButton-tGAGJiUN.css": {
+    "file": "assets/PrimaryButton-tGAGJiUN.css",
+    "src": "_PrimaryButton-tGAGJiUN.css"
+  },
+  "_SecondaryButton-Hfir6peE.js": {
+    "file": "assets/SecondaryButton-Hfir6peE.js",
     "name": "SecondaryButton",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_StatusBadge-BPR9jrM1.js": {
-    "file": "assets/StatusBadge-BPR9jrM1.js",
+  "_StatusBadge-l9RB6Mpk.js": {
+    "file": "assets/StatusBadge-l9RB6Mpk.js",
     "name": "StatusBadge",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_TextInput-CA6QeRQ-.js": {
-    "file": "assets/TextInput-CA6QeRQ-.js",
+  "_TextInput-8zkqwclO.js": {
+    "file": "assets/TextInput-8zkqwclO.js",
     "name": "TextInput",
     "imports": [
       "resources/js/app.js"
@@ -144,8 +144,8 @@
     "file": "assets/_plugin-vue_export-helper-BDNMzG2s.js",
     "name": "_plugin-vue_export-helper"
   },
-  "_companyTerms-Ce-hjNmR.js": {
-    "file": "assets/companyTerms-Ce-hjNmR.js",
+  "_companyTerms-GREFnky5.js": {
+    "file": "assets/companyTerms-GREFnky5.js",
     "name": "companyTerms",
     "imports": [
       "resources/js/app.js"
@@ -163,402 +163,402 @@
     "file": "assets/format-u8qIuRle.js",
     "name": "format"
   },
-  "_useStickyFilters-BmISQ9RX.js": {
-    "file": "assets/useStickyFilters-BmISQ9RX.js",
+  "_useStickyFilters-DlYebi9K.js": {
+    "file": "assets/useStickyFilters-DlYebi9K.js",
     "name": "useStickyFilters",
     "imports": [
       "resources/js/app.js"
     ]
   },
   "resources/js/Pages/Analytics/Index.vue": {
-    "file": "assets/Index-Atr1VHkx.js",
+    "file": "assets/Index-BJCBt5Iv.js",
     "name": "Index",
     "src": "resources/js/Pages/Analytics/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Avatar-CiVcDn9U.js",
-      "_useStickyFilters-BmISQ9RX.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Avatar-DZiF5H47.js",
+      "_useStickyFilters-DlYebi9K.js"
     ]
   },
   "resources/js/Pages/Audit/Index.vue": {
-    "file": "assets/Index-DvNy7zyz.js",
+    "file": "assets/Index-Du55CQ4W.js",
     "name": "Index",
     "src": "resources/js/Pages/Audit/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Pagination-C3BsUa5T.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Pagination-DtvuyDmm.js"
     ]
   },
   "resources/js/Pages/Auth/ConfirmPassword.vue": {
-    "file": "assets/ConfirmPassword-CVsEl8v0.js",
+    "file": "assets/ConfirmPassword-CipYejzf.js",
     "name": "ConfirmPassword",
     "src": "resources/js/Pages/Auth/ConfirmPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_GuestLayout-DH-2Xpww.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js"
+      "_GuestLayout-CBl9sztI.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js"
     ]
   },
   "resources/js/Pages/Auth/ForgotPassword.vue": {
-    "file": "assets/ForgotPassword-CQy504EA.js",
+    "file": "assets/ForgotPassword-Dp74-DWR.js",
     "name": "ForgotPassword",
     "src": "resources/js/Pages/Auth/ForgotPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AuthSplitLayout-C2CHOEF8.js"
+      "_AuthSplitLayout-QqlIJmOG.js"
     ]
   },
   "resources/js/Pages/Auth/Login.vue": {
-    "file": "assets/Login-DQyI6d-X.js",
+    "file": "assets/Login-DLLMx5Ad.js",
     "name": "Login",
     "src": "resources/js/Pages/Auth/Login.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AuthSplitLayout-C2CHOEF8.js"
+      "_AuthSplitLayout-QqlIJmOG.js"
     ]
   },
   "resources/js/Pages/Auth/Register.vue": {
-    "file": "assets/Register-BJlwwFEz.js",
+    "file": "assets/Register-DLM5jfh_.js",
     "name": "Register",
     "src": "resources/js/Pages/Auth/Register.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AuthSplitLayout-C2CHOEF8.js"
+      "_AuthSplitLayout-QqlIJmOG.js"
     ]
   },
   "resources/js/Pages/Auth/ResetPassword.vue": {
-    "file": "assets/ResetPassword-BTyrMTnX.js",
+    "file": "assets/ResetPassword-D3x4X9Tf.js",
     "name": "ResetPassword",
     "src": "resources/js/Pages/Auth/ResetPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_GuestLayout-DH-2Xpww.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js"
+      "_GuestLayout-CBl9sztI.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js"
     ]
   },
   "resources/js/Pages/Auth/VerifyEmail.vue": {
-    "file": "assets/VerifyEmail-DmTthoqY.js",
+    "file": "assets/VerifyEmail-DD_ULExJ.js",
     "name": "VerifyEmail",
     "src": "resources/js/Pages/Auth/VerifyEmail.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_GuestLayout-DH-2Xpww.js",
-      "_PrimaryButton-yGpXe_VI.js"
+      "_GuestLayout-CBl9sztI.js",
+      "_PrimaryButton-ChWgHWPD.js"
     ]
   },
   "resources/js/Pages/Chat/Index.vue": {
-    "file": "assets/Index-e-6857P9.js",
+    "file": "assets/Index-C5JU1Tjz.js",
     "name": "Index",
     "src": "resources/js/Pages/Chat/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
       "__plugin-vue_export-helper-BDNMzG2s.js",
-      "_Avatar-CiVcDn9U.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js"
+      "_Avatar-DZiF5H47.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js"
     ],
     "css": [
       "assets/Index-Epnm3_hQ.css"
     ]
   },
   "resources/js/Pages/Clients/Index.vue": {
-    "file": "assets/Index--vWrkb95.js",
+    "file": "assets/Index-D02YdhJJ.js",
     "name": "Index",
     "src": "resources/js/Pages/Clients/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Pagination-C3BsUa5T.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
-      "_StatusBadge-BPR9jrM1.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Pagination-DtvuyDmm.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
+      "_StatusBadge-l9RB6Mpk.js"
     ]
   },
   "resources/js/Pages/Deals/Index.vue": {
-    "file": "assets/Index-DwEHB-WE.js",
+    "file": "assets/Index-Dl4dn4OG.js",
     "name": "Index",
     "src": "resources/js/Pages/Deals/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_Pagination-C3BsUa5T.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_Pagination-DtvuyDmm.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_deadline-D_ckIbMa.js",
       "_dealOptions-BCVRB-dz.js",
       "_format-u8qIuRle.js"
     ]
   },
   "resources/js/Pages/Deals/Overdue.vue": {
-    "file": "assets/Overdue-vtxQTxq5.js",
+    "file": "assets/Overdue-G2nen2U-.js",
     "name": "Overdue",
     "src": "resources/js/Pages/Deals/Overdue.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_format-u8qIuRle.js"
     ]
   },
   "resources/js/Pages/Deals/Show.vue": {
-    "file": "assets/Show-CFlmfUp5.js",
+    "file": "assets/Show-8b-YjoXq.js",
     "name": "Show",
     "src": "resources/js/Pages/Deals/Show.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_deadline-D_ckIbMa.js",
       "_dealOptions-BCVRB-dz.js",
       "_format-u8qIuRle.js",
-      "_HistoryPanel-DyvZGwrz.js"
+      "_HistoryPanel-CNqeuo9K.js"
     ]
   },
   "resources/js/Pages/Departments/Index.vue": {
-    "file": "assets/Index-B_6MczCG.js",
+    "file": "assets/Index-Cg2Yxce7.js",
     "name": "Index",
     "src": "resources/js/Pages/Departments/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Pagination-C3BsUa5T.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Pagination-DtvuyDmm.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js"
     ]
   },
   "resources/js/Pages/Finance/CashBook.vue": {
-    "file": "assets/CashBook-CVBnRCF6.js",
+    "file": "assets/CashBook-DK5yAH6W.js",
     "name": "CashBook",
     "src": "resources/js/Pages/Finance/CashBook.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_useStickyFilters-BmISQ9RX.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_useStickyFilters-DlYebi9K.js",
       "_format-u8qIuRle.js",
-      "_FinanceLayout-B-UxU0cl.js"
+      "_FinanceLayout-CAwctrPP.js"
     ]
   },
   "resources/js/Pages/Finance/Expenses.vue": {
-    "file": "assets/Expenses-BIigfZtc.js",
+    "file": "assets/Expenses-CfImZfwI.js",
     "name": "Expenses",
     "src": "resources/js/Pages/Finance/Expenses.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_PrimaryButton-yGpXe_VI.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_PrimaryButton-ChWgHWPD.js",
       "_format-u8qIuRle.js",
-      "_FinanceLayout-B-UxU0cl.js"
+      "_FinanceLayout-CAwctrPP.js"
     ]
   },
   "resources/js/Pages/Finance/Index.vue": {
-    "file": "assets/Index-BSOcla3E.js",
+    "file": "assets/Index-lTdLQonM.js",
     "name": "Index",
     "src": "resources/js/Pages/Finance/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_format-u8qIuRle.js",
-      "_FinanceLayout-B-UxU0cl.js"
+      "_FinanceLayout-CAwctrPP.js"
     ]
   },
   "resources/js/Pages/Finance/MyExpenses.vue": {
-    "file": "assets/MyExpenses-BOZ-gHdD.js",
+    "file": "assets/MyExpenses-Dwgqd7lI.js",
     "name": "MyExpenses",
     "src": "resources/js/Pages/Finance/MyExpenses.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
       "_format-u8qIuRle.js",
-      "_FinanceLayout-B-UxU0cl.js"
+      "_FinanceLayout-CAwctrPP.js"
     ]
   },
   "resources/js/Pages/Payroll/Index.vue": {
-    "file": "assets/Index-BLlhBdV4.js",
+    "file": "assets/Index-zi2zHei1.js",
     "name": "Index",
     "src": "resources/js/Pages/Payroll/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_Avatar-CiVcDn9U.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_Avatar-DZiF5H47.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
       "_format-u8qIuRle.js",
-      "_FinanceLayout-B-UxU0cl.js"
+      "_FinanceLayout-CAwctrPP.js"
     ]
   },
   "resources/js/Pages/PreDeals/Index.vue": {
-    "file": "assets/Index-Da0aM4oW.js",
+    "file": "assets/Index-DvhOLQJZ.js",
     "name": "Index",
     "src": "resources/js/Pages/PreDeals/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Avatar-CiVcDn9U.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Avatar-DZiF5H47.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
       "_format-u8qIuRle.js",
-      "_companyTerms-Ce-hjNmR.js"
+      "_companyTerms-GREFnky5.js"
     ]
   },
   "resources/js/Pages/Profile/Card.vue": {
-    "file": "assets/Card-DAzM0sMe.js",
+    "file": "assets/Card-Dx3j8w_l.js",
     "name": "Card",
     "src": "resources/js/Pages/Profile/Card.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
       "resources/js/Pages/Profile/Partials/UpdatePasswordForm.vue",
       "resources/js/Pages/Profile/Partials/DeleteUserForm.vue"
     ]
   },
   "resources/js/Pages/Profile/Partials/DeleteUserForm.vue": {
-    "file": "assets/DeleteUserForm-D3Ouw2KV.js",
+    "file": "assets/DeleteUserForm-B3JixBuv.js",
     "name": "DeleteUserForm",
     "src": "resources/js/Pages/Profile/Partials/DeleteUserForm.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_Modal-qf75mRK_.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_SecondaryButton-CVmkoHAs.js",
-      "_DangerButton-DkRyq8S1.js"
+      "_Modal-DvVFJqSd.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_SecondaryButton-Hfir6peE.js",
+      "_DangerButton-DVEgMxJL.js"
     ]
   },
   "resources/js/Pages/Profile/Partials/UpdatePasswordForm.vue": {
-    "file": "assets/UpdatePasswordForm-CwGzZLXm.js",
+    "file": "assets/UpdatePasswordForm-DNclZlEU.js",
     "name": "UpdatePasswordForm",
     "src": "resources/js/Pages/Profile/Partials/UpdatePasswordForm.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js"
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js"
     ]
   },
   "resources/js/Pages/Projects/Index.vue": {
-    "file": "assets/Index-np3V7mZ6.js",
+    "file": "assets/Index-t02q0HUM.js",
     "name": "Index",
     "src": "resources/js/Pages/Projects/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Avatar-CiVcDn9U.js",
-      "_Pagination-C3BsUa5T.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Avatar-DZiF5H47.js",
+      "_Pagination-DtvuyDmm.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_format-u8qIuRle.js"
     ]
   },
   "resources/js/Pages/Projects/Show.vue": {
-    "file": "assets/Show-BHK5w35C.js",
+    "file": "assets/Show-D_lHt3XZ.js",
     "name": "Show",
     "src": "resources/js/Pages/Projects/Show.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_StatusBadge-BPR9jrM1.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_StatusBadge-l9RB6Mpk.js",
       "_format-u8qIuRle.js",
-      "_HistoryPanel-DyvZGwrz.js"
+      "_HistoryPanel-CNqeuo9K.js"
     ]
   },
   "resources/js/Pages/Reports/Deals.vue": {
-    "file": "assets/Deals-XwwgTwCK.js",
+    "file": "assets/Deals-BZWAdn8Z.js",
     "name": "Deals",
     "src": "resources/js/Pages/Reports/Deals.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
+      "_AppLayout-DUN7BKRN.js",
       "__plugin-vue_export-helper-BDNMzG2s.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_companyTerms-Ce-hjNmR.js"
+      "_PageLayout-DCVrJUEG.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_companyTerms-GREFnky5.js"
     ],
     "css": [
       "assets/Deals-BPzmyhYX.css"
     ]
   },
   "resources/js/Pages/Screen/Enter.vue": {
-    "file": "assets/Enter-BTHM9ZqV.js",
+    "file": "assets/Enter-BFiqAQ5p.js",
     "name": "Enter",
     "src": "resources/js/Pages/Screen/Enter.vue",
     "isDynamicEntry": true,
@@ -567,17 +567,17 @@
     ]
   },
   "resources/js/Pages/Screen/Office.vue": {
-    "file": "assets/Office-BlFVs5oL.js",
+    "file": "assets/Office-Cu-y8OWa.js",
     "name": "Office",
     "src": "resources/js/Pages/Screen/Office.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_Avatar-CiVcDn9U.js"
+      "_Avatar-DZiF5H47.js"
     ]
   },
   "resources/js/Pages/Screen/Workshop.vue": {
-    "file": "assets/Workshop-DG-85WCW.js",
+    "file": "assets/Workshop-RFBKzeqN.js",
     "name": "Workshop",
     "src": "resources/js/Pages/Screen/Workshop.vue",
     "isDynamicEntry": true,
@@ -587,122 +587,122 @@
     ]
   },
   "resources/js/Pages/Settings/CustomFields.vue": {
-    "file": "assets/CustomFields-BtYS8LIr.js",
+    "file": "assets/CustomFields-CDNJUkQu.js",
     "name": "CustomFields",
     "src": "resources/js/Pages/Settings/CustomFields.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js"
     ]
   },
   "resources/js/Pages/Settings/General.vue": {
-    "file": "assets/General-BfVlRwCK.js",
+    "file": "assets/General-BQ9aQtY_.js",
     "name": "General",
     "src": "resources/js/Pages/Settings/General.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js"
     ]
   },
   "resources/js/Pages/Settings/Screens.vue": {
-    "file": "assets/Screens-DcNDImw6.js",
+    "file": "assets/Screens-B0LN637w.js",
     "name": "Screens",
     "src": "resources/js/Pages/Settings/Screens.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js"
     ]
   },
   "resources/js/Pages/Settings/Stages.vue": {
-    "file": "assets/Stages-CPSFU_4x.js",
+    "file": "assets/Stages-C2h1jJMQ.js",
     "name": "Stages",
     "src": "resources/js/Pages/Settings/Stages.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js"
     ]
   },
   "resources/js/Pages/Settings/Translations.vue": {
-    "file": "assets/Translations-BdsKxPi0.js",
+    "file": "assets/Translations-CeVskt4K.js",
     "name": "Translations",
     "src": "resources/js/Pages/Settings/Translations.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js"
     ]
   },
   "resources/js/Pages/Users/Index.vue": {
-    "file": "assets/Index-jnFnogcA.js",
+    "file": "assets/Index-ZxcG_QHf.js",
     "name": "Index",
     "src": "resources/js/Pages/Users/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Avatar-CiVcDn9U.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Avatar-DZiF5H47.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js"
     ]
   },
   "resources/js/Pages/Users/Show.vue": {
-    "file": "assets/Show-DWWvfN1g.js",
+    "file": "assets/Show-TNbJ-h4H.js",
     "name": "Show",
     "src": "resources/js/Pages/Users/Show.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_Avatar-CiVcDn9U.js",
-      "_useStickyFilters-BmISQ9RX.js"
+      "_AppLayout-DUN7BKRN.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_Avatar-DZiF5H47.js",
+      "_useStickyFilters-DlYebi9K.js"
     ]
   },
   "resources/js/Pages/Warehouse/Index.vue": {
-    "file": "assets/Index-BvZts778.js",
+    "file": "assets/Index-B9nStChm.js",
     "name": "Index",
     "src": "resources/js/Pages/Warehouse/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-BYGNrdED.js",
-      "_Modal-qf75mRK_.js",
-      "_PageLayout-CI1ElCNR.js",
-      "_useStickyFilters-BmISQ9RX.js",
-      "_InputError-1xFx7HZR.js",
-      "_TextInput-CA6QeRQ-.js",
-      "_PrimaryButton-yGpXe_VI.js",
-      "_SecondaryButton-CVmkoHAs.js",
+      "_AppLayout-DUN7BKRN.js",
+      "_Modal-DvVFJqSd.js",
+      "_PageLayout-DCVrJUEG.js",
+      "_useStickyFilters-DlYebi9K.js",
+      "_InputError-BPpyZVIP.js",
+      "_TextInput-8zkqwclO.js",
+      "_PrimaryButton-ChWgHWPD.js",
+      "_SecondaryButton-Hfir6peE.js",
       "_format-u8qIuRle.js"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-DDWQpUsk.js",
+    "file": "assets/app-qXqnKuiO.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -746,7 +746,7 @@
       "resources/js/Pages/Warehouse/Index.vue"
     ],
     "css": [
-      "assets/app-D9S2U__2.css"
+      "assets/app-Dq3dwKjb.css"
     ]
   }
 }
