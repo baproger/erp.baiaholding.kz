@@ -24,7 +24,7 @@ class ReportController extends Controller
         $user = $request->user();
         // Руководство видит отчёт целиком (бонусы всех менеджеров), МОП —
         // ТОЛЬКО свои сделки: свой срез «сколько сделал за месяц и где стоит».
-        $isLeadership = $user->hasAnyRole(['admin', 'director']);
+        $isLeadership = $user->hasAnyRole(['admin', 'director', 'financist']);
         abort_unless($isLeadership || $user->hasRole('manager'), 403);
 
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;

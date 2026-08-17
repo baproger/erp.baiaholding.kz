@@ -80,7 +80,9 @@ onUnmounted(() => document.removeEventListener('click', closePicker));
 
 const openDeal = (id) => router.get(route('deals.show', id));
 // Цвет маржи — та же шкала, что на Аналитике: ≥40 здоровая, 20–40 тонкая, ниже — плохая.
-const marginBadge = (m) => m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
+// Минусовая маржа (проект в убыток) — сплошной красный, отличим от просто низкой.
+const marginBadge = (m) => m < 0 ? 'bg-rose-600 text-white ring-rose-600'
+    : m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
 const paidPct = (r) => r.budget > 0 ? Math.min(100, Math.round(r.paid / r.budget * 100)) : 0;
 // ЭСФ и won просрочкой не считаются; Акт утверждение — считается.
 const isOverdue = (r) => r.deadline && !r.is_won && !r.is_esf && new Date(r.deadline) < new Date(new Date().toDateString());
@@ -266,8 +268,8 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(m.expense) }}</td>
                             <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(m.tax) }}</td>
                             <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money0(m.bonus) }}</td>
-                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money0(m.company) }}</td>
-                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-500">{{ m.margin }}%</td>
+                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums" :class="m.company < 0 ? 'text-rose-600' : 'text-slate-800'">{{ money0(m.company) }}</td>
+                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="m.margin < 0 ? 'font-semibold text-rose-600' : 'text-slate-500'">{{ m.margin }}%</td>
                         </tr>
                     </tbody>
                     <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
@@ -364,10 +366,10 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <td class="px-4 py-2.5 text-right tabular-nums text-rose-500">{{ money(r.tax) }}</td>
                             <td class="px-4 py-2.5 text-right tabular-nums" :class="r.remainder < 0 ? 'font-semibold text-rose-600' : 'text-slate-700'">{{ money(r.remainder) }}</td>
                             <td v-if="isLeadership" class="px-4 py-2.5 text-center">
-                                <span class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset" :class="marginBadge(r.margin)">{{ r.margin }}%</span>
+                                <span class="whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset" :class="marginBadge(r.margin)" :title="r.margin < 0 ? 'Проект в убыток' : null">{{ r.margin < 0 ? '▼ ' : '' }}{{ r.margin }}%</span>
                             </td>
                             <td class="px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}</td>
-                            <td v-if="isLeadership" class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">{{ money(r.company) }}</td>
+                            <td v-if="isLeadership" class="px-4 py-2.5 text-right font-semibold tabular-nums" :class="r.company < 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(r.company) }}</td>
                         </tr>
                         <tr v-if="!rows.length">
                             <td :colspan="isLeadership ? 17 : 15" class="px-6 py-10 text-center text-sm text-slate-400">

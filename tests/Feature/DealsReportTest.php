@@ -29,19 +29,19 @@ class DealsReportTest extends TestCase
         $this->seed(StageSeeder::class);
     }
 
-    public function test_report_renders_for_admin_and_director(): void
+    public function test_report_renders_for_admin_director_and_financist(): void
     {
+        // Финансист видит полный отчёт (маржа, минусовые проекты) — 17.08.2026.
         $this->actingAs($this->user('admin'))->get(route('reports.deals'))->assertOk();
         $this->actingAs($this->user('director'))->get(route('reports.deals'))->assertOk();
+        $this->actingAs($this->user('financist'))->get(route('reports.deals'))->assertOk();
     }
 
-    public function test_report_forbidden_for_financist_and_employee(): void
+    public function test_report_forbidden_for_employee(): void
     {
-        // Полный отчёт показывает бонусы ВСЕХ менеджеров — только admin/director
-        // (у МОПа свой урезанный срез, см. тесты ниже).
-        foreach (['financist', 'employee'] as $role) {
-            $this->actingAs($this->user($role))->get(route('reports.deals'))->assertForbidden();
-        }
+        // Полный отчёт показывает бонусы ВСЕХ менеджеров — рядовому сотруднику
+        // нельзя (у МОПа свой урезанный срез, см. тесты ниже).
+        $this->actingAs($this->user('employee'))->get(route('reports.deals'))->assertForbidden();
     }
 
     public function test_manager_sees_only_own_deals_and_cannot_spy_on_others(): void
