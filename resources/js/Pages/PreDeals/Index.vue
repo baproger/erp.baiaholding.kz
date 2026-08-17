@@ -216,7 +216,15 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 <th class="px-6 py-2.5">№ лота</th>
                                 <th class="px-4 py-2.5">Заказчик · товар</th>
                                 <th class="px-4 py-2.5 text-right">Договор · закуп</th>
-                                <th class="px-4 py-2.5 text-right">Расходы</th>
+                                <th class="px-4 py-2.5">
+                                    <div class="grid min-w-[24rem] grid-cols-5 gap-x-3 text-right">
+                                        <span>Партнёр</span>
+                                        <span>Доставка</span>
+                                        <span>{{ assemblyLabel() }}</span>
+                                        <span>Комиссия</span>
+                                        <span>Налог</span>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-2.5 text-right">Остаток</th>
                                 <th class="px-4 py-2.5 text-center">Маржа</th>
                                 <th class="px-4 py-2.5 text-center">Чек-лист</th>
@@ -252,28 +260,15 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                         <span class="block text-[11px] tabular-nums text-slate-400">закуп {{ money(p.purchase_price) }}</span>
                                     </td>
                                     <td class="px-4 py-2.5">
-                                        <div class="flex flex-wrap justify-end gap-x-4 gap-y-1">
-                                            <div v-if="Number(p.partner_sum)" class="text-right">
-                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">партнёр<template v-if="Number(p.partner_pct)"> · {{ Number(p.partner_pct) }}%</template></div>
-                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.partner_sum) }}</div>
-                                            </div>
-                                            <div v-if="Number(p.delivery)" class="text-right">
-                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">доставка</div>
-                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.delivery) }}</div>
-                                            </div>
-                                            <div v-if="Number(p.assembly)" class="text-right">
-                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">{{ assemblyLabel().toLowerCase() }}</div>
-                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.assembly) }}</div>
-                                            </div>
-                                            <div v-if="Number(p.commission)" class="text-right">
-                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">комиссия</div>
-                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.commission) }}</div>
-                                            </div>
-                                            <div v-if="Number(p.tax)" class="text-right">
-                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">налог</div>
-                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.tax) }}</div>
-                                            </div>
-                                            <span v-if="!Number(p.partner_sum) && !Number(p.delivery) && !Number(p.assembly) && !Number(p.commission) && !Number(p.tax)" class="text-[11px] text-slate-300">—</span>
+                                        <div class="grid min-w-[24rem] grid-cols-5 items-baseline gap-x-3 text-right text-[11px] tabular-nums">
+                                            <span :class="Number(p.partner_sum) ? 'font-semibold text-slate-700' : 'text-slate-300'">
+                                                {{ Number(p.partner_sum) ? money(p.partner_sum) : '—' }}
+                                                <span v-if="Number(p.partner_pct)" class="block text-[9px] font-normal text-slate-400">{{ Number(p.partner_pct) }}%</span>
+                                            </span>
+                                            <span :class="Number(p.delivery) ? 'font-semibold text-slate-700' : 'text-slate-300'">{{ Number(p.delivery) ? money(p.delivery) : '—' }}</span>
+                                            <span :class="Number(p.assembly) ? 'font-semibold text-slate-700' : 'text-slate-300'">{{ Number(p.assembly) ? money(p.assembly) : '—' }}</span>
+                                            <span :class="Number(p.commission) ? 'font-semibold text-slate-700' : 'text-slate-300'">{{ Number(p.commission) ? money(p.commission) : '—' }}</span>
+                                            <span :class="Number(p.tax) ? 'font-semibold text-slate-700' : 'text-slate-300'">{{ Number(p.tax) ? money(p.tax) : '—' }}</span>
                                         </div>
                                     </td>
                                     <td class="px-4 py-2.5 text-right font-semibold tabular-nums" :class="Number(p.remainder) >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(p.remainder) }}</td>
