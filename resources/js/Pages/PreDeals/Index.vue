@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -65,9 +66,9 @@ const editingId = ref(null);
 // «Участие» (умолчание) считает маржу, «Звонок» и «КП» фиксируют только
 // контакт и сумму — им расчёт не нужен.
 const actionLabels = { participation: 'Участие', call: 'Звонок', offer: 'КП (ватсап)' };
-const actionClass = (a) => a === 'call' ? 'bg-sky-100 text-sky-700'
-    : a === 'offer' ? 'bg-violet-100 text-violet-700'
-    : 'bg-emerald-100 text-emerald-700';
+const actionClass = (a) => a === 'call' ? 'bg-sky-50 text-sky-700'
+    : a === 'offer' ? 'bg-indigo-50 text-indigo-700'
+    : 'bg-emerald-50 text-emerald-700';
 const SHORT_ACTIONS = ['call', 'offer'];
 
 const form = useForm({ action: 'participation', comment: '', lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', assembly: '', commission: '' });
@@ -135,7 +136,7 @@ const del = async (p) => {
 const expanded = ref(null);
 
 const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
-    ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
+    ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600';
 </script>
 
 <template>
@@ -143,184 +144,185 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
     <AppLayout>
         <template #header>Предварительные сделки</template>
 
-        <!-- Рейтинг менеджеров (руководству) -->
-        <div v-if="leadership && stats?.length" class="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-900">Рейтинг менеджеров <span class="font-normal text-slate-400">— по подтверждённым лотам</span></div>
-            <div class="flex gap-3 overflow-x-auto px-5 py-3">
-                <div v-for="(m, i) in stats" :key="m.name" class="flex min-w-56 flex-shrink-0 items-center gap-3 rounded-xl border p-3"
-                    :class="i === 0 ? 'border-amber-200 bg-amber-50/60' : 'border-slate-100 bg-slate-50'">
-                    <span class="text-lg font-bold" :class="i === 0 ? '' : 'text-slate-300'">{{ i === 0 ? '👑' : i + 1 }}</span>
-                    <Avatar :name="m.name" :src="m.avatar" :size="36" />
-                    <div class="min-w-0">
-                        <div class="truncate text-sm font-semibold text-slate-900">{{ m.name }}</div>
-                        <div class="text-xs text-slate-500">подтв. <b>{{ m.confirmed }}</b> из {{ m.total }} · <b class="tabular-nums">{{ money(m.sum) }}</b></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Результат по действиям: из скольких лотов вышли сделки и на сколько.
-             Уважает фильтр месяца и менеджера, но не фильтр действия — иначе
-             сравнивать было бы не с чем. -->
-        <div v-if="leadership && byAction?.length" class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <button v-for="a in byAction" :key="a.action" type="button"
-                @click="actionF = actionF === a.action ? '' : a.action; applyFilters()"
-                class="rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:shadow-md"
-                :class="actionF === a.action ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-slate-200'">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="rounded-full px-2 py-0.5 text-[11px] font-bold" :class="actionClass(a.action)">{{ a.label }}</span>
-                    <span class="text-[11px] text-slate-400">{{ a.total }} лотов</span>
-                </div>
-                <div class="mt-2 flex items-baseline gap-2">
-                    <span class="text-2xl font-bold tabular-nums text-emerald-600">{{ a.won }}</span>
-                    <span class="text-xs text-slate-400">выиграно · {{ a.conversion }}%</span>
-                </div>
-                <div class="mt-1 text-sm font-semibold tabular-nums text-slate-700">{{ money(a.won_sum) }}</div>
-                <div class="text-[11px] text-slate-400">сумма выигранных договоров</div>
-            </button>
-        </div>
-
-        <!-- Панель: фильтры + действия -->
-        <div class="mb-4 flex flex-wrap items-center gap-2">
-            <PrimaryButton @click="openCreate">+ Предв. сделка</PrimaryButton>
-            <div class="ml-auto flex flex-wrap items-center gap-2">
-                <select v-if="leadership" v-model="managerF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+        <PageLayout title="Предварительные сделки" subtitle="лоты: маржа, действия, рейтинг">
+            <template #actions>
+                <label class="flex items-center gap-1 text-xs text-slate-400" title="Показать лоты, внесённые в выбранном месяце — по датам">месяц
+                    <input v-model="monthF" @change="applyFilters" type="month" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                </label>
+                <button v-if="monthF" @click="monthF = ''; applyFilters()" class="text-xs font-medium text-indigo-600 hover:underline">сбросить</button>
+                <select v-if="leadership" v-model="managerF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все менеджеры</option>
                     <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
                 </select>
-                <select v-model="actionF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                <select v-model="actionF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все действия</option>
                     <option v-for="(label, a) in actionLabels" :key="a" :value="a">{{ label }}</option>
                 </select>
-                <select v-model="statusF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm">
+                <select v-model="statusF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все статусы</option>
                     <option value="new">В работе</option>
                     <option value="confirmed">Подтверждённые</option>
                 </select>
-                <label class="flex items-center gap-1 text-xs text-slate-400" title="Показать лоты, внесённые в выбранном месяце — по датам">месяц
-                    <input v-model="monthF" @change="applyFilters" type="month" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm" />
-                </label>
-                <button v-if="monthF" @click="monthF = ''; applyFilters()" class="text-xs font-medium text-indigo-600 hover:underline">сбросить</button>
-                <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">порог маржи: <b>{{ minMargin }}%</b></span>
-            </div>
-        </div>
+                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">порог маржи: <b class="tabular-nums">{{ minMargin }}%</b></span>
+                <PrimaryButton @click="openCreate">+ Предв. сделка</PrimaryButton>
+            </template>
 
-        <!-- Таблица как Excel -->
-        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="overflow-x-auto">
-                <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
-                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                        <tr>
-                            <th class="px-4 py-2.5">№ лота</th>
-                            <th class="px-4 py-2.5">Заказчик · товар</th>
-                            <th v-if="leadership" class="px-4 py-2.5">Менеджер</th>
-                            <th class="px-4 py-2.5 text-right">Сумма договора</th>
-                            <th class="px-4 py-2.5 text-right">Закуп</th>
-                            <th class="px-4 py-2.5 text-right">Партнёр</th>
-                            <th class="px-4 py-2.5 text-right">Доставка</th>
-                            <th class="px-4 py-2.5 text-right">Сборка</th>
-                            <th class="px-4 py-2.5 text-right">Комиссия</th>
-                            <th class="px-4 py-2.5 text-right">Налог</th>
-                            <th class="px-4 py-2.5 text-right">Остаток</th>
-                            <th class="px-4 py-2.5 text-center">Маржа</th>
-                            <th class="px-4 py-2.5 text-center">Выиграл</th>
-                            <th class="px-4 py-2.5 text-center">Чек-лист</th>
-                            <th class="px-4 py-2.5"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-50">
-                        <template v-for="g in lotGroups" :key="g.key">
-                        <!-- Секция «Сегодня» / «Прошлые» (аккордеон) -->
-                        <tr v-if="g.list.length || g.toggle" class="bg-slate-100/70" :class="g.toggle ? 'cursor-pointer select-none hover:bg-slate-200/60' : ''"
-                            @click="g.toggle && (showPast = !showPast)">
-                            <td :colspan="leadership ? 15 : 14" class="px-4 py-2">
-                                <span class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                                    <svg v-if="g.toggle" class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="showPast ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
-                                    {{ g.label }} <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }}</span>
-                                </span>
-                            </td>
-                        </tr>
-                        <tr v-if="g.key === 'today' && !g.list.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-4 text-center text-xs text-slate-300">Сегодня лотов ещё нет</td></tr>
-                        <template v-if="g.open">
-                        <template v-for="p in g.list" :key="p.id">
-                            <tr class="hover:bg-slate-50">
-                                <td class="px-4 py-3 text-slate-500">{{ p.lot_number || '—' }}<span class="block text-[10px] text-slate-300">{{ formatDate(p.created_at) }}</span>
-                                    <span v-if="p.tender_deadline" class="block text-[10px] font-semibold" :class="tenderUrgent(p) ? 'text-rose-600' : 'text-slate-400'">⏳ тендер до {{ formatDate(p.tender_deadline) }}</span>
-                                </td>
-                                <td class="max-w-56 px-4 py-3">
-                                    <div class="truncate font-medium text-slate-800" :title="p.customer">{{ p.customer || '—' }}<span v-if="p.bin" class="text-xs text-slate-400"> · {{ p.bin }}</span></div>
-                                    <div class="truncate text-xs text-slate-500" :title="p.product">{{ p.product }}</div>
-                                </td>
-                                <td v-if="leadership" class="px-4 py-3 text-xs text-slate-500">{{ p.user?.name ?? '—' }}</td>
-                                <td class="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{{ money(p.contract_sum) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.purchase_price) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.partner_sum) }}<span class="block text-[10px] text-slate-400">{{ Number(p.partner_pct) }}%</span></td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.delivery) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.assembly) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.commission) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(p.tax) }}</td>
-                                <td class="px-4 py-3 text-right font-semibold tabular-nums" :class="Number(p.remainder) >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(p.remainder) }}</td>
-                                <td class="px-4 py-3 text-center"><span class="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums" :class="marginClass(p.margin)">{{ Number(p.margin) }}%</span></td>
-                                <td class="px-4 py-3 text-center">
-                                    <span class="rounded-md px-2.5 py-1 text-xs font-bold" :class="Number(p.margin) >= minMargin ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'">{{ Number(p.margin) >= minMargin ? 'да' : 'нет' }}</span>
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    <button @click="expanded = expanded === p.id ? null : p.id"
-                                        class="rounded-full px-2.5 py-1 text-xs font-bold transition" :class="actionClass(p.action)">
-                                        {{ actionLabels[p.action] ?? '—' }}</button>
-                                </td>
-                                <td class="px-4 py-3 text-right whitespace-nowrap">
-                                    <template v-if="p.status === 'confirmed'">
-                                        <span class="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">→ {{ p.deal?.number ?? 'сделка' }}</span>
-                                        <button class="ml-1 rounded p-1 text-slate-300 transition hover:text-amber-600" title="Вернуть в предварительные (нажали «Выиграл» случайно)" @click="revertDeal(p)">↩</button>
-                                    </template>
-                                    <template v-else>
-                                        <button v-if="Number(p.margin) >= minMargin" @click="confirmDeal(p)"
-                                            class="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">Выиграл ✓</button>
-                                        <span v-else class="text-[11px] text-rose-400" title="Маржа ниже порога — сделка отклонена">отклонена</span>
-                                        <button class="ml-1 rounded p-1 text-slate-300 transition hover:text-indigo-600" title="Изменить" @click="openEdit(p)">
-                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                                        </button>
-                                        <button class="rounded p-1 text-slate-300 transition hover:text-rose-600" title="Удалить" @click="del(p)">✕</button>
-                                    </template>
+            <!-- Рейтинг менеджеров (руководству) — секция §6 -->
+            <div v-if="leadership && stats?.length" class="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                    <h3 class="text-sm font-semibold text-slate-900">Рейтинг менеджеров <span class="font-normal text-slate-400">— по подтверждённым лотам</span></h3>
+                </div>
+                <div class="flex gap-3 overflow-x-auto px-6 py-4">
+                    <div v-for="(m, i) in stats" :key="m.name" class="flex min-w-56 flex-shrink-0 items-center gap-3 rounded-xl border p-3"
+                        :class="i === 0 ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'">
+                        <span class="text-lg font-bold tabular-nums" :class="i === 0 ? '' : 'text-slate-300'">{{ i === 0 ? '👑' : i + 1 }}</span>
+                        <Avatar :name="m.name" :src="m.avatar" :size="36" />
+                        <div class="min-w-0">
+                            <div class="truncate text-sm font-semibold text-slate-900">{{ m.name }}</div>
+                            <div class="text-[11px] text-slate-400">подтв. <b class="text-slate-600">{{ m.confirmed }}</b> из {{ m.total }} · <b class="tabular-nums text-slate-600">{{ money(m.sum) }}</b></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Результат по действиям: из скольких лотов вышли сделки и на сколько.
+                 Уважает фильтр месяца и менеджера, но не фильтр действия — иначе
+                 сравнивать было бы не с чем. Плитки §5 -->
+            <div v-if="leadership && byAction?.length" class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <button v-for="a in byAction" :key="a.action" type="button"
+                    @click="actionF = actionF === a.action ? '' : a.action; applyFilters()"
+                    class="rounded-xl border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
+                    :class="actionF === a.action ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-slate-200'">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="actionClass(a.action)">{{ a.label }}</span>
+                        <span class="text-[11px] uppercase tracking-wide text-slate-400">{{ a.total }} лотов</span>
+                    </div>
+                    <div class="mt-1 flex items-baseline gap-2">
+                        <span class="whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ a.won }}</span>
+                        <span class="text-[11px] text-slate-400">выиграно · {{ a.conversion }}%</span>
+                    </div>
+                    <div class="mt-0.5 whitespace-nowrap text-sm font-semibold tabular-nums text-slate-800">{{ money(a.won_sum) }}</div>
+                    <div class="mt-0.5 text-[11px] text-slate-400">сумма выигранных договоров</div>
+                </button>
+            </div>
+
+            <!-- Таблица лотов §7 -->
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full whitespace-nowrap text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                            <tr>
+                                <th class="px-6 py-2.5">№ лота</th>
+                                <th class="px-4 py-2.5">Заказчик · товар</th>
+                                <th v-if="leadership" class="px-4 py-2.5">Менеджер</th>
+                                <th class="px-4 py-2.5 text-right">Сумма договора</th>
+                                <th class="px-4 py-2.5 text-right">Закуп</th>
+                                <th class="px-4 py-2.5 text-right">Партнёр</th>
+                                <th class="px-4 py-2.5 text-right">Доставка</th>
+                                <th class="px-4 py-2.5 text-right">Сборка</th>
+                                <th class="px-4 py-2.5 text-right">Комиссия</th>
+                                <th class="px-4 py-2.5 text-right">Налог</th>
+                                <th class="px-4 py-2.5 text-right">Остаток</th>
+                                <th class="px-4 py-2.5 text-center">Маржа</th>
+                                <th class="px-4 py-2.5 text-center">Выиграл</th>
+                                <th class="px-4 py-2.5 text-center">Чек-лист</th>
+                                <th class="px-4 py-2.5"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <template v-for="g in lotGroups" :key="g.key">
+                            <!-- Секция «Сегодня» / «Прошлые» (аккордеон) -->
+                            <tr v-if="g.list.length || g.toggle" class="bg-slate-100/70 transition-colors duration-150" :class="g.toggle ? 'cursor-pointer select-none hover:bg-slate-200/60' : ''"
+                                @click="g.toggle && (showPast = !showPast)">
+                                <td :colspan="leadership ? 15 : 14" class="px-6 py-2">
+                                    <span class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                        <svg v-if="g.toggle" class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="showPast ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                                        {{ g.label }} <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }}</span>
+                                    </span>
                                 </td>
                             </tr>
-                            <!-- Комментарий + контакт клиента -->
-                            <tr v-if="expanded === p.id" class="bg-slate-50/60">
-                                <td :colspan="leadership ? 15 : 14" class="px-6 py-3">
-                                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                        <span class="text-sm text-slate-600">
-                                            <span class="rounded-full px-2 py-0.5 text-[11px] font-bold" :class="actionClass(p.action)">{{ actionLabels[p.action] ?? '—' }}</span>
-                                            <span v-if="p.comment" class="ml-2">{{ p.comment }}</span>
-                                            <span v-else class="ml-2 text-slate-300">без комментария</span>
-                                        </span>
-                                        <span v-if="p.client_name || p.client_phone" class="ml-auto text-sm text-slate-500">
-                                            Клиент: <b class="text-slate-700">{{ p.client_name || '—' }}</b>
-                                            <a v-if="p.client_phone" :href="'tel:' + p.client_phone" class="ml-2 font-semibold text-indigo-600 hover:underline">{{ p.client_phone }}</a>
-                                        </span>
-                                    </div>
-                                </td>
-                            </tr>
-                        </template>
-                        </template>
-                        </template>
-                        <tr v-if="!preDeals.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-10 text-center text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
-                    </tbody>
-                </table>
+                            <tr v-if="g.key === 'today' && !g.list.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-4 text-center text-xs text-slate-400">Сегодня лотов ещё нет</td></tr>
+                            <template v-if="g.open">
+                            <template v-for="p in g.list" :key="p.id">
+                                <tr class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                    <td class="px-6 py-2.5 text-slate-500">{{ p.lot_number || '—' }}<span class="block text-[11px] text-slate-400">{{ formatDate(p.created_at) }}</span>
+                                        <span v-if="p.tender_deadline" class="block text-[11px] font-medium" :class="tenderUrgent(p) ? 'text-rose-600' : 'text-slate-400'">⏳ тендер до {{ formatDate(p.tender_deadline) }}</span>
+                                    </td>
+                                    <td class="max-w-56 px-4 py-2.5">
+                                        <div class="truncate font-medium text-slate-800" :title="p.customer">{{ p.customer || '—' }}<span v-if="p.bin" class="text-xs text-slate-400"> · {{ p.bin }}</span></div>
+                                        <div class="truncate text-[11px] text-slate-400" :title="p.product">{{ p.product }}</div>
+                                    </td>
+                                    <td v-if="leadership" class="px-4 py-2.5 text-xs text-slate-500">{{ p.user?.name ?? '—' }}</td>
+                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(p.contract_sum) }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.purchase_price) }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.partner_sum) }}<span class="block text-[11px] tabular-nums text-slate-400">{{ Number(p.partner_pct) }}%</span></td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.delivery) }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.assembly) }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.commission) }}</td>
+                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.tax) }}</td>
+                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums" :class="Number(p.remainder) >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(p.remainder) }}</td>
+                                    <td class="px-4 py-2.5 text-center"><span class="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums" :class="marginClass(p.margin)">{{ Number(p.margin) }}%</span></td>
+                                    <td class="px-4 py-2.5 text-center">
+                                        <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="Number(p.margin) >= minMargin ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'">{{ Number(p.margin) >= minMargin ? 'да' : 'нет' }}</span>
+                                    </td>
+                                    <td class="px-4 py-2.5 text-center">
+                                        <button @click="expanded = expanded === p.id ? null : p.id"
+                                            class="rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-150" :class="actionClass(p.action)">
+                                            {{ actionLabels[p.action] ?? '—' }}</button>
+                                    </td>
+                                    <td class="whitespace-nowrap px-4 py-2.5 text-right">
+                                        <template v-if="p.status === 'confirmed'">
+                                            <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">→ {{ p.deal?.number ?? 'сделка' }}</span>
+                                            <button class="ml-1 rounded p-1 text-slate-300 transition-colors hover:text-amber-600" title="Вернуть в предварительные (нажали «Выиграл» случайно)" @click="revertDeal(p)">↩</button>
+                                        </template>
+                                        <template v-else>
+                                            <button v-if="Number(p.margin) >= minMargin" @click="confirmDeal(p)"
+                                                class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">Выиграл ✓</button>
+                                            <span v-else class="text-[11px] text-rose-400" title="Маржа ниже порога — сделка отклонена">отклонена</span>
+                                            <button class="ml-1 rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Изменить" @click="openEdit(p)">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                                            </button>
+                                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить" @click="del(p)">✕</button>
+                                        </template>
+                                    </td>
+                                </tr>
+                                <!-- Комментарий + контакт клиента -->
+                                <tr v-if="expanded === p.id" class="bg-slate-50/60">
+                                    <td :colspan="leadership ? 15 : 14" class="px-6 py-3">
+                                        <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                            <span class="text-sm text-slate-600">
+                                                <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="actionClass(p.action)">{{ actionLabels[p.action] ?? '—' }}</span>
+                                                <span v-if="p.comment" class="ml-2">{{ p.comment }}</span>
+                                                <span v-else class="ml-2 text-slate-400">без комментария</span>
+                                            </span>
+                                            <span v-if="p.client_name || p.client_phone" class="ml-auto text-sm text-slate-500">
+                                                Клиент: <b class="text-slate-700">{{ p.client_name || '—' }}</b>
+                                                <a v-if="p.client_phone" :href="'tel:' + p.client_phone" class="ml-2 font-medium text-indigo-600 hover:underline">{{ p.client_phone }}</a>
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            </template>
+                            </template>
+                            <tr v-if="!preDeals.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-10 text-center text-sm text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
+        </PageLayout>
 
-        <!-- Модалка лота: живой расчёт -->
+        <!-- Модалка лота: живой расчёт §11 -->
         <Modal :show="showForm" max-width="2xl" @close="showForm = false">
             <div class="p-6">
-                <h3 class="mb-4 text-base font-semibold text-slate-900">{{ editingId ? 'Изменить предварительную сделку' : 'Новая предварительная сделка' }}</h3>
+                <h2 class="mb-4 text-lg font-semibold text-slate-900">{{ editingId ? 'Изменить предварительную сделку' : 'Новая предварительная сделка' }}</h2>
                 <!-- Действие: у звонка и КП только контакты и сумма, у участия — расчёт маржи -->
                 <div class="mb-4">
                     <InputLabel value="Действие *" />
                     <div class="mt-1.5 flex flex-wrap gap-2">
                         <button v-for="(label, a) in actionLabels" :key="a" type="button" @click="form.action = a"
-                            class="rounded-lg border px-3.5 py-2 text-sm font-semibold transition"
-                            :class="form.action === a ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
+                            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                            :class="form.action === a ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
                             {{ label }}
                         </button>
                     </div>
@@ -329,13 +331,13 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     </p>
                 </div>
 
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div v-if="!isShort">
                         <InputLabel value="№ лота" />
                         <div class="mt-1 flex gap-2">
                             <TextInput v-model="form.lot_number" class="w-full" @input="lotCheck = null" @keydown.enter.prevent="checkLot" />
                             <button type="button" @click="checkLot" :disabled="!form.lot_number || lotChecking"
-                                class="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 disabled:opacity-40">
+                                class="shrink-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50 disabled:opacity-50">
                                 {{ lotChecking ? '…' : 'Проверить' }}
                             </button>
                         </div>
@@ -353,10 +355,10 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     </div>
                     <div><InputLabel value="БИН заказчика" /><TextInput v-model="form.bin" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Заказчик (компания)" /><TextInput v-model="form.customer" class="mt-1 w-full" /></div>
-                    <div><InputLabel value="Название товара *" /><TextInput v-model="form.product" class="mt-1 w-full" /><div v-if="form.errors.product" class="mt-1 text-xs text-rose-600">{{ form.errors.product }}</div></div>
+                    <div><InputLabel value="Название товара *" /><TextInput v-model="form.product" class="mt-1 w-full" /><div v-if="form.errors.product" class="mt-1 text-xs text-red-600">{{ form.errors.product }}</div></div>
                     <div><InputLabel value="Имя клиента (контакт)" /><TextInput v-model="form.client_name" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Телефон клиента" /><TextInput v-model="form.client_phone" class="mt-1 w-full" placeholder="+7 ___ ___ __ __" /></div>
-                    <div><InputLabel value="Сумма договора *" /><TextInput v-model="form.contract_sum" type="number" min="1" class="mt-1 w-full" /><div v-if="form.errors.contract_sum" class="mt-1 text-xs text-rose-600">{{ form.errors.contract_sum }}</div></div>
+                    <div><InputLabel value="Сумма договора *" /><TextInput v-model="form.contract_sum" type="number" min="1" class="mt-1 w-full" /><div v-if="form.errors.contract_sum" class="mt-1 text-xs text-red-600">{{ form.errors.contract_sum }}</div></div>
                     <div v-if="!isShort"><InputLabel value="Закуп цена" /><TextInput v-model="form.purchase_price" type="number" min="0" class="mt-1 w-full" /></div>
                     <div v-if="!isShort"><InputLabel value="Доля партнёра, %" /><TextInput v-model="form.partner_pct" type="number" min="0" max="100" step="0.1" class="mt-1 w-full" /></div>
                     <div v-if="!isShort"><InputLabel value="Доставка, грузчики" /><TextInput v-model="form.delivery" type="number" min="0" class="mt-1 w-full" /></div>
@@ -376,13 +378,13 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         <span class="text-slate-500">Налог {{ taxPercent }}%: <b class="tabular-nums text-slate-700">{{ money(calc.tax) }}</b></span>
                         <span class="text-slate-500">Остаток: <b class="tabular-nums" :class="calc.remainder >= 0 ? 'text-slate-900' : 'text-rose-600'">{{ money(calc.remainder) }}</b></span>
                         <span class="ml-auto flex items-center gap-2">
-                            <span class="rounded-full px-3 py-1 text-sm font-bold tabular-nums" :class="calc.pass ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'">маржа {{ calc.margin }}%</span>
+                            <span class="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums" :class="calc.pass ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'">маржа {{ calc.margin }}%</span>
                             <span class="text-xs font-semibold" :class="calc.pass ? 'text-emerald-700' : 'text-rose-600'">{{ calc.pass ? 'выиграл — да' : 'ниже ' + minMargin + '% — отклоняется' }}</span>
                         </span>
                     </div>
                 </div>
 
-                <div class="mt-4 flex justify-end gap-2">
+                <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showForm = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="form.processing" @click="submit">{{ editingId ? 'Сохранить' : 'Добавить' }}</PrimaryButton>
                 </div>

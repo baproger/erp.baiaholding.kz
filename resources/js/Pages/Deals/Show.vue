@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -140,7 +141,19 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
             </div>
         </template>
 
-        <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+        <PageLayout :title="`${deal.number} · ${deal.company_name || deal.name}`" :subtitle="stages[currentStageIndex]?.name">
+        <template #actions>
+            <button v-if="can.update" @click="openEdit" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16l-3.5.5L4 13z"/></svg>
+                Изменить
+            </button>
+            <button v-if="can.delete" @click="destroy" class="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors duration-150 hover:bg-rose-100">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4h4v2M6 6l.5 10h7l.5-10M8.5 9v4M11.5 9v4"/></svg>
+                Удалить
+            </button>
+        </template>
+
+        <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex items-center gap-2 overflow-x-auto pb-1">
                 <button v-for="(stage, idx) in stages" :key="stage.id" @click="moveStage(stage.id)" :disabled="!can.update || stageLocked(stage)"
                     :title="stageLocked(stage) ? lockHint(stage) : ''"
@@ -183,58 +196,50 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
             <div class="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
                 <PrimaryButton v-if="(can.advance ?? can.update) && !isWorkshopStage && !isLastStage && !managerFrozen" @click="advance">Далее →</PrimaryButton>
-                <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop()" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-all duration-150 hover:bg-emerald-700">
+                <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop()" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
                     Отправить в цех
                 </button>
-                <Link v-if="deal.project && deal.project.status !== 'completed'" :href="route('projects.show', deal.project.id)" class="inline-flex items-center rounded-xl bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200 transition-colors duration-150 hover:bg-emerald-100">В цеху: {{ deal.project.number }} →</Link>
-                <button v-if="can.update" @click="openEdit" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-200">
-                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16l-3.5.5L4 13z"/></svg>
-                    Изменить
-                </button>
-                <button v-if="can.delete" @click="destroy" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-600 transition-colors duration-150 hover:border-rose-600 hover:bg-rose-600 hover:text-white">
-                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4h4v2M6 6l.5 10h7l.5-10M8.5 9v4M11.5 9v4"/></svg>
-                    Удалить
-                </button>
+                <Link v-if="deal.project && deal.project.status !== 'completed'" :href="route('projects.show', deal.project.id)" class="inline-flex items-center rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">В цеху: {{ deal.project.number }} →</Link>
             </div>
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div class="lg:col-span-2 space-y-6">
                 <!-- Информация — компактная сетка -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Компания</div>
-                            <div class="mt-1 text-[15px] font-semibold text-slate-900">{{ deal.company_name || '—' }}</div>
+                            <div class="mt-1 text-sm font-semibold text-slate-900">{{ deal.company_name || '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Адрес</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">📍 {{ deal.address || '—' }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">📍 {{ deal.address || '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Номер договора</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">{{ deal.bin || '—' }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">{{ deal.bin || '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Наименование товара</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">{{ deal.client_name || deal.client?.name || '—' }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">{{ deal.client_name || deal.client?.name || '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Количество</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">{{ deal.lot_number ? `${deal.lot_number} ${deal.unit || ''}` : '—' }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">{{ deal.lot_number ? `${deal.lot_number} ${deal.unit || ''}` : '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Дата договора</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">{{ deal.contract_date ? formatDate(deal.contract_date) : '—' }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">{{ deal.contract_date ? formatDate(deal.contract_date) : '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Источник (портал)</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">{{ deal.source || '—' }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">{{ deal.source || '—' }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Срок</div>
-                            <div class="mt-1 text-[15px] font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span></div>
+                            <div class="mt-1 text-sm font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span></div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Ответственный</div>
@@ -245,7 +250,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         </div>
                         <div v-for="f in visibleFields" :key="f.id">
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">{{ f.name }}</div>
-                            <div class="mt-1 text-[15px] font-medium text-slate-900">{{ f.value }}</div>
+                            <div class="mt-1 text-sm font-medium text-slate-900">{{ f.value }}</div>
                         </div>
                     </div>
                     <div v-if="deal.note" class="mt-6 rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-inset ring-amber-100">
@@ -262,40 +267,52 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
 
                 <!-- Задачи -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-                    <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m4 16 2 2 4-4M11 6h10M11 11h10M11 18h10"/></svg>
-                        Задачи <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600">{{ deal.tasks.length }}</span>
-                    </h3>
-                    <TaskPanel :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
+                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m4 16 2 2 4-4M11 6h10M11 11h10M11 18h10"/></svg>
+                            Задачи <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.tasks.length }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <TaskPanel :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
+                    </div>
                 </div>
 
                 <!-- Документы (только если прикреплены) -->
-                <div v-if="deal.documents.length" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-                    <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                        Документы <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600">{{ deal.documents.length }}</span>
-                    </h3>
-                    <DocumentPanel :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
+                <div v-if="deal.documents.length" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            Документы <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.documents.length }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <DocumentPanel :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
+                    </div>
                 </div>
 
                 <!-- Комментарии -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-                    <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Комментарии <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600">{{ deal.comments.length }}</span>
-                    </h3>
-                    <CommentPanel :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
+                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            Комментарии <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.comments.length }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <CommentPanel :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
+                    </div>
                 </div>
 
                 <!-- Второстепенное: Финансы / Документы (управление) / Доп. поля / История -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-                    <div class="mb-6 flex flex-wrap gap-6 border-b border-slate-200 text-sm">
-                        <button :class="tab==='finance' ? 'border-b-2 border-indigo-600 font-semibold text-indigo-600' : 'border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700'" class="pb-2 transition-colors duration-150" @click="tab='finance'">Финансы</button>
-                        <button :class="tab==='docs' ? 'border-b-2 border-indigo-600 font-semibold text-indigo-600' : 'border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700'" class="pb-2 transition-colors duration-150" @click="tab='docs'">Документы</button>
-                        <button :class="tab==='custom' ? 'border-b-2 border-indigo-600 font-semibold text-indigo-600' : 'border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700'" class="pb-2 transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
-                        <button :class="tab==='history' ? 'border-b-2 border-indigo-600 font-semibold text-indigo-600' : 'border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700'" class="pb-2 transition-colors duration-150" @click="tab='history'">История</button>
-                    </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
+                        <button :class="tab==='finance' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='finance'">Финансы</button>
+                        <button :class="tab==='docs' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='docs'">Документы</button>
+                        <button :class="tab==='custom' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
+                        <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
+                    </nav>
                     <FinancePanel v-if="tab==='finance'" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
                     <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
@@ -308,7 +325,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                                     :class="l.open ? 'bg-indigo-50' : 'bg-slate-50'">
                                     <div class="flex min-w-0 items-center gap-2">
                                         <span class="font-medium text-slate-800">{{ l.stage }}</span>
-                                        <span v-if="l.open" class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">сейчас</span>
+                                        <span v-if="l.open" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">сейчас</span>
                                         <span v-if="l.mover" class="truncate text-[11px] text-slate-400">перевёл(а): {{ l.mover }}</span>
                                     </div>
                                     <div class="flex items-center gap-3 tabular-nums">
@@ -324,9 +341,9 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
             </div>
 
             <div class="space-y-6">
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="text-[11px] uppercase tracking-wide text-slate-400">Сумма договора</div>
-                    <div class="mt-1 text-[28px] font-bold leading-tight tracking-tight text-indigo-600">{{ money(deal.budget) }}</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-slate-900">{{ money(deal.budget) }}</div>
                     <div class="mt-4 space-y-2 text-sm">
                         <div class="flex justify-between"><span class="text-slate-500">Статус</span><StatusBadge :status="deal.status" /></div>
                         <div class="flex justify-between"><span class="text-slate-500">Аванс (оплачено)</span><span class="font-medium tabular-nums text-emerald-600">{{ money(finance.income) }}</span></div>
@@ -340,7 +357,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <div class="flex items-center justify-between">
                             <span class="flex items-center gap-1.5 text-slate-500">
                                 ЗП сотрудника {{ profit.bonusRate }}%
-                                <span class="rounded px-1 py-px text-[9px] font-bold uppercase" :class="profit.bonusManual ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'">{{ profit.bonusManual ? 'вручную' : 'авто' }}</span>
+                                <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="profit.bonusManual ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'">{{ profit.bonusManual ? 'вручную' : 'авто' }}</span>
                                 <button v-if="canAccounting" @click="openBonusEdit" title="Изменить % бонуса" class="text-slate-300 hover:text-indigo-500">✎</button>
                             </span>
                             <span class="font-medium tabular-nums text-emerald-600">− {{ money(profit.bonus) }}</span>
@@ -356,20 +373,24 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                                 <button @click="editBonusRate = false" class="ml-auto text-slate-400 hover:text-slate-600">✕</button>
                             </div>
                         </div>
-                        <div class="rounded-xl px-4 py-3 text-white" style="background-color: #1A3B5C">
-                            <div class="text-[11px] font-semibold uppercase tracking-wide text-white/70">Чистая прибыль компании</div>
-                            <div class="mt-0.5 text-[28px] font-bold leading-tight tabular-nums tracking-tight">{{ money(profit.company) }}</div>
+                        <div class="rounded-xl px-4 py-3 shadow-md" style="background-color: #1A3B5C">
+                            <div class="text-[11px] uppercase tracking-wide text-white/60">Чистая прибыль компании</div>
+                            <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money(profit.company) }}</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Чат сделки — сразу на виду -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-                    <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
-                        Чат сделки
-                    </h3>
-                    <DealChat :chat-id="chatId" />
+                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>
+                            Чат сделки
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <DealChat :chat-id="chatId" />
+                    </div>
                 </div>
 
             </div>
@@ -385,7 +406,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     <div><InputLabel value="Дата договора" /><TextInput v-model="editForm.contract_date" type="date" class="mt-1 w-full" /><InputError :message="editForm.errors.contract_date" class="mt-1" /></div>
                     <div>
                         <InputLabel value="Источник (портал)" />
-                        <select v-model="editForm.source" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                        <select v-model="editForm.source" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                             <option value="">—</option>
                             <option v-for="s in SOURCES" :key="s" :value="s">{{ s }}</option>
                         </select>
@@ -396,7 +417,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <InputLabel value="Количество" />
                         <div class="mt-1 flex gap-2">
                             <TextInput v-model="editForm.lot_number" type="number" min="0" step="any" class="w-1/2" />
-                            <select v-model="editForm.unit" class="w-1/2 rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                            <select v-model="editForm.unit" class="w-1/2 rounded-md border-slate-300 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                                 <option value="">ед. изм.</option>
                                 <option v-for="u in UNITS" :key="u" :value="u">{{ u }}</option>
                             </select>
@@ -410,8 +431,8 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <InputError :message="editForm.errors.partner_pct" class="mt-1" />
                     </div>
                     <div><InputLabel value="Срок" /><TextInput v-model="editForm.deadline" type="date" class="mt-1 w-full" /></div>
-                    <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
-                    <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-lg border-slate-300 shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
+                    <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
+                    <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showEdit = false">Отмена</SecondaryButton>
@@ -471,5 +492,6 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
             </div>
             <p v-if="preDeal.comment" class="border-t border-violet-100 px-5 py-3 text-sm text-slate-600">{{ preDeal.comment }}</p>
         </div>
+        </PageLayout>
     </AppLayout>
 </template>

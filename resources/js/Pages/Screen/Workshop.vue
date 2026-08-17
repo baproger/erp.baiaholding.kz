@@ -64,7 +64,7 @@ const complete = (p) => {
                     <span class="relative flex h-2.5 w-2.5"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span></span>
                     <span class="text-xl font-bold tabular-nums lg:text-2xl">{{ clock }}</span>
                 </div>
-                <button @click="leave" class="rounded-lg px-3 py-2 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" title="Сменить код">выйти</button>
+                <button @click="leave" class="rounded-lg px-3 py-2 text-xs text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600" title="Сменить код">выйти</button>
             </div>
         </div>
 
@@ -83,13 +83,13 @@ const complete = (p) => {
                     <div v-for="p in byStage(stage.id)" :key="p.id" class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
                         <div class="text-lg font-bold leading-snug text-slate-900">{{ p.name }}</div>
                         <div class="flex items-center justify-between">
-                            <span class="text-xs text-slate-300">{{ p.number }}</span>
+                            <span class="text-xs text-slate-400">{{ p.number }}</span>
                             <span v-if="onStage(p)" class="rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-bold tabular-nums text-indigo-600" title="Время на этапе">⏱ {{ onStage(p) }}</span>
                         </div>
                         <div v-if="p.address" class="mt-1.5 text-sm text-slate-500">📍 {{ p.address }}</div>
                         <div v-if="p.deadline" class="mt-1 text-sm font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></div>
                         <div v-if="p.description" class="mt-1.5 whitespace-pre-line text-sm leading-snug text-slate-500">{{ p.description }}</div>
-                        <div v-if="p.note" class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm leading-snug text-amber-800">📌 {{ p.note }}</div>
+                        <div v-if="p.note" class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm leading-snug text-amber-700">📌 {{ p.note }}</div>
                         <!-- Крупные кнопки, чтобы удобно жать с ТВ/планшета цеха:
                              «Далее» — следующий этап; на «Отправке» — «Готово» (в Логистику) -->
                         <button v-if="p.stage_id !== lastStageId" @click="advance(p)" :disabled="advancing === p.id"

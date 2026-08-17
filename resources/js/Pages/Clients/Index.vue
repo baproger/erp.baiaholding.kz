@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import { confirmDialog } from '@/composables/useConfirm';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -47,63 +48,69 @@ const doSearch = () => router.get(route('clients.index'), { search: search.value
     <AppLayout>
         <template #header>{{ $t('page.clients', 'Контрагенты') }}</template>
 
-        <div class="mb-4 flex items-center justify-between gap-3">
-            <TextInput v-model="search" placeholder="Поиск по имени/ИНН/телефону..." class="w-80" @keyup.enter="doSearch" />
-            <PrimaryButton v-if="can.create" @click="openCreate">+ Добавить контрагента</PrimaryButton>
-        </div>
+        <PageLayout title="Клиенты">
+            <template #actions>
+                <TextInput v-model="search" placeholder="Поиск по имени/ИНН/телефону..." class="w-64 sm:w-80" @keyup.enter="doSearch" />
+                <PrimaryButton v-if="can.create" @click="openCreate">+ Добавить контрагента</PrimaryButton>
+            </template>
 
-        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table class="min-w-full divide-y divide-slate-100 text-sm">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr>
-                        <th class="px-4 py-3">Название</th>
-                        <th class="px-4 py-3">Тип</th>
-                        <th class="px-4 py-3">ИНН</th>
-                        <th class="px-4 py-3">Контакты</th>
-                        <th class="px-4 py-3">Ответственный</th>
-                        <th class="px-4 py-3 text-right">Действия</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr v-for="c in clients.data" :key="c.id" class="hover:bg-slate-50">
-                        <td class="px-4 py-3 font-medium text-slate-900">{{ c.name }}</td>
-                        <td class="px-4 py-3"><StatusBadge :status="c.type" /></td>
-                        <td class="px-4 py-3 text-slate-500">{{ c.inn }}</td>
-                        <td class="px-4 py-3 text-slate-500">
-                            <div>{{ c.phone }}</div>
-                            <div class="text-xs">{{ c.email }}</div>
-                        </td>
-                        <td class="px-4 py-3 text-slate-500">{{ c.responsible?.name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right space-x-2">
-                            <button v-if="can.update" class="text-indigo-600 hover:underline" @click="openEdit(c)">Изменить</button>
-                            <button v-if="can.delete" class="text-red-600 hover:underline" @click="destroy(c)">Удалить</button>
-                        </td>
-                    </tr>
-                    <tr v-if="!clients.data.length"><td colspan="6" class="px-4 py-8 text-center text-slate-400">Нет данных</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="mt-4"><Pagination :links="clients.links" /></div>
+            <!-- Таблица §7 -->
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                            <tr>
+                                <th class="px-6 py-2.5">Название</th>
+                                <th class="px-4 py-2.5">Тип</th>
+                                <th class="px-4 py-2.5">ИНН</th>
+                                <th class="px-4 py-2.5">Контакты</th>
+                                <th class="px-4 py-2.5">Ответственный</th>
+                                <th class="px-4 py-2.5 text-right">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="c in clients.data" :key="c.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                <td class="px-6 py-2.5 font-medium text-slate-800">{{ c.name }}</td>
+                                <td class="px-4 py-2.5"><StatusBadge :status="c.type" /></td>
+                                <td class="px-4 py-2.5 tabular-nums text-slate-500">{{ c.inn }}</td>
+                                <td class="px-4 py-2.5 text-slate-500">
+                                    <div class="whitespace-nowrap tabular-nums">{{ c.phone }}</div>
+                                    <div class="text-[11px] text-slate-400">{{ c.email }}</div>
+                                </td>
+                                <td class="px-4 py-2.5 text-slate-500">{{ c.responsible?.name ?? '—' }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right">
+                                    <button v-if="can.update" class="rounded p-1 text-xs font-medium text-slate-400 transition-colors hover:text-indigo-600" @click="openEdit(c)">Изменить</button>
+                                    <button v-if="can.delete" class="rounded p-1 text-xs font-medium text-slate-400 transition-colors hover:text-rose-600" @click="destroy(c)">Удалить</button>
+                                </td>
+                            </tr>
+                            <tr v-if="!clients.data.length"><td colspan="6" class="px-6 py-10 text-center text-sm text-slate-400">Нет данных</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="mt-4"><Pagination :links="clients.links" /></div>
+        </PageLayout>
 
+        <!-- Модалка контрагента §11 -->
         <Modal :show="showModal" @close="showModal = false" max-width="2xl">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold">{{ editing ? 'Изменить контрагента' : 'Новый контрагент' }}</h2>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="col-span-2">
+                <h2 class="mb-4 text-lg font-semibold text-slate-900">{{ editing ? 'Изменить контрагента' : 'Новый контрагент' }}</h2>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class="sm:col-span-2">
                         <InputLabel value="Название" />
                         <TextInput v-model="form.name" class="mt-1 w-full" />
                         <InputError :message="form.errors.name" class="mt-1" />
                     </div>
                     <div>
                         <InputLabel value="Тип" />
-                        <select v-model="form.type" class="mt-1 w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <select v-model="form.type" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             <option value="legal">Юридическое лицо</option>
                             <option value="individual">Физическое лицо</option>
                         </select>
                     </div>
                     <div>
                         <InputLabel value="Ответственный" />
-                        <select v-model="form.responsible_user_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
+                        <select v-model="form.responsible_user_id" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm">
                             <option value="">—</option>
                             <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
                         </select>
@@ -118,9 +125,9 @@ const doSearch = () => router.get(route('clients.index'), { search: search.value
                     </div>
                     <div><InputLabel value="Адрес" /><TextInput v-model="form.address" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Сайт" /><TextInput v-model="form.website" class="mt-1 w-full" /></div>
-                    <div class="col-span-2">
+                    <div class="sm:col-span-2">
                         <InputLabel value="Заметка" />
-                        <textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm"></textarea>
+                        <textarea v-model="form.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm"></textarea>
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">

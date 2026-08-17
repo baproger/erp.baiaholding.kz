@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 
 const props = defineProps({ rows: Array, byManager: { type: Array, default: () => [] }, byStage: { type: Array, default: () => [] }, isLeadership: { type: Boolean, default: true }, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array });
@@ -97,14 +98,10 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
 <template>
     <Head title="Сводный отчет" />
     <AppLayout>
-        <template #header>
-            <span class="flex items-center gap-2">{{ isLeadership ? 'Сводный отчет' : 'Мой отчёт' }}
-                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">{{ totals.count }}</span>
-            </span>
-        </template>
-
+        <template #header>{{ isLeadership ? 'Сводный отчет' : 'Мой отчёт' }}</template>
+        <PageLayout :title="isLeadership ? 'Сводный отчёт' : 'Мой отчёт'" subtitle="сделки и цех за период">
         <!-- Фильтры: поиск, период, менеджер, этап (серверные) -->
-        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <template #actions>
             <div class="relative w-full sm:w-60">
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
                 <input v-model="search" @input="onSearch" type="text" placeholder="Поиск: №, компания, договор, адрес…"
@@ -158,66 +155,67 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                 <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
             </select>
             <button v-if="hasFilters()" @click="reset"
-                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
-        </div>
+                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+        </template>
 
-        <!-- Итоги: те же плитки, что на Аналитике/Дашборде -->
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-            <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 0ms">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Сумма договоров</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-slate-900">{{ money0(totals.budget) }}</div>
+        <!-- Итоги: плитки-итоги (§5) -->
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <div class="rise rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 0ms">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Сумма договоров</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-slate-800">{{ money0(totals.budget) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">{{ totals.count }} сделок · 100%</div>
             </div>
-            <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 40ms">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Оплачено</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-emerald-600">{{ money0(totals.paid) }}</div>
+            <div class="rise rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 40ms">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Оплачено</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ money0(totals.paid) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">{{ share(totals.paid) }} от договоров</div>
             </div>
-            <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 80ms">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Расходы</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-rose-600">−{{ money0(totals.material + (totals.delivery ?? 0) + (totals.purchase ?? 0) + (totals.assembly ?? 0) + totals.other) }}</div>
-                <div class="mt-0.5 text-[11px] text-slate-400">склад {{ money0(totals.material) }} · 🚚 {{ money0(totals.delivery ?? 0) }} · 📦 {{ money0(totals.purchase ?? 0) }} · 🔧 {{ money0(totals.assembly ?? 0) }} · прочие {{ money0(totals.other) }}</div>
+            <div class="rise rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm" style="animation-delay: 80ms">
+                <div class="text-[11px] uppercase tracking-wide text-rose-500">Расходы</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-rose-600">−{{ money0(totals.material + (totals.delivery ?? 0) + (totals.purchase ?? 0) + (totals.assembly ?? 0) + totals.other) }}</div>
+                <div class="mt-0.5 text-[11px] text-rose-500">склад {{ money0(totals.material) }} · 🚚 {{ money0(totals.delivery ?? 0) }} · 📦 {{ money0(totals.purchase ?? 0) }} · 🔧 {{ money0(totals.assembly ?? 0) }} · прочие {{ money0(totals.other) }}</div>
             </div>
-            <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 120ms">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-rose-500">−{{ money0(totals.tax) }}</div>
+            <div class="rise rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 120ms">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Налог {{ taxRate }}%</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-rose-600">−{{ money0(totals.tax) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">{{ share(totals.tax) }} от договоров</div>
             </div>
-            <div class="rise rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 160ms">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-400">{{ isLeadership ? 'Бонусы менеджеров' : 'Мой бонус' }}</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums text-emerald-600">{{ money0(totals.bonus) }}</div>
+            <div class="rise rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="animation-delay: 160ms">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">{{ isLeadership ? 'Бонусы менеджеров' : 'Мой бонус' }}</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ money0(totals.bonus) }}</div>
                 <div class="mt-0.5 text-[11px] text-slate-400">{{ share(totals.bonus) }} от договоров</div>
             </div>
             <!-- Доход компании и маржа — только руководству: МОП видит свой оборот
                  и свой бонус, прибыль фирмы по его сделкам ему не показываем. -->
-            <div v-if="isLeadership" class="rise rounded-2xl border border-transparent p-4 text-white shadow-md" style="animation-delay: 200ms; background-color: #1A3B5C">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-white/60">Доход</div>
-                <div class="mt-1.5 text-xl font-semibold tracking-tight tabular-nums">{{ money0(totals.company) }}</div>
+            <div v-if="isLeadership" class="rise rounded-xl p-4 shadow-md" style="animation-delay: 200ms; background-color: #1A3B5C">
+                <div class="text-[11px] uppercase tracking-wide text-white/60">Доход</div>
+                <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money0(totals.company) }}</div>
                 <div class="mt-0.5 text-[11px] text-white/60">маржа {{ totals.margin }}%</div>
             </div>
         </div>
 
         <!-- «На каком этапе стоят сделки»: сколько штук и на какую сумму висит
              на каждом этапе. Клик по плитке фильтрует таблицу по этому этапу. -->
-        <div v-if="byStage.length" class="mt-4">
-            <div class="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                {{ isLeadership ? 'Сделки по этапам' : 'Мои сделки по этапам' }}
+        <div v-if="byStage.length" class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                <h3 class="text-sm font-semibold text-slate-900">{{ isLeadership ? 'Сделки по этапам' : 'Мои сделки по этапам' }}</h3>
+                <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">{{ byStage.length }}</span>
             </div>
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            <div class="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                 <button v-for="s in byStage" :key="s.stage_id ?? 0" type="button"
-                    class="rise rounded-xl border bg-white p-3 text-left shadow-sm transition hover:shadow-md"
+                    class="rise rounded-xl border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
                     :class="Number(stageF) === s.stage_id ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-slate-200'"
                     :title="'Показать только сделки на этапе «' + s.stage + '»'"
                     @click="stageF = Number(stageF) === s.stage_id ? '' : s.stage_id; apply()">
                     <div class="flex items-center gap-1.5">
-                        <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: s.color || '#94a3b8' }"></span>
-                        <span class="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ s.stage }}</span>
+                        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :style="{ backgroundColor: s.color || '#94a3b8' }"></span>
+                        <span class="truncate text-[11px] uppercase tracking-wide text-slate-400">{{ s.stage }}</span>
                     </div>
                     <div class="mt-1 flex items-baseline gap-1.5">
-                        <span class="text-xl font-semibold tabular-nums" :class="s.is_won ? 'text-emerald-600' : 'text-slate-900'">{{ s.count }}</span>
+                        <span class="text-xl font-bold tabular-nums" :class="s.is_won ? 'text-emerald-600' : 'text-slate-800'">{{ s.count }}</span>
                         <span class="text-[11px] text-slate-400">сделок</span>
                     </div>
-                    <div class="mt-0.5 truncate text-[11px] tabular-nums text-slate-400">{{ money0(s.budget) }}</div>
+                    <div class="mt-0.5 truncate whitespace-nowrap text-[11px] tabular-nums text-slate-400">{{ money0(s.budget) }}</div>
                 </button>
             </div>
         </div>
@@ -225,64 +223,64 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
         <!-- Сводная по МОП: строка = менеджер (а не сделка). Считается из тех же
              сделок, что и таблица ниже, — с тем же фильтром и теми же итогами.
              У МОПа тут ровно одна строка — его собственная. -->
-        <div v-if="byManager.length" class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div v-if="byManager.length" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <button type="button" @click="summaryOpen = !summaryOpen"
-                class="flex w-full items-center justify-between gap-2 bg-slate-50 px-4 py-2.5 text-left transition hover:bg-slate-100">
-                <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-600">
-                    <svg class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="summaryOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+                class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4 text-left transition-colors duration-150 hover:bg-slate-50">
+                <span class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <svg class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="summaryOpen ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                     {{ isLeadership ? 'Сводная по МОП' : 'Мои показатели за период' }}
-                    <span v-if="isLeadership" class="font-medium normal-case tracking-normal text-slate-400">{{ byManager.length }} чел.</span>
+                    <span v-if="isLeadership" class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">{{ byManager.length }} чел.</span>
                 </span>
-                <span class="text-xs font-semibold tabular-nums text-slate-500">
-                    оборот <b class="text-slate-800">{{ money0(totals.budget) }}</b>
+                <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-emerald-700">
+                    оборот {{ money0(totals.budget) }}
                 </span>
             </button>
             <div v-if="summaryOpen" class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-white text-[11px] uppercase tracking-wide text-slate-400">
-                        <tr class="border-y border-slate-100">
-                            <th class="px-4 py-2.5 text-left font-medium">Менеджер</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Сделок</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Выиграл</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Оборот</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Оплачено</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Расходы</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Налог</th>
-                            <th class="px-3 py-2.5 text-right font-medium">Бонус</th>
-                            <th v-if="isLeadership" class="px-3 py-2.5 text-right font-medium">Доход</th>
-                            <th v-if="isLeadership" class="px-3 py-2.5 text-right font-medium">Маржа</th>
+                    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                        <tr>
+                            <th class="whitespace-nowrap px-6 py-2.5">Менеджер</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Сделок</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Выиграл</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Оборот</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Оплачено</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Расходы</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Налог</th>
+                            <th class="whitespace-nowrap px-4 py-2.5 text-right">Бонус</th>
+                            <th v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right">Доход</th>
+                            <th v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right">Маржа</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="m in byManager" :key="m.manager_id ?? 0"
-                            class="cursor-pointer transition hover:bg-indigo-50/50"
+                            class="cursor-pointer transition-colors duration-150 hover:bg-slate-50/60"
                             :class="Number(manager) === m.manager_id ? 'bg-indigo-50' : ''"
                             :title="'Показать только сделки: ' + m.manager"
                             @click="pickManager(Number(manager) === m.manager_id ? '' : (m.manager_id ?? ''))">
-                            <td class="px-4 py-2.5 font-medium text-slate-800">{{ m.manager }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-slate-500">{{ m.deals }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-emerald-600">{{ m.won }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">{{ money0(m.budget) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-emerald-600">{{ money0(m.paid) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(m.expense) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-rose-500">−{{ money0(m.tax) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-emerald-600">{{ money0(m.bonus) }}</td>
-                            <td v-if="isLeadership" class="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">{{ money0(m.company) }}</td>
-                            <td v-if="isLeadership" class="px-3 py-2.5 text-right tabular-nums text-slate-500">{{ m.margin }}%</td>
+                            <td class="px-6 py-2.5 font-medium text-slate-800">{{ m.manager }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-500">{{ m.deals }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600">{{ m.won }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money0(m.budget) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money0(m.paid) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(m.expense) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(m.tax) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money0(m.bonus) }}</td>
+                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money0(m.company) }}</td>
+                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-500">{{ m.margin }}%</td>
                         </tr>
                     </tbody>
-                    <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-semibold">
+                    <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
                         <tr>
-                            <td class="px-4 py-2.5 text-slate-700">ИТОГО</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-slate-600">{{ totals.count }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ byManager.reduce((s, m) => s + m.won, 0) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-slate-900">{{ money0(totals.budget) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money0(totals.paid) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(totals.material + (totals.delivery ?? 0) + (totals.purchase ?? 0) + (totals.assembly ?? 0) + totals.other) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-rose-500">−{{ money0(totals.tax) }}</td>
-                            <td class="px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money0(totals.bonus) }}</td>
-                            <td v-if="isLeadership" class="px-3 py-2.5 text-right tabular-nums text-slate-900">{{ money0(totals.company) }}</td>
-                            <td v-if="isLeadership" class="px-3 py-2.5 text-right tabular-nums text-slate-600">{{ totals.margin }}%</td>
+                            <td class="px-6 py-3 text-slate-500">ИТОГО</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-600">{{ totals.count }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-700">{{ byManager.reduce((s, m) => s + m.won, 0) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-900">{{ money0(totals.budget) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-700">{{ money0(totals.paid) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(totals.material + (totals.delivery ?? 0) + (totals.purchase ?? 0) + (totals.assembly ?? 0) + totals.other) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-rose-600">−{{ money0(totals.tax) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-700">{{ money0(totals.bonus) }}</td>
+                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-900">{{ money0(totals.company) }}</td>
+                            <td v-if="isLeadership" class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-600">{{ totals.margin }}%</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -290,7 +288,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
         </div>
 
         <!-- Легенда подсветки строк -->
-        <div class="mt-4 flex flex-wrap items-center gap-4 px-1 text-[11px] text-slate-400">
+        <div class="mt-6 flex flex-wrap items-center gap-4 px-1 text-[11px] text-slate-400">
             <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-emerald-200 to-emerald-50"></span> Оплата успешно · Акт · ЭСФ</span>
             <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-gradient-to-r from-amber-200 to-amber-50"></span> Логистика · Сборка</span>
             <span class="flex items-center gap-1.5"><span class="h-3 w-6 rounded bg-white ring-1 ring-inset ring-slate-200"></span> В работе</span>
@@ -302,30 +300,30 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                 <table class="min-w-full whitespace-nowrap text-xs">
                     <thead class="text-left uppercase tracking-wide text-slate-400">
                         <tr>
-                            <th class="sticky top-0 z-20 border-b border-slate-100 bg-slate-50 px-4 py-3">Сделка</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3">Товар · кол-во</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3">Менеджер</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3">Этап · срок</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Сумма договора</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Оплачено</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Закуп (склад)</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">🚚 Доставка</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">📦 Закуп</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">🔧 Сборка</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Прочие</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right" title="Доля партнёра: % от суммы договора">Партнёр</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Налог</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Остаток</th>
-                            <th v-if="isLeadership" class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-center">Маржа</th>
-                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Бонус</th>
-                            <th v-if="isLeadership" class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-3 text-right">Доход</th>
+                            <th class="sticky top-0 z-20 border-b border-slate-100 bg-slate-50 px-6 py-2.5">Сделка</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5">Товар · кол-во</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5">Менеджер</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5">Этап · срок</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Сумма договора</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Оплачено</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Закуп (склад)</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">🚚 Доставка</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">📦 Закуп</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">🔧 Сборка</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Прочие</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right" title="Доля партнёра: % от суммы договора">Партнёр</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Налог</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Остаток</th>
+                            <th v-if="isLeadership" class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-center">Маржа</th>
+                            <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Бонус</th>
+                            <th v-if="isLeadership" class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-right">Доход</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="r in rows" :key="r.id" @click="openDeal(r.id)"
                             class="group cursor-pointer transition-colors" :class="rowClass(r)">
                             <!-- Сделка: организация + № / договор -->
-                            <td class="max-w-64 px-4 py-3">
+                            <td class="max-w-64 px-6 py-2.5">
                                 <div class="truncate text-[13px] font-semibold text-slate-800" :title="r.company_name">{{ r.company_name || '—' }}</div>
                                 <div class="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
                                     <span class="font-medium text-slate-500">{{ r.number }}</span>
@@ -333,12 +331,12 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                                 </div>
                                 <div v-if="r.address" class="mt-0.5 max-w-60 truncate text-[11px] text-slate-400" :title="r.address">{{ r.address }}</div>
                             </td>
-                            <td class="max-w-40 px-4 py-3">
+                            <td class="max-w-40 px-4 py-2.5">
                                 <div class="truncate text-slate-700" :title="r.product">{{ r.product || '—' }}</div>
                                 <div v-if="r.qty" class="mt-0.5 text-[11px] text-slate-400">{{ r.qty }}</div>
                             </td>
-                            <td class="max-w-36 truncate px-4 py-3 text-slate-600">{{ r.manager || '—' }}</td>
-                            <td class="px-4 py-3">
+                            <td class="max-w-36 truncate px-4 py-2.5 text-slate-600">{{ r.manager || '—' }}</td>
+                            <td class="px-4 py-2.5">
                                 <span v-if="r.stage" class="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" :style="{ backgroundColor: r.stage_color || '#94a3b8' }">{{ r.stage }}</span>
                                 <!-- Сделка в цехе: этап цеха вторым бейджем — общая таблица, без дублей -->
                                 <div v-if="r.workshop_stage" class="mt-1">
@@ -348,51 +346,50 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                                     {{ fmtDate(r.deadline) }}<span v-if="isOverdue(r)"> · просрочено</span>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{{ money(r.budget) }}</td>
+                            <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">{{ money(r.budget) }}</td>
                             <!-- Оплачено + мини-прогресс -->
-                            <td class="px-4 py-3 text-right">
+                            <td class="px-4 py-2.5 text-right">
                                 <div class="tabular-nums" :class="paidPct(r) >= 100 ? 'font-semibold text-emerald-600' : 'text-slate-700'">{{ money(r.paid) }}</div>
                                 <div class="ml-auto mt-1 h-1 w-16 overflow-hidden rounded-full bg-slate-100">
                                     <div class="h-1 rounded-full" :class="paidPct(r) >= 100 ? 'bg-emerald-500' : 'bg-indigo-400'" :style="{ width: paidPct(r) + '%' }"></div>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums text-indigo-600">{{ money(r.material) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-sky-600">{{ money(r.delivery) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-amber-600">{{ money(r.purchase) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-teal-600">{{ money(r.assembly) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-slate-600">{{ money(r.other) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-violet-600">{{ money(r.partner) }}<span v-if="r.partner_pct" class="ml-1 text-[10px] text-slate-400">{{ r.partner_pct }}%</span></td>
-                            <td class="px-4 py-3 text-right tabular-nums text-rose-500">{{ money(r.tax) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums" :class="r.remainder < 0 ? 'font-semibold text-rose-600' : 'text-slate-700'">{{ money(r.remainder) }}</td>
-                            <td v-if="isLeadership" class="px-4 py-3 text-center">
+                            <td class="px-4 py-2.5 text-right tabular-nums text-indigo-600">{{ money(r.material) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-sky-600">{{ money(r.delivery) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-amber-600">{{ money(r.purchase) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-teal-600">{{ money(r.assembly) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(r.other) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-violet-600">{{ money(r.partner) }}<span v-if="r.partner_pct" class="ml-1 text-[10px] text-slate-400">{{ r.partner_pct }}%</span></td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-rose-500">{{ money(r.tax) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums" :class="r.remainder < 0 ? 'font-semibold text-rose-600' : 'text-slate-700'">{{ money(r.remainder) }}</td>
+                            <td v-if="isLeadership" class="px-4 py-2.5 text-center">
                                 <span class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset" :class="marginBadge(r.margin)">{{ r.margin }}%</span>
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}</td>
-                            <td v-if="isLeadership" class="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{{ money(r.company) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}</td>
+                            <td v-if="isLeadership" class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">{{ money(r.company) }}</td>
                         </tr>
                         <tr v-if="!rows.length">
-                            <td :colspan="isLeadership ? 17 : 15" class="px-4 py-16 text-center">
-                                <div class="text-3xl">📋</div>
-                                <div class="mt-2 text-sm font-medium text-slate-500">{{ filters.search || filters.from || filters.to ? 'Ничего не найдено' : 'Сделок пока нет' }}</div>
-                                <div v-if="filters.search || filters.from || filters.to" class="mt-1 text-xs text-slate-400">Попробуйте изменить поиск или период</div>
+                            <td :colspan="isLeadership ? 17 : 15" class="px-6 py-10 text-center text-sm text-slate-400">
+                                <div>{{ filters.search || filters.from || filters.to ? 'Ничего не найдено' : 'Сделок пока нет' }}</div>
+                                <div v-if="filters.search || filters.from || filters.to" class="mt-1 text-xs">Попробуйте изменить поиск или период</div>
                             </td>
                         </tr>
                     </tbody>
                     <tfoot v-if="rows.length">
-                        <tr class="sticky bottom-0 z-10 bg-slate-900 font-semibold text-white">
-                            <td colspan="4" class="rounded-bl-2xl px-4 py-3 text-[11px] uppercase tracking-wider text-slate-400">Итого · {{ totals.count }} сделок</td>
+                        <tr class="sticky bottom-0 z-10 font-semibold text-white" style="background-color: #1A3B5C">
+                            <td colspan="4" class="rounded-bl-2xl px-6 py-3 text-[11px] uppercase tracking-wide text-white/60">Итого · {{ totals.count }} сделок</td>
                             <td class="px-4 py-3 text-right tabular-nums">{{ money(totals.budget) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-emerald-400">{{ money(totals.paid) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-emerald-300">{{ money(totals.paid) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-indigo-300">{{ money(totals.material) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-sky-300">{{ money(totals.delivery) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-amber-300">{{ money(totals.purchase) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-teal-300">{{ money(totals.assembly) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-slate-300">{{ money(totals.other) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums text-violet-300">{{ money(totals.partner) }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-rose-400">{{ money(totals.tax) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-rose-300">{{ money(totals.tax) }}</td>
                             <td class="px-4 py-3 text-right tabular-nums">{{ money(totals.remainder) }}</td>
                             <td v-if="isLeadership" class="px-4 py-3 text-center"><span class="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px]">{{ totals.margin }}%</span></td>
-                            <td class="px-4 py-3 text-right tabular-nums text-emerald-400" :class="isLeadership ? '' : 'rounded-br-2xl'">{{ money(totals.bonus) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums text-emerald-300" :class="isLeadership ? '' : 'rounded-br-2xl'">{{ money(totals.bonus) }}</td>
                             <td v-if="isLeadership" class="rounded-br-2xl px-4 py-3 text-right tabular-nums">{{ money(totals.company) }}</td>
                         </tr>
                     </tfoot>
@@ -400,6 +397,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             </div>
         </div>
 
+        </PageLayout>
     </AppLayout>
 </template>
 

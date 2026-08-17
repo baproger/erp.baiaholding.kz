@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -158,13 +159,14 @@ const applyBinMatch = () => {
     <AppLayout>
         <template #header>{{ $t('page.deals', 'Сделки') }}</template>
 
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div class="inline-flex rounded-xl bg-white shadow-sm border border-slate-200">
-                <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-l-lg px-4 py-1.5 text-sm transition-colors" @click="switchView('kanban')">Канбан</button>
-                <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-600'" class="rounded-r-lg px-4 py-1.5 text-sm transition-colors" @click="switchView('list')">Список</button>
+        <PageLayout title="Сделки" subtitle="канбан и список по воронке">
+        <template #actions>
+            <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('kanban')">Канбан</button>
+                <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('list')">Список</button>
             </div>
-            <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:scale-[1.02] hover:bg-indigo-700 active:scale-95" @click="openCreate">+ Новая сделка</button>
-        </div>
+            <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openCreate">+ Новая сделка</button>
+        </template>
 
         <!-- Единый фильтр-бар: поиск, менеджер (руководству), этап, срок с—по -->
         <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -195,31 +197,31 @@ const applyBinMatch = () => {
 
         <!-- KANBAN -->
         <div v-if="view === 'kanban'" class="flex gap-3 overflow-x-auto pb-4">
-            <div v-for="stage in visibleStages" :key="stage.id" class="flex w-64 flex-shrink-0 flex-col rounded-xl bg-slate-100/80" :class="fStage ? 'w-80' : ''" @dragover.prevent @drop="onDrop(stage)">
-                <div class="px-3 py-2">
+            <div v-for="stage in visibleStages" :key="stage.id" class="flex w-64 flex-shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50 shadow-sm" :class="fStage ? 'w-80' : ''" @dragover.prevent @drop="onDrop(stage)">
+                <div class="border-b border-slate-100 px-3 py-2.5">
                     <div class="flex items-center gap-2">
                         <span class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: stage.color }"></span>
-                        <span class="truncate text-sm font-semibold text-slate-700">{{ stage.name }}</span>
-                        <span class="shrink-0 text-xs text-slate-400">{{ byStage(stage.id).length }}</span>
+                        <span class="truncate text-sm font-semibold text-slate-900">{{ stage.name }}</span>
+                        <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-slate-500">{{ byStage(stage.id).length }}</span>
                     </div>
                     <div class="mt-0.5 pl-4 text-[11px] font-medium tabular-nums text-slate-400">{{ money(stageTotal(stage.id)) }}</div>
                 </div>
-                <div class="flex-1 space-y-2 px-2 pb-2">
+                <div class="flex-1 space-y-2 px-2 pb-2 pt-2">
                     <!-- Кнопка создания всегда СВЕРХУ колонки «Заключение договора» -->
                     <button v-if="stage.id === firstStageId && can.create" @click="openCreate"
                         class="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-indigo-300 py-2 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50">
                         + Новая сделка
                     </button>
                     <div v-for="deal in byStage(stage.id)" :key="deal.id" draggable="true" @dragstart="draggingId = deal.id"
-                        class="cursor-move rounded-lg bg-white p-2.5 border border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200">
+                        class="cursor-move rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
                         <Link :href="route('deals.show', deal.id)" class="block">
                             <!-- Кто и сколько -->
                             <div class="flex items-start justify-between gap-2">
                                 <div class="truncate text-sm font-bold text-slate-900">{{ deal.company_name || deal.name }}</div>
                                 <!-- Номер сделки виден ВСЕГДА, «Просрочена» — дополнительным бейджем -->
                                 <span class="flex shrink-0 flex-col items-end gap-0.5">
-                                    <span class="text-[10px] text-slate-300">{{ deal.number }}</span>
-                                    <span v-if="deal.overdue_count" class="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">ПРОСРОЧЕНА</span>
+                                    <span class="text-[11px] text-slate-400">{{ deal.number }}</span>
+                                    <span v-if="deal.overdue_count" class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-600">ПРОСРОЧЕНА</span>
                                 </span>
                             </div>
                             <div class="text-base font-bold leading-tight text-indigo-600">{{ money(deal.budget) }}</div>
@@ -240,11 +242,11 @@ const applyBinMatch = () => {
                                 <span v-if="deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</span>
                             </div>
                         </Link>
-                        <div class="mt-2 flex items-center justify-between border-t pt-1.5">
-                            <Link :href="route('deals.show', deal.id)" class="text-[11px] text-slate-400 hover:text-indigo-600">+ Дело</Link>
-                            <span v-if="stageTime(deal)" title="Время на текущем этапе" class="text-[10px] tabular-nums text-slate-400">⏱ {{ stageTime(deal) }}</span>
-                            <button v-if="workshopIds.includes(deal.deal_stage_id)" @click="toWorkshop(deal)" class="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">📦 В цех</button>
-                            <button v-else-if="!wonIds.includes(deal.deal_stage_id) && (canAccounting || !postActIds.includes(deal.deal_stage_id))" @click="advance(deal)" class="rounded bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700">Далее →</button>
+                        <div class="mt-2 flex items-center justify-between border-t border-slate-100 pt-1.5">
+                            <Link :href="route('deals.show', deal.id)" class="text-[11px] text-slate-400 transition-colors duration-150 hover:text-indigo-600">+ Дело</Link>
+                            <span v-if="stageTime(deal)" title="Время на текущем этапе" class="text-[11px] tabular-nums text-slate-400">⏱ {{ stageTime(deal) }}</span>
+                            <button v-if="workshopIds.includes(deal.deal_stage_id)" @click="toWorkshop(deal)" class="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">📦 В цех</button>
+                            <button v-else-if="!wonIds.includes(deal.deal_stage_id) && (canAccounting || !postActIds.includes(deal.deal_stage_id))" @click="advance(deal)" class="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500 transition-colors duration-150 hover:bg-indigo-50 hover:text-indigo-700">Далее →</button>
                         </div>
                     </div>
                     <div v-if="!byStage(stage.id).length" class="py-5 text-center text-[11px] text-slate-400">Пусто</div>
@@ -253,7 +255,7 @@ const applyBinMatch = () => {
         </div>
 
         <!-- LIST -->
-        <div v-else class="overflow-x-auto rounded-xl bg-white border border-slate-200 shadow-sm">
+        <div v-else class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
             <!-- Панель массовых действий (admin): появляется при выборе -->
             <div v-if="can.delete && selected.size" class="flex items-center justify-between gap-3 border-b border-rose-100 bg-rose-50/60 px-4 py-2.5">
                 <span class="text-sm font-medium text-rose-700">Выбрано: {{ selected.size }}</span>
@@ -263,33 +265,33 @@ const applyBinMatch = () => {
                         class="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-700">Удалить выбранные</button>
                 </div>
             </div>
-            <table class="min-w-full whitespace-nowrap divide-y divide-slate-100 text-sm">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <table class="min-w-full whitespace-nowrap text-sm">
+                <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                     <tr>
-                        <th v-if="can.delete" class="w-10 px-4 py-3">
+                        <th v-if="can.delete" class="w-10 px-6 py-2.5">
                             <input type="checkbox" :checked="allSelected" @change="toggleAllSel"
                                 class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" title="Выбрать все на странице" />
                         </th>
-                        <th class="px-4 py-3">Номер</th><th class="px-4 py-3">Компания</th><th class="px-4 py-3">Товар</th><th class="px-4 py-3">Этап</th><th class="px-4 py-3">Сумма</th><th class="px-4 py-3">Завершение</th><th class="px-4 py-3">Ответственный</th>
+                        <th class="px-4 py-2.5 first:px-6">Номер</th><th class="px-4 py-2.5">Компания</th><th class="px-4 py-2.5">Товар</th><th class="px-4 py-2.5">Этап</th><th class="px-4 py-2.5 text-right">Сумма</th><th class="px-4 py-2.5">Завершение</th><th class="px-4 py-2.5">Ответственный</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors"
-                        :class="selected.has(deal.id) ? 'bg-rose-50/50' : 'hover:bg-slate-50'"
+                <tbody class="divide-y divide-slate-50">
+                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors duration-150"
+                        :class="selected.has(deal.id) ? 'bg-rose-50/50' : 'hover:bg-slate-50/60'"
                         @click="router.get(route('deals.show', deal.id))">
-                        <td v-if="can.delete" class="px-4 py-3" @click.stop>
+                        <td v-if="can.delete" class="px-6 py-2.5" @click.stop>
                             <input type="checkbox" :checked="selected.has(deal.id)" @change="toggleSel(deal.id)"
                                 class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
                         </td>
-                        <td class="px-4 py-3 text-slate-400">{{ deal.number }}</td>
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-2.5 text-slate-400 first:px-6">{{ deal.number }}</td>
+                        <td class="px-4 py-2.5">
                             <div class="line-clamp-2 max-w-md font-medium leading-snug text-slate-900" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}</div>
                         </td>
-                        <td class="px-4 py-3"><div class="max-w-40 truncate text-slate-500" :title="deal.client_name || deal.client?.name">{{ deal.client_name || deal.client?.name || '—' }}</div></td>
-                        <td class="px-4 py-3"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
-                        <td class="px-4 py-3">{{ money(deal.budget) }}</td>
-                        <td class="px-4 py-3" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ deal.responsible?.name ?? '—' }}</td>
+                        <td class="px-4 py-2.5"><div class="max-w-40 truncate text-slate-500" :title="deal.client_name || deal.client?.name">{{ deal.client_name || deal.client?.name || '—' }}</div></td>
+                        <td class="px-4 py-2.5"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
+                        <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(deal.budget) }}</td>
+                        <td class="px-4 py-2.5" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}</td>
+                        <td class="px-4 py-2.5 text-slate-500">{{ deal.responsible?.name ?? '—' }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -299,7 +301,7 @@ const applyBinMatch = () => {
         <!-- CREATE MODAL -->
         <Modal :show="showModal" @close="showModal = false" max-width="2xl">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold">Новая сделка</h2>
+                <h2 class="mb-4 text-lg font-semibold text-slate-900">Новая сделка</h2>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div v-if="companies.length" class="sm:col-span-2">
                         <InputLabel value="Компания (нумерация сделки)" />
@@ -362,9 +364,9 @@ const applyBinMatch = () => {
         <!-- BIN EXISTS MODAL -->
         <Modal :show="showBinModal" @close="showBinModal = false" max-width="lg">
             <div class="p-6">
-                <h2 class="text-lg font-semibold text-slate-900">С этим номером договора уже есть данные</h2>
-                <p class="mt-1 text-sm text-slate-500">Можно подставить его данные в новую сделку.</p>
-                <div class="mt-4 rounded-lg bg-slate-50 p-4 border border-slate-200">
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">С этим номером договора уже есть данные</h2>
+                <p class="mb-4 text-xs text-slate-400">Можно подставить его данные в новую сделку.</p>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div class="text-xs uppercase tracking-wide text-slate-400">Компания</div>
                     <div class="text-base font-semibold text-slate-900">{{ binMatch?.company_name }}</div>
                     <div class="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-500">
@@ -409,5 +411,6 @@ const applyBinMatch = () => {
                 </div>
             </div>
         </Modal>
+        </PageLayout>
     </AppLayout>
 </template>

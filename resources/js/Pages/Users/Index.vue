@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 import Avatar from '@/Components/Avatar.vue';
@@ -228,25 +229,9 @@ const deactivate = async (u) => {
     <AppLayout>
         <template #header>{{ $t('page.users', 'Сотрудники') }}</template>
 
-        <!-- Мини-статистика -->
-        <div class="mb-4 grid grid-cols-3 gap-3 sm:max-w-md">
-            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <p class="text-2xl font-bold text-slate-900">{{ stats.total }}</p>
-                <p class="text-xs text-slate-500">Всего</p>
-            </div>
-            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <p class="text-2xl font-bold text-emerald-600">{{ stats.active }}</p>
-                <p class="text-xs text-slate-500">Активных</p>
-            </div>
-            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <p class="text-2xl font-bold text-indigo-600">{{ stats.departments }}</p>
-                <p class="text-xs text-slate-500">Отделов</p>
-            </div>
-        </div>
-
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <TextInput v-model="search" placeholder="Поиск: имя, email, телефон, отдел, роль…" class="w-full sm:w-80" />
-            <div class="flex items-center gap-2">
+        <PageLayout title="Сотрудники" subtitle="список по компаниям и отделам">
+            <template #actions>
+                <TextInput v-model="search" placeholder="Поиск: имя, email, телефон, отдел, роль…" class="w-full text-sm sm:w-72" />
                 <a :href="route('users.export')">
                     <SecondaryButton>⬇ Excel</SecondaryButton>
                 </a>
@@ -254,112 +239,125 @@ const deactivate = async (u) => {
                     <SecondaryButton>⚙ Отделы</SecondaryButton>
                 </Link>
                 <PrimaryButton v-if="can.manage" @click="openCreate">+ Добавить сотрудника</PrimaryButton>
-            </div>
-        </div>
+            </template>
 
-        <!-- Фильтр по компаниям -->
-        <div class="mb-3 flex flex-wrap items-center gap-2">
-            <button type="button" @click="companyFilter = 'all'"
-                class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
-                :class="companyFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
-                Все фирмы
-            </button>
-            <button v-for="c in companies" :key="c.id" type="button" @click="companyFilter = companyFilter === c.id ? 'all' : c.id"
-                class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
-                :class="companyFilter === c.id ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
-                {{ c.name }}
-            </button>
-        </div>
-
-        <!-- Фильтр по отделам -->
-        <div class="mb-5 flex flex-wrap items-center gap-2">
-            <button type="button" @click="deptFilter = 'all'"
-                class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
-                :class="deptFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
-                Все
-            </button>
-            <button v-for="c in deptChips" :key="c.code" type="button" @click="deptFilter = deptFilter === c.code ? 'all' : c.code"
-                class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
-                :class="deptFilter === c.code ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'">
-                {{ c.name }} <span :class="deptFilter === c.code ? 'text-indigo-200' : 'text-slate-400'">{{ c.count }}</span>
-            </button>
-            <label v-if="inactiveCount" class="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
-                <input type="checkbox" v-model="showInactive" class="rounded border-slate-300 text-indigo-600" />
-                Отключённые ({{ inactiveCount }})
-            </label>
-        </div>
-
-        <!-- Секции: компания → отделы -->
-        <section v-for="s in companySections" :key="s.id" class="mb-9">
-            <div class="mb-4 flex items-center gap-2.5 border-b-2 border-slate-800 pb-2">
-                <h2 class="text-base font-extrabold uppercase tracking-wide text-slate-800">{{ s.name }}</h2>
-                <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-bold text-white">{{ s.count }}</span>
-            </div>
-
-        <div v-for="g in s.groups" :key="g.key" class="mb-7">
-            <div class="mb-2.5 flex items-center gap-2">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ g.name }}</h3>
-                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{{ g.users.length }}</span>
-                <div class="h-px flex-1 bg-slate-200"></div>
-            </div>
-            <!-- Список, а не карточки: справочник сканируют глазами сверху вниз,
-                 и одна строка на человека читается быстрее сетки плиток. -->
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div v-for="u in g.users" :key="u.id"
-                    class="group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 transition last:border-b-0 hover:bg-slate-50 sm:px-4"
-                    :class="{ 'opacity-50': !u.is_active }"
-                    @click="router.visit(route('users.show', u.id))">
-                    <Avatar :name="u.name" :src="u.avatar" :size="34" class="shrink-0" />
-
-                    <!-- Имя и роль: главное, что ищут в списке -->
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-1.5">
-                            <span v-if="headIds.has(u.id)" title="Руководитель отдела">⭐</span>
-                            <span class="truncate font-medium text-slate-900" :title="tenure(u) ? 'В компании ' + tenure(u) : ''">{{ u.name }}</span>
-                            <span v-if="daysToBirthday(u) === 0" class="shrink-0 text-pink-500" title="День рождения сегодня">🎂</span>
-                            <span v-else-if="daysToBirthday(u) !== null && daysToBirthday(u) <= 7" class="shrink-0 text-pink-400" :title="'День рождения через ' + daysToBirthday(u) + ' дн.'">🎂</span>
-                            <span v-if="!u.is_active" class="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Отключён</span>
-                        </div>
-                        <!-- Контакты и цеха — второй строкой, приглушённо -->
-                        <div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-400">
-                            <a :href="`mailto:${u.email}`" class="truncate hover:text-indigo-600" @click.stop>{{ u.email }}</a>
-                            <a v-if="u.phone" :href="`tel:${u.phone}`" class="whitespace-nowrap hover:text-indigo-600" @click.stop>{{ u.phone }}</a>
-                            <span v-if="u.workshops?.length" class="hidden truncate sm:inline">🏭 {{ u.workshops.join(' + ') }}</span>
-                        </div>
-                    </div>
-
-                    <span class="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 sm:inline-block"
-                        :class="roleColors[u.role] ?? roleColors.employee">
-                        {{ roleLabels[u.role] ?? u.role ?? '—' }}
-                    </span>
-
-                    <div class="hidden shrink-0 gap-1 lg:flex">
-                        <span v-for="cid in u.company_ids" :key="cid" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
-                            {{ companyNames[cid] }}
-                        </span>
-                    </div>
-
-                    <!-- Действия проявляются на строке, не занимая место постоянно -->
-                    <div v-if="can.manage" class="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
-                        <button class="rounded p-1.5 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600" title="Изменить" @click.stop="openEdit(u)">
-                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                        </button>
-                        <button v-if="u.is_active" class="rounded p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="Отключить" @click.stop="deactivate(u)">
-                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
-                        </button>
-                    </div>
+            <!-- Мини-статистика — плитки §5 -->
+            <div class="grid grid-cols-1 gap-3 sm:max-w-md sm:grid-cols-3">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Всего</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-slate-800">{{ stats.total }}</div>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Активных</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ stats.active }}</div>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Отделов</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-indigo-600">{{ stats.departments }}</div>
                 </div>
             </div>
-        </div>
-        </section>
-        <div v-if="!companySections.length" class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-14 text-center text-slate-400">
-            Никого не нашли — измените поиск или фильтр
-        </div>
+
+            <!-- Фильтр по компаниям — чипы-фильтры §10 -->
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+                <button type="button" @click="companyFilter = 'all'"
+                    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                    :class="companyFilter === 'all' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                    Все фирмы
+                </button>
+                <button v-for="c in companies" :key="c.id" type="button" @click="companyFilter = companyFilter === c.id ? 'all' : c.id"
+                    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                    :class="companyFilter === c.id ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                    {{ c.name }}
+                </button>
+            </div>
+
+            <!-- Фильтр по отделам — чипы-фильтры §10 -->
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" @click="deptFilter = 'all'"
+                    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                    :class="deptFilter === 'all' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                    Все
+                </button>
+                <button v-for="c in deptChips" :key="c.code" type="button" @click="deptFilter = deptFilter === c.code ? 'all' : c.code"
+                    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                    :class="deptFilter === c.code ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                    {{ c.name }} <span class="tabular-nums" :class="deptFilter === c.code ? 'text-indigo-400' : 'text-slate-400'">{{ c.count }}</span>
+                </button>
+                <label v-if="inactiveCount" class="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+                    <input type="checkbox" v-model="showInactive" class="rounded border-slate-300 text-indigo-600" />
+                    Отключённые ({{ inactiveCount }})
+                </label>
+            </div>
+
+            <!-- Секции §6: компания → отделы -->
+            <section v-for="s in companySections" :key="s.id" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                    <h3 class="text-sm font-semibold text-slate-900">{{ s.name }}</h3>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium tabular-nums text-slate-500">{{ s.count }}</span>
+                </div>
+
+                <div v-for="g in s.groups" :key="g.key">
+                    <div class="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-6 py-2.5">
+                        <h4 class="text-xs uppercase tracking-wide text-slate-400">{{ g.name }}</h4>
+                        <span class="text-[11px] font-medium tabular-nums text-slate-400">{{ g.users.length }}</span>
+                    </div>
+                    <!-- Список, а не карточки: справочник сканируют глазами сверху вниз,
+                         и одна строка на человека читается быстрее сетки плиток. -->
+                    <div v-for="u in g.users" :key="u.id"
+                        class="group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-2.5 transition-colors duration-150 last:border-b-0 hover:bg-slate-50/60 sm:px-6"
+                        :class="{ 'opacity-50': !u.is_active }"
+                        @click="router.visit(route('users.show', u.id))">
+                        <Avatar :name="u.name" :src="u.avatar" :size="34" class="shrink-0" />
+
+                        <!-- Имя и роль: главное, что ищут в списке -->
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span v-if="headIds.has(u.id)" title="Руководитель отдела">⭐</span>
+                                <span class="truncate text-sm font-medium text-slate-900" :title="tenure(u) ? 'В компании ' + tenure(u) : ''">{{ u.name }}</span>
+                                <span v-if="daysToBirthday(u) === 0" class="shrink-0 text-pink-500" title="День рождения сегодня">🎂</span>
+                                <span v-else-if="daysToBirthday(u) !== null && daysToBirthday(u) <= 7" class="shrink-0 text-pink-400" :title="'День рождения через ' + daysToBirthday(u) + ' дн.'">🎂</span>
+                                <span v-if="!u.is_active" class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Отключён</span>
+                            </div>
+                            <!-- Контакты и цеха — второй строкой, приглушённо -->
+                            <div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400">
+                                <a :href="`mailto:${u.email}`" class="truncate transition-colors hover:text-indigo-600" @click.stop>{{ u.email }}</a>
+                                <a v-if="u.phone" :href="`tel:${u.phone}`" class="whitespace-nowrap transition-colors hover:text-indigo-600" @click.stop>{{ u.phone }}</a>
+                                <span v-if="u.workshops?.length" class="hidden truncate sm:inline">🏭 {{ u.workshops.join(' + ') }}</span>
+                            </div>
+                        </div>
+
+                        <span class="hidden shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-block"
+                            :class="roleColors[u.role] ?? roleColors.employee">
+                            {{ roleLabels[u.role] ?? u.role ?? '—' }}
+                        </span>
+
+                        <div class="hidden shrink-0 gap-1 lg:flex">
+                            <span v-for="cid in u.company_ids" :key="cid" class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                                {{ companyNames[cid] }}
+                            </span>
+                        </div>
+
+                        <!-- Действия проявляются на строке, не занимая место постоянно -->
+                        <div v-if="can.manage" class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Изменить" @click.stop="openEdit(u)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </button>
+                            <button v-if="u.is_active" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Отключить" @click.stop="deactivate(u)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <div v-if="!companySections.length" class="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-8 text-center text-sm text-slate-400 shadow-sm">
+                Никого не нашли — измените поиск или фильтр
+            </div>
+        </PageLayout>
 
         <Modal :show="show" @close="show = false" max-width="2xl">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold">{{ editing ? 'Изменить сотрудника' : 'Новый сотрудник' }}</h2>
-                <div class="grid grid-cols-2 gap-4">
+                <h2 class="mb-4 text-lg font-semibold text-slate-900">{{ editing ? 'Изменить сотрудника' : 'Новый сотрудник' }}</h2>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <InputLabel value="Имя" />
                         <TextInput v-model="form.name" class="mt-1 w-full" />
@@ -381,7 +379,7 @@ const deactivate = async (u) => {
                     </div>
                     <div>
                         <InputLabel value="Отдел" />
-                        <select v-model="form.department_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
+                        <select v-model="form.department_id" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm">
                             <option value="">—</option>
                             <!-- Отделы свои у каждой фирмы — группируем, иначе одноимённые не различить. -->
                             <optgroup v-for="c in companies" :key="c.id" :label="c.name">
@@ -391,16 +389,16 @@ const deactivate = async (u) => {
                     </div>
                     <div>
                         <InputLabel value="Роль" />
-                        <select v-model="form.role" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
+                        <select v-model="form.role" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm">
                             <option v-for="r in roles" :key="r" :value="r">{{ roleLabels[r] ?? r }}</option>
                         </select>
                     </div>
-                    <div v-if="workshopOptions.length" class="col-span-2">
+                    <div v-if="workshopOptions.length" class="sm:col-span-2">
                         <InputLabel value="Доступ к цехам (пусто = все цеха; можно выбрать оба)" />
                         <div class="mt-1 flex flex-wrap gap-2">
                             <button v-for="w in workshopOptions" :key="w" type="button" @click="toggleWorkshop(w)"
-                                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
-                                :class="form.workshops.includes(w) ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                                :class="form.workshops.includes(w) ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
                                 🏭 {{ w }}
                             </button>
                         </div>
@@ -424,22 +422,22 @@ const deactivate = async (u) => {
                     </div>
                     <div>
                         <InputLabel value="Договор (файл, необязательно)" />
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" class="mt-1 w-full text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" class="mt-1 w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-600 hover:file:bg-slate-200"
                             @change="form.contract = $event.target.files[0] ?? null" />
                         <InputError :message="form.errors.contract" class="mt-1" />
-                        <a v-if="editing?.has_contract" :href="route('users.contract', editing.id)" class="mt-1 inline-block text-xs text-indigo-600 hover:underline">📄 Скачать текущий договор</a>
+                        <a v-if="editing?.has_contract" :href="route('users.contract', editing.id)" class="mt-1 inline-block text-xs font-medium text-indigo-600 hover:underline">📄 Скачать текущий договор</a>
                     </div>
-                    <div class="col-span-2">
+                    <div class="sm:col-span-2">
                         <InputLabel value="Компании (может работать в обеих)" />
                         <div class="mt-1 flex gap-2">
                             <button v-for="c in companies" :key="c.id" type="button" @click="toggleCompany(c.id)"
-                                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
-                                :class="form.company_ids.includes(c.id) ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                                :class="form.company_ids.includes(c.id) ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
                                 {{ c.name }}
                             </button>
                         </div>
                     </div>
-                    <label class="col-span-2 flex items-center gap-2 text-sm">
+                    <label class="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
                         <input type="checkbox" v-model="form.is_active" class="rounded border-slate-300 text-indigo-600" /> Активен
                     </label>
                 </div>

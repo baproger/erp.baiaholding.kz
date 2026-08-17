@@ -6,8 +6,8 @@ import Avatar from '@/Components/Avatar.vue';
 const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] }, funnel: { type: Array, default: () => [] } });
 
 // Цвет действия по лоту: участие — нейтральное, звонок и КП — активная работа.
-const actionClass = (a) => a === 'Звонок' ? 'bg-sky-100 text-sky-700'
-    : a === 'КП (ватсап)' ? 'bg-violet-100 text-violet-700'
+const actionClass = (a) => a === 'Звонок' ? 'bg-sky-50 text-sky-700'
+    : a === 'КП (ватсап)' ? 'bg-indigo-50 text-indigo-700'
     : 'bg-slate-100 text-slate-500';
 
 // ТВ-режим: часы + автообновление раз в 10 секунд. Без автопрокрутки —
@@ -30,7 +30,7 @@ const monthF = ref(props.month ?? '');
 const applyMonth = () => router.get(route('screen.show'), { month: monthF.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
 const isCurrent = computed(() => props.month === new Date().toISOString().slice(0, 7));
 
-const convClass = (c) => c >= 50 ? 'bg-emerald-100 text-emerald-700' : c >= 25 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500';
+const convClass = (c) => c >= 50 ? 'bg-emerald-50 text-emerald-700' : c >= 25 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500';
 const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' : 'bg-amber-400';
 </script>
 
@@ -41,16 +41,16 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
         <div class="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
             <div>
                 <h1 class="text-2xl font-bold leading-tight text-slate-900 lg:text-3xl">{{ title }}</h1>
-                <div class="text-sm text-slate-400">рейтинг эффективности — {{ monthLabel }}<span v-if="!isCurrent" class="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">архив</span></div>
+                <div class="text-sm text-slate-400">рейтинг эффективности — {{ monthLabel }}<span v-if="!isCurrent" class="ml-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">архив</span></div>
             </div>
             <div class="flex items-center gap-3">
                 <input v-model="monthF" @change="applyMonth" type="month"
-                    class="rounded-lg border-slate-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" title="Какой месяц показать" />
+                    class="rounded-lg border-slate-300 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Какой месяц показать" />
                 <div class="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-emerald-700">
                     <span class="relative flex h-2.5 w-2.5"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span></span>
                     <span class="text-xl font-bold tabular-nums lg:text-2xl">{{ clock }}</span>
                 </div>
-                <button @click="leave" class="rounded-lg px-3 py-2 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" title="Сменить код">выйти</button>
+                <button @click="leave" class="rounded-lg px-3 py-2 text-xs text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600" title="Сменить код">выйти</button>
             </div>
         </div>
 
@@ -96,7 +96,7 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                                 <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
                                 <!-- Лоты, по которым менеджер сделал звонок или КП -->
                                 <span class="rounded-full px-1.5 py-0.5 font-bold tabular-nums"
-                                    :class="m.contacted > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'"
+                                    :class="m.contacted > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'"
                                     title="Лоты, по которым был звонок или КП">☎ {{ m.contacted }}</span>
                             </div>
                         </div>
@@ -116,7 +116,7 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2">
                             <span class="truncate text-sm font-semibold text-slate-900">{{ l.product || '—' }}</span>
-                            <span v-if="l.won" class="flex-shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">ВЫИГРАЛ ✓</span>
+                            <span v-if="l.won" class="flex-shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">ВЫИГРАЛ ✓</span>
                         </div>
                         <div class="truncate text-xs text-slate-400">{{ l.customer || '—' }} · {{ l.manager }}</div>
                     </div>

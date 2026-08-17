@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import PageLayout from '@/Layouts/PageLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 
@@ -143,24 +144,33 @@ const donut = computed(() => {
     <Head title="Аналитика" />
     <AppLayout>
         <template #header>{{ $t('page.analytics', 'Аналитика') }}</template>
-
-        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-                <button :class="tab==='general' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='general'">Обзор</button>
-                <button :class="tab==='employees' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='employees'">По сотрудникам</button>
+        <PageLayout :title="$t('page.analytics', 'Аналитика')" subtitle="live-показатели компании">
+        <!-- Вкладки страницы (§1) -->
+        <template #tabs>
+            <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
+                <button type="button" @click="tab='general'"
+                    class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150"
+                    :class="tab==='general' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'">Обзор</button>
+                <button type="button" @click="tab='employees'"
+                    class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150"
+                    :class="tab==='employees' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'">По сотрудникам</button>
                 <!-- Бухгалтеры: сделки, застрявшие на ИХ этапах (АКТ, ЭСФ) -->
-                <button :class="tab==='accountants' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'" class="relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors" @click="tab='accountants'">
+                <button type="button" @click="tab='accountants'"
+                    class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150"
+                    :class="tab==='accountants' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'">
                     По бухгалтерам
-                    <span v-if="accountantTotals?.overdue_deals" class="ml-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ accountantTotals.overdue_deals }}</span>
+                    <span v-if="accountantTotals?.overdue_deals" class="ml-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-600">{{ accountantTotals.overdue_deals }}</span>
                 </button>
-            </div>
-            <!-- Реальное время: часы + автообновление данных раз в минуту -->
-            <div class="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-                <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span></span>
+            </nav>
+        </template>
+        <!-- Реальное время: часы + автообновление данных раз в минуту -->
+        <template #actions>
+            <div class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                 LIVE <span class="tabular-nums">{{ clock }}</span>
                 <span class="hidden text-emerald-500/70 sm:inline">· данные на {{ updatedAt }}</span>
             </div>
-        </div>
+        </template>
 
         <!-- ============ BENTO: ОБЗОР ============ -->
         <div v-show="tab==='general'" class="space-y-4">
@@ -194,12 +204,12 @@ const donut = computed(() => {
                  Каждая строка кликабельна — переход в раздел. -->
             <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div v-for="col in [
-                        { grad: 'bg-gradient-to-br from-indigo-50/80 via-white to-white border-indigo-100', rows: [
+                        { grad: 'border-slate-200 bg-white', rows: [
                             { label: 'Общая сумма договоров', value: totals.contracts, accent: 'text-slate-900', sub: 'все сделки (кроме отменённых) · won: ' + money(totals.budget), href: route('finance.index') },
                             { label: 'Расходы', value: totals.expense, accent: 'text-rose-600', minus: true, sub: 'подтверждённые', href: route('finance.index', { exp_status: 'confirmed' }) },
                             { label: 'Чистая прибыль', value: totals.net, accent: 'text-emerald-600', sub: 'по won-сделкам · полная — в «Деньгах компании» ниже', href: route('finance.index') },
                         ] },
-                        { grad: 'bg-gradient-to-br from-emerald-50/80 via-white to-white border-emerald-100', rows: [
+                        { grad: 'border-slate-200 bg-white', rows: [
                             { label: 'Оплачено', value: totals.income, accent: 'text-emerald-600', sub: 'фактически поступило', href: route('finance.index') },
                             { label: 'Налог', value: totals.tax, accent: 'text-rose-500', minus: true, sub: 'ставка ' + totals.taxRate + '%', href: route('finance.index') },
                             { label: 'ЗП (бонусы)', value: totals.bonus, accent: 'text-slate-900', sub: 'бонусы менеджеров', href: route('payroll.index') },
@@ -207,12 +217,12 @@ const donut = computed(() => {
                     ]" :key="col.rows[0].label"
                     class="divide-y divide-slate-100 rounded-xl border shadow-sm" :class="col.grad">
                     <Link v-for="r in col.rows" :key="r.label" :href="r.href"
-                        class="flex items-center justify-between gap-3 px-5 py-3.5 transition first:rounded-t-xl last:rounded-b-xl hover:bg-white/60">
+                        class="flex items-center justify-between gap-3 px-6 py-3.5 transition-colors duration-150 first:rounded-t-xl last:rounded-b-xl hover:bg-slate-50/60">
                         <div>
-                            <div class="text-sm font-medium text-slate-700">{{ r.label }}</div>
-                            <div class="mt-0.5 text-xs text-slate-400">{{ r.sub }}</div>
+                            <div class="text-sm text-slate-600">{{ r.label }}</div>
+                            <div class="mt-0.5 text-[11px] text-slate-400">{{ r.sub }}</div>
                         </div>
-                        <div class="text-right text-xl font-semibold tracking-tight tabular-nums" :class="r.accent">{{ r.minus ? '−' : '' }}{{ money(r.value) }}</div>
+                        <div class="whitespace-nowrap text-right text-xl font-bold tabular-nums" :class="r.accent">{{ r.minus ? '−' : '' }}{{ money(r.value) }}</div>
                     </Link>
                 </div>
             </div>
@@ -656,5 +666,6 @@ const donut = computed(() => {
                 <div class="text-sm text-slate-400">На этапах АКТ и ЭСФ сейчас нет сделок с задачами бухгалтеров</div>
             </div>
         </div>
+        </PageLayout>
     </AppLayout>
 </template>

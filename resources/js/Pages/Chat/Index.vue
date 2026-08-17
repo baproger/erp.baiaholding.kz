@@ -508,7 +508,7 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                     <div class="relative">
                         <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
                         <input v-model="search" placeholder="Поиск чатов и контактов…"
-                            class="w-full rounded-lg border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                            class="w-full rounded-lg border-slate-200 bg-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                     </div>
                 </div>
 
@@ -612,7 +612,7 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                     <div v-if="activeChat" class="flex items-center gap-1.5">
                         <div v-if="showSearch" class="relative">
                             <input v-model="msgSearch" autofocus placeholder="Поиск в чате…"
-                                class="w-40 rounded-lg border-slate-200 py-1.5 pl-3 pr-7 text-xs shadow-sm focus:border-indigo-400 focus:ring-indigo-400 sm:w-52" />
+                                class="w-40 rounded-lg border-slate-200 py-1.5 pl-3 pr-7 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 sm:w-52" />
                             <button @click="showSearch = false; msgSearch = ''" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">✕</button>
                         </div>
                         <button v-else @click="showSearch = true" title="Поиск в чате" class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100">
@@ -769,7 +769,7 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                         </button>
 
                         <!-- Emoji panel -->
-                        <transition enter-active-class="transition duration-150" enter-from-class="opacity-0 translate-y-2" leave-active-class="transition duration-100" leave-to-class="opacity-0">
+                        <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 translate-y-1" leave-active-class="transition duration-150 ease-in" leave-to-class="opacity-0 translate-y-1">
                             <div v-if="showEmoji" class="absolute bottom-14 left-0 grid grid-cols-8 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                                 <button v-for="e in emojis" :key="e" @click="addEmoji(e)" class="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-slate-100">{{ e }}</button>
                             </div>
@@ -822,7 +822,7 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                                 <div v-if="canManage(activeChat)" class="mt-3 border-t border-slate-100 pt-3">
                                     <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">➕ Добавить участника</div>
                                     <input v-model="memberSearch" placeholder="Поиск сотрудника…"
-                                        class="mb-1.5 w-full rounded-lg border-slate-200 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                                        class="mb-1.5 w-full rounded-lg border-slate-200 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                                     <div class="max-h-44 space-y-0.5 overflow-y-auto">
                                         <button v-for="u in nonMembers" :key="u.id" @click="addMember(u)"
                                             class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-indigo-50">
@@ -876,31 +876,32 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
         <!-- ============ New chat / group modal ============ -->
         <Modal :show="showNew" @close="showNew = false" max-width="lg">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold text-slate-900">Новый чат</h2>
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">Новый чат</h2>
+                <p class="mb-4 text-xs text-slate-400">Личный диалог или группа для команды.</p>
 
-                <div class="mb-4 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-sm">
-                    <button @click="newForm.type = 'personal'" :class="newForm.type === 'personal' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'" class="rounded-md px-3 py-1 font-medium">Личный</button>
-                    <button v-if="canCreateGroup" @click="newForm.type = 'group'" :class="newForm.type === 'group' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'" class="rounded-md px-3 py-1 font-medium">Группа</button>
+                <div class="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                    <button @click="newForm.type = 'personal'" :class="newForm.type === 'personal' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150">Личный</button>
+                    <button v-if="canCreateGroup" @click="newForm.type = 'group'" :class="newForm.type === 'group' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150">Группа</button>
                 </div>
 
                 <div v-if="newForm.type === 'group'" class="mb-3 space-y-2">
-                    <input v-model="newForm.name" placeholder="Название группы" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                    <input v-model="newForm.name" placeholder="Название группы" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
                     <div v-if="newForm.errors.name" class="text-xs text-red-600">{{ newForm.errors.name }}</div>
-                    <textarea v-model="newForm.description" rows="2" placeholder="Описание группы (необязательно)" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400"></textarea>
+                    <textarea v-model="newForm.description" rows="2" placeholder="Описание группы (необязательно)" class="w-full rounded-md border-slate-300 text-sm shadow-sm"></textarea>
                     <!-- Фирма группы: сотрудники BAIA видят группы BAIA, ASU — свои -->
                     <div v-if="companies.length > 1" class="flex items-center gap-1.5">
-                        <span class="text-xs text-slate-500">Фирма:</span>
+                        <span class="text-xs font-medium text-slate-500">Фирма:</span>
                         <button type="button" @click="newForm.company_id = null"
-                            :class="!newForm.company_id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
-                            class="rounded-full px-2.5 py-1 text-xs font-semibold">Обе</button>
+                            :class="!newForm.company_id ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
+                            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150">Обе</button>
                         <button v-for="co in companies" :key="co.id" type="button" @click="newForm.company_id = co.id"
-                            :class="newForm.company_id === co.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
-                            class="rounded-full px-2.5 py-1 text-xs font-semibold">{{ co.name }}</button>
+                            :class="newForm.company_id === co.id ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
+                            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150">{{ co.name }}</button>
                     </div>
                 </div>
 
                 <div class="mb-1 text-xs font-medium text-slate-500">Участники ({{ newForm.participants.length }})</div>
-                <input v-model="userSearch" placeholder="Поиск по имени…" class="mb-2 w-full rounded-lg border-slate-200 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                <input v-model="userSearch" placeholder="Поиск по имени…" class="mb-2 w-full rounded-md border-slate-300 py-1.5 text-sm shadow-sm" />
                 <div class="max-h-56 space-y-0.5 overflow-y-auto rounded-lg border border-slate-100 p-1">
                     <label v-for="u in filteredUsers" :key="u.id" class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50">
                         <input type="checkbox" :checked="newForm.participants.includes(u.id)" @change="toggleParticipant(u.id)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
@@ -910,7 +911,7 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                     <div v-if="!filteredUsers.length" class="py-3 text-center text-xs text-slate-400">Нет сотрудников</div>
                 </div>
 
-                <div class="mt-5 flex justify-end gap-2">
+                <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showNew = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="newForm.processing || (newForm.type === 'personal' && !newForm.participants.length)" @click="createChat">Создать</PrimaryButton>
                 </div>
@@ -920,7 +921,8 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
         <!-- ============ Edit group modal ============ -->
         <Modal :show="showEdit" @close="showEdit = false" max-width="lg">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold text-slate-900">Редактировать группу</h2>
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">Редактировать группу</h2>
+                <p class="mb-4 text-xs text-slate-400">Название, описание, фото и состав участников.</p>
 
                 <div class="mb-4 flex items-center gap-3">
                     <span class="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-xl font-bold text-white" :class="avatarColor(editForm.name)">
@@ -929,28 +931,28 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                     </span>
                     <div>
                         <input ref="editPhotoInput" type="file" accept="image/*" class="hidden" @change="onEditPhoto" />
-                        <button @click="editPhotoInput?.click()" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">Загрузить фото группы</button>
+                        <button @click="editPhotoInput?.click()" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Загрузить фото группы</button>
                         <div v-if="editForm.errors.photo" class="mt-1 text-xs text-red-600">{{ editForm.errors.photo }}</div>
                     </div>
                 </div>
 
                 <div class="mb-3 space-y-2">
-                    <input v-model="editForm.name" placeholder="Название группы" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                    <input v-model="editForm.name" placeholder="Название группы" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
                     <div v-if="editForm.errors.name" class="text-xs text-red-600">{{ editForm.errors.name }}</div>
-                    <textarea v-model="editForm.description" rows="2" placeholder="Описание группы" class="w-full rounded-lg border-slate-200 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400"></textarea>
+                    <textarea v-model="editForm.description" rows="2" placeholder="Описание группы" class="w-full rounded-md border-slate-300 text-sm shadow-sm"></textarea>
                     <div v-if="companies.length > 1" class="flex items-center gap-1.5">
-                        <span class="text-xs text-slate-500">Фирма:</span>
+                        <span class="text-xs font-medium text-slate-500">Фирма:</span>
                         <button type="button" @click="editForm.company_id = null"
-                            :class="!editForm.company_id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
-                            class="rounded-full px-2.5 py-1 text-xs font-semibold">Обе</button>
+                            :class="!editForm.company_id ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
+                            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150">Обе</button>
                         <button v-for="co in companies" :key="co.id" type="button" @click="editForm.company_id = co.id"
-                            :class="editForm.company_id === co.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'"
-                            class="rounded-full px-2.5 py-1 text-xs font-semibold">{{ co.name }}</button>
+                            :class="editForm.company_id === co.id ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
+                            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150">{{ co.name }}</button>
                     </div>
                 </div>
 
                 <div class="mb-1 text-xs font-medium text-slate-500">Участники ({{ editForm.participants.length + 1 }})</div>
-                <input v-model="userSearch" placeholder="Поиск по имени…" class="mb-2 w-full rounded-lg border-slate-200 py-1.5 text-sm shadow-sm focus:border-indigo-400 focus:ring-indigo-400" />
+                <input v-model="userSearch" placeholder="Поиск по имени…" class="mb-2 w-full rounded-md border-slate-300 py-1.5 text-sm shadow-sm" />
                 <div class="max-h-56 space-y-0.5 overflow-y-auto rounded-lg border border-slate-100 p-1">
                     <label v-for="u in filteredUsers" :key="u.id" class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50">
                         <input type="checkbox" :checked="editForm.participants.includes(u.id)" @change="toggleEditParticipant(u.id)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
@@ -960,7 +962,7 @@ onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.remov
                     <div v-if="!filteredUsers.length" class="py-3 text-center text-xs text-slate-400">Нет сотрудников</div>
                 </div>
 
-                <div class="mt-5 flex justify-end gap-2">
+                <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showEdit = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="editForm.processing" @click="saveEdit">Сохранить</PrimaryButton>
                 </div>
