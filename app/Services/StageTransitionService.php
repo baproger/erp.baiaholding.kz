@@ -83,7 +83,9 @@ class StageTransitionService
                     'stage' => 'На «ЭСФ» можно перейти только с этапа «Акт утверждение».',
                 ]);
             }
-            if ($wonStage && $target->id === $wonStage->id && (! $current || ! $preWon || $current->id !== $preWon->id)) {
+            // На won-этап — с «ЭСФ» или любого более позднего этапа (между ними
+            // могут стоять свои этапы, например «Оплата»); с ранних — нельзя.
+            if ($wonStage && $target->id === $wonStage->id && (! $current || ! $preWon || $current->order < $preWon->order)) {
                 throw ValidationException::withMessages([
                     'stage' => 'Сначала «'.($preWon?->name ?? 'Акт утверждение').'», затем «Оплата успешно».',
                 ]);

@@ -51,7 +51,8 @@ const stageLocked = (stage) => {
     if (managerFrozen.value) return true;
     if (!canAccounting.value && postActIds.value.includes(stage.id) && stage.id !== actStage.value?.id) return true;
     if (stage.id === esfStage.value?.id && props.deal.deal_stage_id !== actStage.value?.id) return true;
-    if (stage.id === wonStage.value?.id && props.deal.deal_stage_id !== preWonStage.value?.id) return true;
+    // Won-этап открыт с «ЭСФ» и любого более позднего этапа (напр. «Оплата»).
+    if (stage.id === wonStage.value?.id && currentStageIndex.value < props.stages.findIndex((s) => s.id === preWonStage.value?.id)) return true;
     return false;
 };
 const lockHint = (stage) => {
