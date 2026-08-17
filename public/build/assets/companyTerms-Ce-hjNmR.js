@@ -1,0 +1,1 @@
+import{i as e}from"./app-DDWQpUsk.js";var t=e=>(e??``).toUpperCase().includes(`ASU`);function n(n=null){let r=e().props.auth??{},i=n??r.currentCompanyId,a=(r.companies??[]).find(e=>e.id===i)?.name;return t(a)?`Работа`:`Сборка`}export{n as t};

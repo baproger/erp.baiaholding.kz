@@ -54,7 +54,7 @@ const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(
     <AppLayout>
         <template #header>{{ $t('page.workshop', 'Цех') }}</template>
 
-        <PageLayout :title="$t('page.workshop', 'Цех')" subtitle="заказы по этапам цеха">
+        <PageLayout :title="$t('page.workshop', 'Цех')" subtitle="заказы по этапам цеха" full>
             <template #actions>
                 <!-- Сегмент-контрол (DESIGN.md §10) -->
                 <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
