@@ -159,7 +159,7 @@ const applyBinMatch = () => {
     <AppLayout>
         <template #header>{{ $t('page.deals', 'Сделки') }}</template>
 
-        <PageLayout title="Сделки" subtitle="канбан и список по воронке">
+        <PageLayout title="Сделки" subtitle="канбан и список по воронке" full>
         <template #actions>
             <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
                 <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('kanban')">Канбан</button>
@@ -267,7 +267,7 @@ const applyBinMatch = () => {
             </div>
             <table class="min-w-full whitespace-nowrap text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
+                    <tr class="divide-x divide-slate-100">
                         <th v-if="can.delete" class="w-10 px-6 py-2.5">
                             <input type="checkbox" :checked="allSelected" @change="toggleAllSel"
                                 class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" title="Выбрать все на странице" />
@@ -276,7 +276,7 @@ const applyBinMatch = () => {
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
-                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer transition-colors duration-150"
+                    <tr v-for="deal in deals.data" :key="deal.id" class="cursor-pointer divide-x divide-slate-100 transition-colors duration-150"
                         :class="selected.has(deal.id) ? 'bg-rose-50/50' : 'hover:bg-slate-50/60'"
                         @click="router.get(route('deals.show', deal.id))">
                         <td v-if="can.delete" class="px-6 py-2.5" @click.stop>

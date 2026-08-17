@@ -100,7 +100,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
     <Head title="Сводный отчет" />
     <AppLayout>
         <template #header>{{ isLeadership ? 'Сводный отчет' : 'Мой отчёт' }}</template>
-        <PageLayout :title="isLeadership ? 'Сводный отчёт' : 'Мой отчёт'" subtitle="сделки и цех за период">
+        <PageLayout :title="isLeadership ? 'Сводный отчёт' : 'Мой отчёт'" subtitle="сделки и цех за период" full>
         <!-- Фильтры: поиск, период, менеджер, этап (серверные) -->
         <template #actions>
             <div class="relative w-full sm:w-60">
@@ -239,7 +239,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             <div v-if="summaryOpen" class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                        <tr>
+                        <tr class="divide-x divide-slate-100">
                             <th class="whitespace-nowrap px-6 py-2.5">Менеджер</th>
                             <th class="whitespace-nowrap px-4 py-2.5 text-right">Сделок</th>
                             <th class="whitespace-nowrap px-4 py-2.5 text-right">Выиграл</th>
@@ -254,7 +254,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="m in byManager" :key="m.manager_id ?? 0"
-                            class="cursor-pointer transition-colors duration-150 hover:bg-slate-50/60"
+                            class="cursor-pointer divide-x divide-slate-100 transition-colors duration-150 hover:bg-slate-50/60"
                             :class="Number(manager) === m.manager_id ? 'bg-indigo-50' : ''"
                             :title="'Показать только сделки: ' + m.manager"
                             @click="pickManager(Number(manager) === m.manager_id ? '' : (m.manager_id ?? ''))">
@@ -271,7 +271,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                         </tr>
                     </tbody>
                     <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
-                        <tr>
+                        <tr class="divide-x divide-slate-100">
                             <td class="px-6 py-3 text-slate-500">ИТОГО</td>
                             <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-600">{{ totals.count }}</td>
                             <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-700">{{ byManager.reduce((s, m) => s + m.won, 0) }}</td>
@@ -300,7 +300,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             <div class="max-h-[70vh] overflow-auto">
                 <table class="min-w-full whitespace-nowrap text-xs">
                     <thead class="text-left uppercase tracking-wide text-slate-400">
-                        <tr>
+                        <tr class="divide-x divide-slate-100">
                             <th class="sticky top-0 z-20 border-b border-slate-100 bg-slate-50 px-6 py-2.5">Сделка</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5">Товар · кол-во</th>
                             <th class="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 px-4 py-2.5">Менеджер</th>
@@ -322,7 +322,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="r in rows" :key="r.id" @click="openDeal(r.id)"
-                            class="group cursor-pointer transition-colors" :class="rowClass(r)">
+                            class="group cursor-pointer divide-x divide-slate-100 transition-colors" :class="rowClass(r)">
                             <!-- Сделка: организация + № / договор -->
                             <td class="max-w-64 px-6 py-2.5">
                                 <div class="truncate text-[13px] font-semibold text-slate-800" :title="r.company_name">{{ r.company_name || '—' }}</div>

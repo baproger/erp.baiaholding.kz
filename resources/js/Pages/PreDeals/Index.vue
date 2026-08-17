@@ -145,7 +145,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
     <AppLayout>
         <template #header>Предварительные сделки</template>
 
-        <PageLayout title="Предварительные сделки" subtitle="лоты: маржа, действия, рейтинг">
+        <PageLayout title="Предварительные сделки" subtitle="лоты: маржа, действия, рейтинг" full>
             <template #actions>
                 <label class="flex items-center gap-1 text-xs text-slate-400" title="Показать лоты, внесённые в выбранном месяце — по датам">месяц
                     <input v-model="monthF" @change="applyFilters" type="month" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
@@ -212,20 +212,13 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 <div class="overflow-x-auto">
                     <table class="min-w-full whitespace-nowrap text-sm">
                         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                            <tr>
+                            <tr class="divide-x divide-slate-100">
                                 <th class="px-6 py-2.5">№ лота</th>
                                 <th class="px-4 py-2.5">Заказчик · товар</th>
-                                <th v-if="leadership" class="px-4 py-2.5">Менеджер</th>
-                                <th class="px-4 py-2.5 text-right">Сумма договора</th>
-                                <th class="px-4 py-2.5 text-right">Закуп</th>
-                                <th class="px-4 py-2.5 text-right">Партнёр</th>
-                                <th class="px-4 py-2.5 text-right">Доставка</th>
-                                <th class="px-4 py-2.5 text-right">{{ assemblyLabel() }}</th>
-                                <th class="px-4 py-2.5 text-right">Комиссия</th>
-                                <th class="px-4 py-2.5 text-right">Налог</th>
+                                <th class="px-4 py-2.5 text-right">Договор · закуп</th>
+                                <th class="px-4 py-2.5 text-right">Расходы</th>
                                 <th class="px-4 py-2.5 text-right">Остаток</th>
                                 <th class="px-4 py-2.5 text-center">Маржа</th>
-                                <th class="px-4 py-2.5 text-center">Выиграл</th>
                                 <th class="px-4 py-2.5 text-center">Чек-лист</th>
                                 <th class="px-4 py-2.5"></th>
                             </tr>
@@ -235,36 +228,60 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                             <!-- Секция «Сегодня» / «Прошлые» (аккордеон) -->
                             <tr v-if="g.list.length || g.toggle" class="bg-slate-100/70 transition-colors duration-150" :class="g.toggle ? 'cursor-pointer select-none hover:bg-slate-200/60' : ''"
                                 @click="g.toggle && (showPast = !showPast)">
-                                <td :colspan="leadership ? 15 : 14" class="px-6 py-2">
+                                <td colspan="8" class="px-6 py-2">
                                     <span class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                                         <svg v-if="g.toggle" class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="showPast ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
                                         {{ g.label }} <span class="font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }}</span>
                                     </span>
                                 </td>
                             </tr>
-                            <tr v-if="g.key === 'today' && !g.list.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-4 text-center text-xs text-slate-400">Сегодня лотов ещё нет</td></tr>
+                            <tr v-if="g.key === 'today' && !g.list.length"><td colspan="8" class="px-6 py-4 text-center text-xs text-slate-400">Сегодня лотов ещё нет</td></tr>
                             <template v-if="g.open">
                             <template v-for="p in g.list" :key="p.id">
-                                <tr class="group transition-colors duration-150 hover:bg-slate-50/60">
+                                <tr class="group divide-x divide-slate-100 transition-colors duration-150 hover:bg-slate-50/60">
                                     <td class="px-6 py-2.5 text-slate-500">{{ p.lot_number || '—' }}<span class="block text-[11px] text-slate-400">{{ formatDate(p.created_at) }}</span>
                                         <span v-if="p.tender_deadline" class="block text-[11px] font-medium" :class="tenderUrgent(p) ? 'text-rose-600' : 'text-slate-400'">⏳ тендер до {{ formatDate(p.tender_deadline) }}</span>
                                     </td>
                                     <td class="max-w-56 px-4 py-2.5">
                                         <div class="truncate font-medium text-slate-800" :title="p.customer">{{ p.customer || '—' }}<span v-if="p.bin" class="text-xs text-slate-400"> · {{ p.bin }}</span></div>
                                         <div class="truncate text-[11px] text-slate-400" :title="p.product">{{ p.product }}</div>
+                                        <div v-if="leadership" class="truncate text-[11px] text-slate-500">👤 {{ p.user?.name ?? '—' }}</div>
                                     </td>
-                                    <td v-if="leadership" class="px-4 py-2.5 text-xs text-slate-500">{{ p.user?.name ?? '—' }}</td>
-                                    <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(p.contract_sum) }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.purchase_price) }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.partner_sum) }}<span class="block text-[11px] tabular-nums text-slate-400">{{ Number(p.partner_pct) }}%</span></td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.delivery) }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.assembly) }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.commission) }}</td>
-                                    <td class="px-4 py-2.5 text-right tabular-nums text-slate-600">{{ money(p.tax) }}</td>
+                                    <td class="px-4 py-2.5 text-right">
+                                        <span class="font-semibold tabular-nums text-slate-800">{{ money(p.contract_sum) }}</span>
+                                        <span class="block text-[11px] tabular-nums text-slate-400">закуп {{ money(p.purchase_price) }}</span>
+                                    </td>
+                                    <td class="px-4 py-2.5">
+                                        <div class="flex flex-wrap justify-end gap-x-4 gap-y-1">
+                                            <div v-if="Number(p.partner_sum)" class="text-right">
+                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">партнёр<template v-if="Number(p.partner_pct)"> · {{ Number(p.partner_pct) }}%</template></div>
+                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.partner_sum) }}</div>
+                                            </div>
+                                            <div v-if="Number(p.delivery)" class="text-right">
+                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">доставка</div>
+                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.delivery) }}</div>
+                                            </div>
+                                            <div v-if="Number(p.assembly)" class="text-right">
+                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">{{ assemblyLabel().toLowerCase() }}</div>
+                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.assembly) }}</div>
+                                            </div>
+                                            <div v-if="Number(p.commission)" class="text-right">
+                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">комиссия</div>
+                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.commission) }}</div>
+                                            </div>
+                                            <div v-if="Number(p.tax)" class="text-right">
+                                                <div class="text-[9px] font-medium uppercase tracking-wide text-slate-400">налог</div>
+                                                <div class="whitespace-nowrap text-[11px] font-semibold tabular-nums text-slate-700">{{ money(p.tax) }}</div>
+                                            </div>
+                                            <span v-if="!Number(p.partner_sum) && !Number(p.delivery) && !Number(p.assembly) && !Number(p.commission) && !Number(p.tax)" class="text-[11px] text-slate-300">—</span>
+                                        </div>
+                                    </td>
                                     <td class="px-4 py-2.5 text-right font-semibold tabular-nums" :class="Number(p.remainder) >= 0 ? 'text-slate-800' : 'text-rose-600'">{{ money(p.remainder) }}</td>
-                                    <td class="px-4 py-2.5 text-center"><span class="rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums" :class="marginClass(p.margin)">{{ Number(p.margin) }}%</span></td>
                                     <td class="px-4 py-2.5 text-center">
-                                        <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="Number(p.margin) >= minMargin ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'">{{ Number(p.margin) >= minMargin ? 'да' : 'нет' }}</span>
+                                        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums" :class="marginClass(p.margin)"
+                                            :title="Number(p.margin) >= minMargin ? `Проходит порог ${minMargin}%` : `Ниже порога ${minMargin}%`">
+                                            <span class="h-1.5 w-1.5 rounded-full" :class="Number(p.margin) >= minMargin ? 'bg-emerald-500' : 'bg-rose-500'"></span>{{ Number(p.margin) }}%
+                                        </span>
                                     </td>
                                     <td class="px-4 py-2.5 text-center">
                                         <button @click="expanded = expanded === p.id ? null : p.id"
@@ -289,7 +306,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                 </tr>
                                 <!-- Комментарий + контакт клиента -->
                                 <tr v-if="expanded === p.id" class="bg-slate-50/60">
-                                    <td :colspan="leadership ? 15 : 14" class="px-6 py-3">
+                                    <td colspan="8" class="px-6 py-3">
                                         <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
                                             <span class="text-sm text-slate-600">
                                                 <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="actionClass(p.action)">{{ actionLabels[p.action] ?? '—' }}</span>
@@ -306,7 +323,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                             </template>
                             </template>
                             </template>
-                            <tr v-if="!preDeals.length"><td :colspan="leadership ? 15 : 14" class="px-6 py-10 text-center text-sm text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
+                            <tr v-if="!preDeals.length"><td colspan="8" class="px-6 py-10 text-center text-sm text-slate-400">Пока нет предварительных сделок — «+ Предв. сделка»</td></tr>
                         </tbody>
                     </table>
                 </div>

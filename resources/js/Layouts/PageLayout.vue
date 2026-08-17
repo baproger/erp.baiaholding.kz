@@ -6,11 +6,14 @@ defineProps({
     title: String,
     subtitle: String,
     wide: { type: Boolean, default: true },
+    // Полная ширина — для датаёмких страниц (широкие таблицы, канбан):
+    // контент занимает весь экран, отступы даёт AppLayout.
+    full: { type: Boolean, default: false },
 });
 </script>
 
 <template>
-    <div class="mx-auto" :class="wide ? 'max-w-7xl' : 'max-w-5xl'">
+    <div class="mx-auto" :class="full ? 'max-w-none' : wide ? 'max-w-7xl' : 'max-w-5xl'">
         <slot name="tabs" />
 
         <!-- Заголовок и действия -->
