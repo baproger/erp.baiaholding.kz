@@ -43,9 +43,14 @@ class WorkshopScreenController extends Controller
         $projects = Project::query()
             ->whereNotIn('status', ['completed', 'cancelled'])
             ->when($companyId, fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
-            // Заказ без цеха виден на экране (как на странице «Цех») — иначе
-            // он «пропадает» со всех табло, хотя в системе есть.
-            ->when($screen->workshop, fn ($q, $w) => $q->where(fn ($x) => $x->where('workshop', $w)->orWhereNull('workshop')))
+            // Тот же принцип, что на странице «Цех»: заказ относится к цеху,
+            // если его ЭТАП из набора этапов этого цеха — даже когда колонка
+            // workshop пуста или записана иначе. Плюс совпадение по названию
+            // цеха и заказы без цеха — ничто не «пропадает» с табло.
+            ->when($screen->workshop, fn ($q, $w) => $q->where(fn ($x) => $x
+                ->whereIn('project_stage_id', $stages->pluck('id'))
+                ->orWhere('workshop', $w)
+                ->orWhereNull('workshop')))
             ->with(['stage:id,name', 'responsible:id,name', 'deal:id,number,company_name,client_name,address,deadline,description,note'])
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
                 ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
