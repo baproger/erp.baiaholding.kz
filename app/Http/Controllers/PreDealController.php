@@ -66,12 +66,27 @@ class PreDealController extends Controller
                 ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
         }
 
-        // Рейтинг менеджеров (руководству): подтверждено лотов / на какую сумму.
+        // Рейтинг менеджеров (руководству): подтверждено лотов / на какую сумму
+        // + разбивка по действиям (Участие/Звонок/КП → из них выиграно) —
+        // соревнование видно по цифрам. Уважает фильтр месяца.
         $stats = null;
         if ($lead) {
             $rows = PreDeal::query()
                 ->when($companyId, fn ($qq, $c) => $qq->where('company_id', $c))
-                ->selectRaw("user_id, count(*) total, sum(case when status = 'confirmed' then 1 else 0 end) confirmed, sum(case when status = 'confirmed' then contract_sum else 0 end) confirmed_sum")
+                ->when(preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $ms = $request->string('month')->toString()), function ($qq) use ($ms) {
+                    $start = $ms.'-01';
+                    $qq->whereDate('created_at', '>=', $start)
+                        ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
+                })
+                ->selectRaw("user_id, count(*) total,
+                    sum(case when status = 'confirmed' then 1 else 0 end) confirmed,
+                    sum(case when status = 'confirmed' then contract_sum else 0 end) confirmed_sum,
+                    sum(case when coalesce(action, 'participation') = 'participation' then 1 else 0 end) p_total,
+                    sum(case when coalesce(action, 'participation') = 'participation' and status = 'confirmed' then 1 else 0 end) p_won,
+                    sum(case when action = 'call' then 1 else 0 end) c_total,
+                    sum(case when action = 'call' and status = 'confirmed' then 1 else 0 end) c_won,
+                    sum(case when action = 'offer' then 1 else 0 end) o_total,
+                    sum(case when action = 'offer' and status = 'confirmed' then 1 else 0 end) o_won")
                 ->groupBy('user_id')->get();
             $names = User::whereIn('id', $rows->pluck('user_id'))->get(['id', 'name', 'avatar'])->keyBy('id');
             $stats = $rows->filter(fn ($r) => $names->has($r->user_id))
@@ -81,6 +96,11 @@ class PreDealController extends Controller
                     'total' => (int) $r->total,
                     'confirmed' => (int) $r->confirmed,
                     'sum' => (float) $r->confirmed_sum,
+                    'actions' => [
+                        ['label' => 'Участие', 'total' => (int) $r->p_total, 'won' => (int) $r->p_won],
+                        ['label' => 'Звонок', 'total' => (int) $r->c_total, 'won' => (int) $r->c_won],
+                        ['label' => 'КП', 'total' => (int) $r->o_total, 'won' => (int) $r->o_won],
+                    ],
                 ])->sortByDesc('confirmed')->values();
         }
 

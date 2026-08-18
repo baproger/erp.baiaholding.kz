@@ -3,12 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import Avatar from '@/Components/Avatar.vue';
 
-const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, lots: { type: Array, default: () => [] }, funnel: { type: Array, default: () => [] } });
-
-// Цвет действия по лоту: участие — нейтральное, звонок и КП — активная работа.
-const actionClass = (a) => a === 'Звонок' ? 'bg-sky-50 text-sky-700'
-    : a === 'КП (ватсап)' ? 'bg-indigo-50 text-indigo-700'
-    : 'bg-slate-100 text-slate-500';
+const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, funnel: { type: Array, default: () => [] } });
 
 // ТВ-режим: часы + автообновление раз в 10 секунд. Без автопрокрутки —
 // список статичен, весь во всю ширину (просьба владельца 31.07.2026).
@@ -59,7 +54,7 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
         <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex items-baseline justify-between border-b border-slate-100 px-5 py-3.5">
                     <span class="text-base font-bold text-slate-900">Отдел продаж — лоты за месяц</span>
-                    <span class="text-xs text-slate-400">добавил лотов · выиграл · конверсия %</span>
+                    <span class="text-xs text-slate-400">Участие / Звонок / КП → из них выиграно</span>
                 </div>
                 <div class="divide-y divide-slate-50">
                     <div v-for="(m, i) in managers" :key="m.name" class="flex items-center gap-4 px-5 py-3.5">
@@ -77,27 +72,22 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                                 <span class="flex-shrink-0 text-xs text-slate-400">план лотов: {{ m.total }}/{{ plan }}</span>
                             </div>
                         </div>
-                        <!-- Справа — данные менеджера: воронка + выиграл -->
+                        <!-- Справа — разбивка по действиям: сколько сделал и сколько из них выиграл -->
                         <div class="text-right">
                             <div class="flex flex-wrap items-center justify-end gap-1.5">
-                                <!-- Персональная воронка: Лоты → КП/Звонок… → Выиграл -->
-                                <span v-for="f in m.funnel" :key="f.label"
-                                    class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset"
-                                    :class="f.kind === 'won'
-                                        ? (f.count > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-slate-50 text-slate-400 ring-slate-200')
-                                        : 'bg-slate-50 text-slate-500 ring-slate-200'"
-                                    :title="f.label">
-                                    <span class="max-w-36 truncate">{{ f.label }}</span>
-                                    <b class="text-base leading-none tabular-nums" :class="f.count > 0 ? (f.kind === 'won' ? 'text-emerald-600' : 'text-slate-900') : 'text-slate-300'">{{ f.count }}</b>
+                                <span v-for="a in m.actions" :key="a.label"
+                                    class="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-semibold ring-1 ring-inset"
+                                    :class="a.count > 0 ? 'bg-slate-50 text-slate-600 ring-slate-200' : 'bg-slate-50 text-slate-300 ring-slate-100'"
+                                    :title="a.label + ': всего ' + a.count + ', выиграно ' + a.won">
+                                    <span class="max-w-36 truncate">{{ a.label }}</span>
+                                    <b class="text-lg leading-none tabular-nums" :class="a.count > 0 ? 'text-slate-900' : 'text-slate-300'">{{ a.count }}</b>
+                                    <span class="rounded-full px-1.5 py-0.5 text-xs font-bold tabular-nums"
+                                        :class="a.won > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-300'">✓ {{ a.won }}</span>
                                 </span>
-                                <span class="ml-1 text-4xl font-black leading-none tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ m.won }}</span>
+                                <span class="ml-1 text-4xl font-black leading-none tabular-nums" :class="m.won > 0 ? 'text-emerald-600' : 'text-slate-300'" title="Выиграл всего">{{ m.won }}</span>
                             </div>
                             <div class="mt-1 flex items-center justify-end gap-1.5 text-xs text-slate-400">
                                 <span>выиграл · лотов {{ m.total }} · сделок {{ m.deals }}</span>
-                                <!-- Лоты, по которым менеджер сделал звонок или КП -->
-                                <span class="rounded-full px-1.5 py-0.5 font-bold tabular-nums"
-                                    :class="m.contacted > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'"
-                                    title="Лоты, по которым был звонок или КП">☎ {{ m.contacted }}</span>
                             </div>
                         </div>
                     </div>
@@ -105,29 +95,6 @@ const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' :
                 </div>
         </div>
 
-        <!-- Лоты месяца с действием по каждому: видно, кто реально работает по лотам -->
-        <div class="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="flex items-baseline justify-between border-b border-slate-100 px-5 py-3.5">
-                <span class="text-base font-bold text-slate-900">Лоты месяца</span>
-                <span class="text-xs text-slate-400">действие по лоту (Участие / Звонок / КП) — работа менеджера</span>
-            </div>
-            <div class="divide-y divide-slate-50">
-                <div v-for="(l, i) in lots" :key="i" class="flex items-center gap-4 px-5 py-2.5">
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2">
-                            <span class="truncate text-sm font-semibold text-slate-900">{{ l.product || '—' }}</span>
-                            <span v-if="l.won" class="flex-shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">ВЫИГРАЛ ✓</span>
-                        </div>
-                        <div class="truncate text-xs text-slate-400">{{ l.customer || '—' }} · {{ l.manager }}</div>
-                    </div>
-                    <!-- Действие по лоту вместо прежних галочек чек-листа -->
-                    <div class="flex w-44 flex-shrink-0 justify-end">
-                        <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="actionClass(l.action)">{{ l.action }}</span>
-                    </div>
-                </div>
-                <div v-if="!lots.length" class="px-5 py-8 text-center text-sm text-slate-400">В {{ monthLabel }} лотов ещё нет</div>
-            </div>
-        </div>
     </div>
 </template>
 

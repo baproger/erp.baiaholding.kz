@@ -174,13 +174,21 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <h3 class="text-sm font-semibold text-slate-900">Рейтинг менеджеров <span class="font-normal text-slate-400">— по подтверждённым лотам</span></h3>
                 </div>
                 <div class="flex gap-3 overflow-x-auto px-6 py-4">
-                    <div v-for="(m, i) in stats" :key="m.name" class="flex min-w-56 flex-shrink-0 items-center gap-3 rounded-xl border p-3"
+                    <div v-for="(m, i) in stats" :key="m.name" class="flex min-w-64 flex-shrink-0 items-center gap-3 rounded-xl border p-3"
                         :class="i === 0 ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'">
                         <span class="text-lg font-bold tabular-nums" :class="i === 0 ? '' : 'text-slate-300'">{{ i === 0 ? '👑' : i + 1 }}</span>
                         <Avatar :name="m.name" :src="m.avatar" :size="36" />
                         <div class="min-w-0">
                             <div class="truncate text-sm font-semibold text-slate-900">{{ m.name }}</div>
-                            <div class="text-[11px] text-slate-400">подтв. <b class="text-slate-600">{{ m.confirmed }}</b> из {{ m.total }} · <b class="tabular-nums text-slate-600">{{ money(m.sum) }}</b></div>
+                            <div class="text-[11px] text-slate-400">выиграл <b class="text-emerald-600">{{ m.confirmed }}</b> из {{ m.total }} · <b class="tabular-nums text-slate-600">{{ money(m.sum) }}</b></div>
+                            <!-- Разбивка по действиям: сколько сделал → из них выиграно -->
+                            <div class="mt-1 flex flex-wrap items-center gap-1 text-[10px] tabular-nums">
+                                <span v-for="a in m.actions" :key="a.label" class="rounded-full px-1.5 py-0.5 font-medium"
+                                    :class="a.total > 0 ? 'bg-slate-100 text-slate-500' : 'bg-slate-50 text-slate-300'"
+                                    :title="a.label + ': всего ' + a.total + ', выиграно ' + a.won">
+                                    {{ a.label }} {{ a.total }}<b v-if="a.won > 0" class="text-emerald-600"> ✓{{ a.won }}</b>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

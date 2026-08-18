@@ -105,34 +105,26 @@ class WorkshopScreenController extends Controller
             ->with('user:id,name')
             ->latest()
             ->get(['id', 'user_id', 'action', 'product', 'customer', 'margin', 'status', 'created_at']);
-        // «Проработан» лот, по которому менеджер сделал хоть что-то, кроме
-        // простой отметки участия, — звонок или КП.
-        $contactedByUser = $monthLots->groupBy('user_id')
-            ->map(fn ($rows) => $rows->whereIn('action', \App\Models\PreDeal::SHORT_ACTIONS)->count());
-        // Персональная воронка менеджера: лоты → по каждому действию → выиграл.
-        $funnelFor = function ($rows) use ($actionSteps) {
-            return collect([['label' => 'Лоты', 'count' => $rows->count(), 'kind' => 'start']])
-                ->concat($actionSteps->map(fn ($it) => [
+        // Разбивка менеджера по действиям: сколько лотов с каждым действием
+        // (Участие / Звонок / КП) и сколько из них ВЫИГРАНО — соревнование
+        // видно по цифрам, «Лоты месяца» списком больше не показываем.
+        $breakdownFor = function ($rows) use ($actionSteps) {
+            return $actionSteps->map(function ($it) use ($rows) {
+                // Старые лоты без action считаем «Участием» (значение по умолчанию).
+                $mine = $rows->filter(fn ($p) => ($p->action ?? 'participation') === $it['action']);
+
+                return [
                     'label' => $it['label'],
-                    'count' => $rows->where('action', $it['action'])->count(),
-                    'kind' => 'step',
-                ]))
-                ->push(['label' => 'Выиграл', 'count' => $rows->where('status', 'confirmed')->count(), 'kind' => 'won'])
-                ->values();
+                    'count' => $mine->count(),
+                    'won' => $mine->where('status', 'confirmed')->count(),
+                ];
+            })->values();
         };
-        $funnelByUser = $monthLots->groupBy('user_id')->map($funnelFor);
-        $emptyFunnel = $funnelFor(collect());
-        // Список лотов на экран (последние 40): лот · менеджер · действие · статус.
-        $lotRows = $monthLots->take(40)->map(fn ($p) => [
-            'manager' => $p->user?->name ?? '—',
-            'product' => $p->product,
-            'customer' => $p->customer,
-            'won' => $p->status === 'confirmed',
-            'action' => \App\Models\PreDeal::ACTION_LABELS[$p->action] ?? $p->action,
-        ])->values();
+        $breakdownByUser = $monthLots->groupBy('user_id')->map($breakdownFor);
+        $emptyBreakdown = $breakdownFor(collect());
 
         $managers = \App\Models\User::role('manager')->where('is_active', true)->ofCompany($companyId)->get(['id', 'name', 'avatar'])
-            ->map(function (\App\Models\User $u) use ($lots, $plan, $contactedByUser, $funnelByUser, $emptyFunnel) {
+            ->map(function (\App\Models\User $u) use ($lots, $plan, $breakdownByUser, $emptyBreakdown) {
                 $m = $lots[$u->id] ?? null;
                 $total = (int) ($m->total ?? 0);
                 $won = (int) ($m->won ?? 0);
@@ -144,10 +136,8 @@ class WorkshopScreenController extends Controller
                     'deals' => (int) ($m->deals ?? 0),          // из них стало сделками
                     'conversion' => $total > 0 ? (int) round($won / $total * 100) : 0,
                     'plan_pct' => min(100, (int) round($total / $plan * 100)),
-                    // Лоты, по которым был звонок или КП (☎ в рейтинге).
-                    'contacted' => (int) ($contactedByUser[$u->id] ?? 0),
-                    // Персональная воронка: лоты → КП/Звонок… → выиграл.
-                    'funnel' => $funnelByUser[$u->id] ?? $emptyFunnel,
+                    // Разбивка по действиям: Участие/Звонок/КП → из них выиграно.
+                    'actions' => $breakdownByUser[$u->id] ?? $emptyBreakdown,
                 ];
             })
             ->sortBy([['won', 'desc'], ['conversion', 'desc'], ['total', 'desc']])->values();
@@ -159,8 +149,6 @@ class WorkshopScreenController extends Controller
             'monthLabel' => \Illuminate\Support\Carbon::parse($mStart)->locale('ru')->translatedFormat('F Y'),
             'managers' => $managers,
             'leader' => $managers->first(),
-            // Лоты месяца с действием по каждому — видно, кто реально работает.
-            'lots' => $lotRows,
             // Воронка отдела КРУПНО: Участвовал (лоты) → каждое ДЕЙСТВИЕ лота
             // (Участие, Звонок, КП) → Выигранные. План лотов и действий общий
             // (sales_plan_monthly), у выигранных — свой (sales_plan_won_monthly).
