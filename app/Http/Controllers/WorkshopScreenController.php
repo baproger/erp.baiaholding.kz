@@ -44,7 +44,7 @@ class WorkshopScreenController extends Controller
             ->whereNotIn('status', ['completed', 'cancelled'])
             ->when($companyId, fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
             ->when($screen->workshop, fn ($q, $w) => $q->where('workshop', $w))
-            ->with(['stage:id,name', 'responsible:id,name', 'deal:id,number,company_name,address,deadline,description,note'])
+            ->with(['stage:id,name', 'responsible:id,name', 'deal:id,number,company_name,client_name,address,deadline,description,note'])
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
                 ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
                 ->latest('entered_at')->limit(1)])
@@ -52,6 +52,10 @@ class WorkshopScreenController extends Controller
             ->map(fn ($p) => [
                 'id' => $p->id, 'number' => $p->number,
                 'name' => $p->deal?->company_name ?: $p->name,
+                // Товар — client_name сделки (как на канбане цеха).
+                'product' => $p->deal?->client_name,
+                // Номер сделки (BAIA-089) — цех ищет заказ по нему.
+                'deal_number' => $p->deal?->number,
                 'stage_id' => $p->project_stage_id,
                 'address' => $p->deal?->address,
                 'deadline' => optional($p->deal?->deadline ?? $p->deadline)->toDateString(),

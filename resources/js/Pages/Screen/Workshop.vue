@@ -69,12 +69,17 @@ const complete = (p) => {
         </div>
 
         <!-- Канбан цеха: только свои этапы и заказы, без сумм -->
-        <div class="flex gap-4 overflow-x-auto pb-4">
-            <div v-for="stage in stages" :key="stage.id" class="flex min-w-72 flex-1 flex-col rounded-2xl bg-slate-200/60">
+        <!-- ВСЕ этапы всегда на одном экране, без горизонтального скролла:
+             до 6 этапов — одна линия во всю ширину ТВ; больше — колонки
+             не уже ~240px и переносятся на вторую строку -->
+        <div class="grid gap-3 pb-4" :style="{ gridTemplateColumns: stages.length <= 6
+            ? `repeat(${stages.length}, minmax(0, 1fr))`
+            : 'repeat(auto-fit, minmax(15rem, 1fr))' }">
+            <div v-for="stage in stages" :key="stage.id" class="flex min-w-0 flex-col rounded-2xl bg-slate-200/60">
                 <div class="flex items-center justify-between px-4 py-3">
-                    <div class="flex items-center gap-2.5">
-                        <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: stage.color }"></span>
-                        <span class="text-lg font-bold text-slate-800">{{ stage.name }}</span>
+                    <div class="flex min-w-0 items-center gap-2.5">
+                        <span class="h-3 w-3 flex-shrink-0 rounded-full" :style="{ backgroundColor: stage.color }"></span>
+                        <span class="truncate text-lg font-bold text-slate-800" :title="stage.name">{{ stage.name }}</span>
                         <span v-if="stage.is_completed" title="Завершающий">🏁</span>
                     </div>
                     <span class="rounded-full bg-white px-2.5 py-0.5 text-sm font-bold tabular-nums text-slate-500 shadow-sm">{{ byStage(stage.id).length }}</span>
@@ -84,11 +89,12 @@ const complete = (p) => {
                         <!-- Компакт для ТВ: номер + таймер, ТОВАР крупно (2 строки максимум),
                              заказчик одной строкой, ответственный и срок -->
                         <div class="flex items-center justify-between gap-2">
-                            <span class="text-xs text-slate-400">{{ p.number }}</span>
+                            <span class="truncate rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600" :title="p.number">{{ p.deal_number || p.number }}</span>
                             <span v-if="onStage(p)" class="flex-shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-bold tabular-nums text-indigo-600" title="Время на этапе">⏱ {{ onStage(p) }}</span>
                         </div>
-                        <div class="mt-1 line-clamp-2 text-lg font-bold leading-snug text-slate-900" :title="p.description || p.name">{{ p.description || p.name }}</div>
-                        <div v-if="p.description" class="mt-0.5 truncate text-xs text-slate-400" :title="p.name">{{ p.name }}</div>
+                        <div class="mt-1 line-clamp-2 break-words text-lg font-bold leading-snug text-slate-900" :title="p.product || p.name">{{ p.product || p.name }}</div>
+                        <div v-if="p.product" class="mt-0.5 truncate text-xs text-slate-400" :title="p.name">{{ p.name }}</div>
+                        <div v-if="p.description" class="mt-1 line-clamp-2 text-sm leading-snug text-slate-500" :title="p.description">{{ p.description }}</div>
                         <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                             <span v-if="p.responsible" class="font-semibold text-slate-700" title="Ответственный">👤 {{ p.responsible }}</span>
                             <span v-if="p.deadline" class="whitespace-nowrap font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></span>
