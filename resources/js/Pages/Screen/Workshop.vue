@@ -70,7 +70,7 @@ const complete = (p) => {
 
         <!-- Канбан цеха: только свои этапы и заказы, без сумм -->
         <div class="flex gap-4 overflow-x-auto pb-4">
-            <div v-for="stage in stages" :key="stage.id" class="flex w-80 flex-shrink-0 flex-col rounded-2xl bg-slate-200/60">
+            <div v-for="stage in stages" :key="stage.id" class="flex min-w-72 flex-1 flex-col rounded-2xl bg-slate-200/60">
                 <div class="flex items-center justify-between px-4 py-3">
                     <div class="flex items-center gap-2.5">
                         <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: stage.color }"></span>
@@ -81,15 +81,19 @@ const complete = (p) => {
                 </div>
                 <div class="flex-1 space-y-2.5 px-3 pb-3">
                     <div v-for="p in byStage(stage.id)" :key="p.id" class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
-                        <div class="text-lg font-bold leading-snug text-slate-900">{{ p.name }}</div>
-                        <div class="flex items-center justify-between">
+                        <!-- Компакт для ТВ: номер + таймер, ТОВАР крупно (2 строки максимум),
+                             заказчик одной строкой, ответственный и срок -->
+                        <div class="flex items-center justify-between gap-2">
                             <span class="text-xs text-slate-400">{{ p.number }}</span>
-                            <span v-if="onStage(p)" class="rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-bold tabular-nums text-indigo-600" title="Время на этапе">⏱ {{ onStage(p) }}</span>
+                            <span v-if="onStage(p)" class="flex-shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-bold tabular-nums text-indigo-600" title="Время на этапе">⏱ {{ onStage(p) }}</span>
                         </div>
-                        <div v-if="p.address" class="mt-1.5 text-sm text-slate-500">📍 {{ p.address }}</div>
-                        <div v-if="p.deadline" class="mt-1 text-sm font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></div>
-                        <div v-if="p.description" class="mt-1.5 whitespace-pre-line text-sm leading-snug text-slate-500">{{ p.description }}</div>
-                        <div v-if="p.note" class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm leading-snug text-amber-700">📌 {{ p.note }}</div>
+                        <div class="mt-1 line-clamp-2 text-lg font-bold leading-snug text-slate-900" :title="p.description || p.name">{{ p.description || p.name }}</div>
+                        <div v-if="p.description" class="mt-0.5 truncate text-xs text-slate-400" :title="p.name">{{ p.name }}</div>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                            <span v-if="p.responsible" class="font-semibold text-slate-700" title="Ответственный">👤 {{ p.responsible }}</span>
+                            <span v-if="p.deadline" class="whitespace-nowrap font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></span>
+                        </div>
+                        <div v-if="p.note" class="mt-2 line-clamp-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm leading-snug text-amber-700" :title="p.note">📌 {{ p.note }}</div>
                         <!-- Крупные кнопки, чтобы удобно жать с ТВ/планшета цеха:
                              «Далее» — следующий этап; на «Отправке» — «Готово» (в Логистику) -->
                         <button v-if="p.stage_id !== lastStageId" @click="advance(p)" :disabled="advancing === p.id"

@@ -44,7 +44,7 @@ class WorkshopScreenController extends Controller
             ->whereNotIn('status', ['completed', 'cancelled'])
             ->when($companyId, fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
             ->when($screen->workshop, fn ($q, $w) => $q->where('workshop', $w))
-            ->with(['stage:id,name', 'deal:id,number,company_name,address,deadline,description,note'])
+            ->with(['stage:id,name', 'responsible:id,name', 'deal:id,number,company_name,address,deadline,description,note'])
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
                 ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
                 ->latest('entered_at')->limit(1)])
@@ -58,6 +58,7 @@ class WorkshopScreenController extends Controller
                 'overdue' => ($p->deal?->deadline ?? $p->deadline)?->isPast() ?? false,
                 'description' => $p->deal?->description,
                 'note' => $p->deal?->note,
+                'responsible' => $p->responsible?->name,
                 'stage_entered_at' => $p->stage_entered_at,
             ]);
 
