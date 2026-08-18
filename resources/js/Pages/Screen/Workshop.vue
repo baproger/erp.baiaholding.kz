@@ -5,7 +5,11 @@ import { formatDate, formatDuration } from '@/utils/format';
 
 const props = defineProps({ screen: Object, stages: Array, projects: Array });
 
-const byStage = (id) => props.projects.filter((p) => p.stage_id === id);
+// Заказ с этапом НЕ из набора этого цеха (этапы пересоздали / заказ перенесли
+// между цехами) не должен исчезать с табло — показываем его в ПЕРВОЙ колонке.
+const stageIds = computed(() => new Set(props.stages.map((s) => s.id)));
+const byStage = (id) => props.projects.filter((p) => p.stage_id === id
+    || (id === props.stages[0]?.id && !stageIds.value.has(p.stage_id)));
 
 // ТВ-режим: часы + автообновление раз в 30 секунд.
 const clock = ref('');
