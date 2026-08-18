@@ -145,16 +145,31 @@ class ExpenseController extends Controller
             }
             $data['amount'] = (float) $data['amount'];
 
-            // Внутреннее списание — подтверждение бухгалтера не требуется.
             // Способ оплаты обнуляем: деньги за материал ушли при ЗАКУПЕ на
             // склад (расход прихода), списание кассу второй раз не трогает.
             $data['payment_method'] = null;
-            $data['status'] = 'confirmed';
             $data['description'] = trim(($data['description'] ?? '')) !== ''
                 ? $data['description']
                 : 'Материал: '.$material->name.' × '.rtrim(rtrim(number_format((float) $data['qty'], 2, '.', ''), '0'), '.').' '.$material->unit;
 
-            \Illuminate\Support\Facades\DB::transaction(function () use ($data, $material) {
+            // Списание подтверждает бухгалтер (правило от 18.08.2026): расход
+            // менеджера — pending, склад НЕ трогаем до подтверждения. Бухгалтер/
+            // админ списывает сразу. Завскладу (снабженец) — уведомление.
+            $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
+            if (! $isAccountant) {
+                $data['status'] = 'pending';
+                $expense = Expense::create($data);
+                $this->notifyAccountants($expense, $entity);
+
+                return back()->with('success', 'Списание отправлено бухгалтеру — остаток спишется после подтверждения.');
+            }
+
+            $data['status'] = 'confirmed';
+            $data['confirmed_by'] = $request->user()->id;
+            $data['confirmed_at'] = now();
+
+            $expense = null;
+            \Illuminate\Support\Facades\DB::transaction(function () use ($data, $material, &$expense) {
                 // Блокируем строку материала и перечитываем остаток ВНУТРИ
                 // транзакции: два параллельных списания не уведут склад в минус.
                 $locked = \App\Models\Material::whereKey($material->id)->lockForUpdate()->first();
@@ -163,10 +178,11 @@ class ExpenseController extends Controller
                         'qty' => 'Недостаточно на складе: остаток '.rtrim(rtrim(number_format((float) $locked->quantity, 2, '.', ' '), '0'), '.').' '.$locked->unit.'.',
                     ]);
                 }
-                Expense::create($data);
+                $expense = Expense::create($data);
                 $locked->decrement('quantity', $data['qty']);
             });
 
+            $this->notifyWarehouse($expense);
             $this->checkExpenseThreshold($entity, (float) $data['amount']);
 
             return back()->with('success', 'Расход по материалам добавлен — остаток на складе списан.');
@@ -242,6 +258,33 @@ class ExpenseController extends Controller
             return back()->with('error', 'Расход уже подтверждён.');
         }
 
+        // Списание материала: чек и способ оплаты не нужны (деньги ушли при
+        // закупе на склад) — подтверждение и есть момент списания остатка.
+        if ($expense->material_id) {
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($request, $expense) {
+                    $locked = \App\Models\Material::whereKey($expense->material_id)->lockForUpdate()->first();
+                    if (! $locked || (float) $locked->quantity < (float) $expense->qty) {
+                        throw new \RuntimeException('Недостаточно на складе: остаток '
+                            .rtrim(rtrim(number_format((float) ($locked?->quantity ?? 0), 2, '.', ' '), '0'), '.').' '.($locked?->unit ?? '').'.');
+                    }
+                    $expense->update([
+                        'status' => 'confirmed',
+                        'confirmed_by' => $request->user()->id,
+                        'confirmed_at' => now(),
+                    ]);
+                    $locked->decrement('quantity', $expense->qty);
+                });
+            } catch (\RuntimeException $e) {
+                return back()->with('error', $e->getMessage());
+            }
+
+            $this->finishConfirmation($request, $expense);
+            $this->notifyWarehouse($expense);
+
+            return back()->with('success', 'Списание подтверждено — остаток на складе списан.');
+        }
+
         $data = $request->validate([
             'payment_method' => ['required', \Illuminate\Validation\Rule::in(['cash', 'bank'])],
             'file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
@@ -267,6 +310,17 @@ class ExpenseController extends Controller
             'confirmed_at' => now(),
         ]);
 
+        $this->finishConfirmation($request, $expense);
+
+        return back()->with('success', 'Расход подтверждён ('.($data['payment_method'] === 'cash' ? 'наличные' : 'банк').').');
+    }
+
+    /**
+     * Общий «хвост» подтверждения: закрыть задачи-гейты, погасить счётчики,
+     * уведомить автора и остальных бухгалтеров, проверить порог расходов.
+     */
+    private function finishConfirmation(Request $request, Expense $expense): void
+    {
         // Закрываем задачи «Подтвердить расход #N …» у бухгалтеров.
         $gateTasks = \App\Models\Task::where('title', 'like', 'Подтвердить расход #'.$expense->id.' %')
             ->where('status', '!=', 'done')->get();
@@ -286,8 +340,19 @@ class ExpenseController extends Controller
             ->where('id', '!=', $expense->responsible_user_id)
             ->get()
             ->each(fn ($fin) => $fin->notify(new \App\Notifications\ExpenseHandled($expense, $request->user())));
+    }
 
-        return back()->with('success', 'Расход подтверждён ('.($data['payment_method'] === 'cash' ? 'наличные' : 'банк').').');
+    /**
+     * Завскладу (роль «Снабженец»): материал списан со склада — с ссылкой на
+     * сделку/заказ, по которому ушёл материал.
+     */
+    private function notifyWarehouse(?Expense $expense): void
+    {
+        if (! $expense || ! $expense->material_id) {
+            return;
+        }
+        User::where('is_active', true)->role('supplier')->get()
+            ->each(fn ($u) => $u->notify(new \App\Notifications\MaterialWrittenOff($expense)));
     }
 
     public function update(ExpenseRequest $request, Expense $expense): RedirectResponse
@@ -364,9 +429,11 @@ class ExpenseController extends Controller
         $this->authorize('delete', $expense);
         $this->assertOwnership(request()->user(), $expense->expenseable);
 
-        // Удаление расхода по материалам возвращает количество на склад.
-        \Illuminate\Support\Facades\DB::transaction(function () use ($expense) {
-            if ($expense->material_id && $expense->qty && $expense->material) {
+        // Удаление подтверждённого расхода по материалам возвращает количество
+        // на склад; pending склад ещё не трогал — возвращать нечего.
+        $returned = $expense->material_id && $expense->qty && $expense->material && $expense->status === 'confirmed';
+        \Illuminate\Support\Facades\DB::transaction(function () use ($expense, $returned) {
+            if ($returned) {
                 $expense->material->increment('quantity', $expense->qty);
             }
             $expense->delete();
@@ -379,6 +446,6 @@ class ExpenseController extends Controller
             \App\Support\FinanceAudit::linkTo($expense->expenseable)
         );
 
-        return back()->with('success', $expense->material_id ? 'Расход удалён — остаток возвращён на склад.' : 'Расход удалён.');
+        return back()->with('success', $returned ? 'Расход удалён — остаток возвращён на склад.' : 'Расход удалён.');
     }
 }

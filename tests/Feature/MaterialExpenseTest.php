@@ -44,18 +44,47 @@ class MaterialExpenseTest extends TestCase
         $this->material = Material::create(['company_id' => $company->id, 'name' => 'ЛДСП', 'unit' => 'штук', 'quantity' => 20]);
     }
 
-    public function test_material_expense_writes_off_stock_without_receipt(): void
+    public function test_manager_material_expense_is_pending_until_accountant_confirms(): void
     {
+        // Правило от 18.08.2026: списание менеджера ждёт бухгалтера,
+        // склад до подтверждения НЕ трогается.
         $this->actingAs($this->manager)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
             'material_id' => $this->material->id, 'qty' => 5,
             'amount' => 50000, 'date' => now()->toDateString(),
         ])->assertSessionHasNoErrors()->assertRedirect();
 
-        $this->assertEquals(15.0, (float) $this->material->fresh()->quantity);
         $expense = Expense::first();
-        $this->assertSame('confirmed', $expense->status);
+        $this->assertSame('pending', $expense->status);
+        $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
         $this->assertStringContainsString('ЛДСП', $expense->description);
+
+        // Бухгалтер подтверждает — без чека и способа оплаты; склад списывается.
+        $financist = User::factory()->create();
+        $financist->assignRole('financist');
+        $financist->companies()->attach($this->deal->company_id);
+
+        $this->actingAs($financist)->patch(route('expenses.confirm', $expense->id))
+            ->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertSame('confirmed', $expense->fresh()->status);
+        $this->assertEquals(15.0, (float) $this->material->fresh()->quantity);
+    }
+
+    public function test_accountant_material_expense_writes_off_stock_immediately(): void
+    {
+        $financist = User::factory()->create();
+        $financist->assignRole('financist');
+        $financist->companies()->attach($this->deal->company_id);
+
+        $this->actingAs($financist)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'material_id' => $this->material->id, 'qty' => 5,
+            'amount' => 50000, 'date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertSame('confirmed', Expense::first()->status);
+        $this->assertEquals(15.0, (float) $this->material->fresh()->quantity);
     }
 
     public function test_material_expense_rejected_when_stock_insufficient(): void
@@ -70,21 +99,29 @@ class MaterialExpenseTest extends TestCase
         $this->assertSame(0, Expense::count());
     }
 
-    public function test_deleting_material_expense_restores_stock(): void
+    public function test_deleting_material_expense_restores_stock_only_after_confirmation(): void
     {
+        $financist = User::factory()->create();
+        $financist->assignRole('financist');
+        $financist->companies()->attach($this->deal->company_id);
+
+        // Pending-списание склад не трогало — удаление ничего не возвращает.
         $this->actingAs($this->manager)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
             'material_id' => $this->material->id, 'qty' => 8,
             'amount' => 10000, 'date' => now()->toDateString(),
         ]);
+        $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
+        $this->actingAs($financist)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
+        $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
+
+        // Подтверждённое списание: склад списан, удаление возвращает остаток.
+        $this->actingAs($financist)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
+            'material_id' => $this->material->id, 'qty' => 8,
+            'amount' => 10000, 'date' => now()->toDateString(),
+        ]);
         $this->assertEquals(12.0, (float) $this->material->fresh()->quantity);
-
-        // Списание заводит менеджер, но удаляет его бухгалтер: удаление любых
-        // расходов — только admin/financist. Остаток при этом возвращается.
-        $financist = User::factory()->create();
-        $financist->assignRole('financist');
-        $financist->companies()->attach($this->deal->company_id);
-
         $this->actingAs($financist)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
     }

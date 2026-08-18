@@ -72,7 +72,16 @@ const canManageExpense = () => canConfirm.value;
 const confirmFor = ref(null); // id расхода, открытого на подтверждение
 const confirmInput = ref(null);
 const confirmForm = useForm({ payment_method: 'bank', file: null });
-const openConfirm = (e) => { confirmFor.value = e.id; confirmForm.reset(); confirmForm.payment_method = 'bank'; };
+const openConfirm = async (e) => {
+    // Материал: чек и способ оплаты не нужны — подтверждение сразу списывает склад.
+    if (e.material) {
+        if (await confirmDialog({ title: 'Подтвердить списание', message: `${e.material.name} спишется со склада. Подтвердить?`, confirmText: '✓ Подтвердить' })) {
+            router.patch(route('expenses.confirm', e.id), {}, { preserveScroll: true });
+        }
+        return;
+    }
+    confirmFor.value = e.id; confirmForm.reset(); confirmForm.payment_method = 'bank';
+};
 const onConfirmReceipt = (ev) => { confirmForm.file = ev.target.files[0] ?? null; };
 const submitConfirm = (e) => confirmForm
     .transform((d) => ({ ...d, _method: 'PATCH' }))
@@ -268,7 +277,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
                     <div v-if="expenseForm.errors.file" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.file }}</div>
                 </div>
-                <div v-else class="mt-2 text-xs text-slate-400">Списание со склада — чек не требуется, остаток уменьшится автоматически.</div>
+                <div v-else class="mt-2 text-xs text-slate-400">{{ canConfirm ? 'Списание со склада — чек не требуется, остаток уменьшится сразу.' : 'Списание со склада — чек не требуется; остаток спишется после подтверждения бухгалтера.' }}</div>
                 <div class="mt-2"><PrimaryButton :disabled="expenseForm.processing || !canSubmitExpense" @click="addExpense">Добавить расход</PrimaryButton></div>
             </div>
             <div class="space-y-2">
