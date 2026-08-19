@@ -38,7 +38,7 @@ class ReportController extends Controller
 
         $deals = Deal::forCurrentCompany()
             ->where('status', '!=', 'cancelled')
-            ->with(['responsible:id,name', 'stage:id,name,color,is_won,stage_type'])
+            ->with(['responsible:id,name', 'stage:id,name,color,order,is_won,stage_type'])
             ->when($search, fn ($q, $s) => $q->where(fn ($w) => $w
                 ->where('number', 'like', "%{$s}%")->orWhere('company_name', 'like', "%{$s}%")
                 ->orWhere('client_name', 'like', "%{$s}%")->orWhere('bin', 'like', "%{$s}%")
@@ -87,7 +87,10 @@ class ReportController extends Controller
             ->whereIn('deal_id', $deals->pluck('id'))
             ->get()->keyBy('deal_id');
 
-        $rows = $deals->map(function ($d) use ($paidByDeal, $expByDeal, $workshopByDeal, $taxRate) {
+        // Порядок этапа «ЭСФ» каждой воронки — для флага is_post_esf (снятие просрочки).
+        $esfOrders = \App\Models\DealStage::where('stage_type', 'esf')->pluck('order', 'company_id');
+
+        $rows = $deals->map(function ($d) use ($paidByDeal, $expByDeal, $workshopByDeal, $taxRate, $esfOrders) {
             $budget = (float) $d->budget;
             $material = (float) ($expByDeal[$d->id]->material ?? 0);
             $delivery = (float) ($expByDeal[$d->id]->delivery ?? 0);
@@ -138,6 +141,9 @@ class ReportController extends Controller
                 // Акт/ЭСФ — зелёные как won; Логистика/Сборка — жёлтые.
                 'is_pending_won' => in_array($d->stage?->stage_type, ['act', 'esf'], true),
                 'is_esf' => $d->stage?->stage_type === 'esf',
+                // С ЭСФ и дальше (Оплата, Тендер закрыт) просрочка снимается.
+                'is_post_esf' => ($eo = $esfOrders[$d->company_id] ?? null) !== null
+                    && $d->stage && $d->stage->order >= $eo,
                 'is_logistics' => in_array($d->stage?->stage_type, ['logistics', 'assembly'], true),
             ];
         })->values();

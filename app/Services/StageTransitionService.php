@@ -94,6 +94,14 @@ class StageTransitionService
             // сделку можно закрыть успешной и с частичной оплатой — остаток
             // виден в дебиторке на Финансах.
 
+            // С «ЭСФ» и дальше (Оплата, Тендер закрыт) доля партнёра по
+            // умолчанию — 5% от суммы договора, если её не заполнили раньше
+            // (правило от 19.08.2026). Заполненную вручную долю не трогаем.
+            if ($isForward && (float) $deal->partner_pct <= 0
+                && (($esfStage && $target->order >= $esfStage->order) || ($wonStage && $target->id === $wonStage->id))) {
+                $deal->partner_pct = 5;
+            }
+
             $deal->deal_stage_id = $target->id;
 
             $deal->save();

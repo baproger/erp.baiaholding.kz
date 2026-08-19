@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { confirmDialog } from '@/composables/useConfirm';
 import Modal from '@/Components/Modal.vue';
@@ -17,6 +17,12 @@ const props = defineProps({
     taskableId: Number,
     users: { type: Array, default: () => [] },
 });
+
+// Компакт: открытые задачи всегда видны, ВЫПОЛНЕННЫЕ свёрнуты — блок не
+// растягивает карточку, расходы и данные ниже видны без длинного скролла.
+const openTasks = computed(() => props.tasks.filter((t) => t.status !== 'done'));
+const doneTasks = computed(() => props.tasks.filter((t) => t.status === 'done'));
+const showDone = ref(false);
 
 const adding = ref(false);
 const form = useForm({
@@ -47,29 +53,49 @@ const saveEdit = () => editForm.put(route('tasks.update', editing.value.id), { p
 </script>
 
 <template>
-    <div class="space-y-2">
-        <div v-for="t in tasks" :key="t.id" class="flex items-center justify-between rounded-xl px-4 py-3 text-sm transition-colors duration-150"
+    <div class="space-y-1.5">
+        <!-- Открытые задачи — компактные строки -->
+        <div v-for="t in openTasks" :key="t.id" class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors duration-150"
             :class="isPastDue(t.due_date, t.status==='done') ? 'bg-rose-50 ring-1 ring-inset ring-rose-200' : 'bg-slate-50'">
             <div class="min-w-0">
-                <div class="font-medium text-slate-900">{{ t.title }}</div>
-                <div class="text-xs text-slate-400">
+                <div class="truncate font-medium text-slate-900" :title="t.title">{{ t.title }}</div>
+                <div class="truncate text-[11px] text-slate-400">
                     {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date" :class="deadlineClass(t.due_date, t.status==='done')"> · {{ isPastDue(t.due_date, t.status==='done') ? 'просрочено ' : '' }}{{ formatDateTime(t.due_date) }}</span>
                 </div>
             </div>
-            <div class="flex items-center gap-1.5">
+            <div class="flex flex-shrink-0 items-center gap-1.5">
                 <button @click="advance(t)" title="Сменить статус"><StatusBadge :status="t.status" /></button>
-                <button class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-indigo-600" title="Редактировать" @click="openEdit(t)">
+                <button class="rounded p-1 text-slate-300 transition-colors duration-150 hover:text-indigo-600" title="Редактировать" @click="openEdit(t)">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
                 </button>
-                <button class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="remove(t)">
+                <button class="rounded p-1 text-slate-300 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="remove(t)">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
                 </button>
             </div>
         </div>
-        <div v-if="!tasks.length" class="flex flex-col items-center gap-2 py-6 text-center">
-            <svg class="h-10 w-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m4 16 2 2 4-4M11 6h10M11 11h10M11 18h10"/></svg>
-            <span class="text-sm text-slate-400">Задач пока нет</span>
-        </div>
+
+        <!-- Выполненные — свёрнуты, чтобы блок не растягивал карточку -->
+        <button v-if="doneTasks.length" @click="showDone = !showDone"
+            class="flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-50 hover:text-slate-600">
+            <svg class="h-3.5 w-3.5 transition-transform duration-200" :class="showDone ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
+            ✓ Выполненные <span class="tabular-nums">({{ doneTasks.length }})</span>
+        </button>
+        <template v-if="showDone">
+            <div v-for="t in doneTasks" :key="t.id" class="flex items-center justify-between gap-2 rounded-lg bg-slate-50/60 px-3 py-1.5 text-sm opacity-70">
+                <div class="min-w-0">
+                    <div class="truncate font-medium text-slate-500 line-through decoration-slate-300" :title="t.title">{{ t.title }}</div>
+                    <div class="truncate text-[11px] text-slate-400">{{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date"> · {{ formatDateTime(t.due_date) }}</span></div>
+                </div>
+                <div class="flex flex-shrink-0 items-center gap-1.5">
+                    <button @click="advance(t)" title="Сменить статус"><StatusBadge :status="t.status" /></button>
+                    <button class="rounded p-1 text-slate-300 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="remove(t)">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <div v-if="!tasks.length" class="py-4 text-center text-sm text-slate-400">Задач пока нет</div>
 
         <div v-if="adding" class="rounded-xl border border-dashed border-slate-300 p-4">
             <TextInput v-model="form.title" placeholder="Название задачи" class="mb-2 w-full" />

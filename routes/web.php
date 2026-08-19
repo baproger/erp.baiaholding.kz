@@ -159,6 +159,7 @@ Route::middleware('auth')->group(function () {
     Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
     Route::patch('expenses/{expense}/confirm', [ExpenseController::class, 'confirm'])->name('expenses.confirm');
     Route::get('expenses/{expense}/receipt', [ExpenseController::class, 'receipt'])->name('expenses.receipt');
+    Route::post('expenses/{expense}/receipt', [ExpenseController::class, 'attachReceipt'])->name('expenses.attachReceipt');
     Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
 
     // Documents

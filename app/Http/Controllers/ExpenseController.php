@@ -290,20 +290,22 @@ class ExpenseController extends Controller
             'file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
         ], ['payment_method.required' => 'Выберите способ оплаты: наличные или банк.']);
 
+        // Чек ОПЛАТЫ бухгалтера — отдельное поле: заявка/чек менеджера
+        // (file_path) остаётся нетронутой, оба чека видны рядом на карточке.
         if ($request->hasFile('file')) {
-            if ($expense->file_path) {
-                Storage::disk('local')->delete($expense->file_path);
+            if ($expense->confirm_file_path) {
+                Storage::disk('local')->delete($expense->confirm_file_path);
             }
-            $expense->file_path = $request->file('file')->store('receipts', 'local');
+            $expense->confirm_file_path = $request->file('file')->store('receipts', 'local');
         }
-        if (! $expense->file_path) {
+        if (! $expense->confirm_file_path) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'file' => 'Без чека расход не подтверждается — прикрепите фото или PDF.',
+                'file' => 'Без чека оплаты расход не подтверждается — прикрепите фото или PDF.',
             ]);
         }
 
         $expense->update([
-            'file_path' => $expense->file_path,
+            'confirm_file_path' => $expense->confirm_file_path,
             'status' => 'confirmed',
             'payment_method' => $data['payment_method'],
             'confirmed_by' => $request->user()->id,
@@ -402,6 +404,36 @@ class ExpenseController extends Controller
         return back()->with('success', 'Расход обновлён.');
     }
 
+    /**
+     * Дозагрузка заявки/чека МЕНЕДЖЕРА к уже существующему расходу — например,
+     * перенесённому из предсделки (лота), где чек прикрепить было негде.
+     * Пока расход pending: автор или бухгалтер/админ; подтверждённый не трогаем.
+     */
+    public function attachReceipt(Request $request, Expense $expense): RedirectResponse
+    {
+        $this->assertOwnership($request->user(), $expense->expenseable);
+        $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
+        abort_unless($isAccountant || (int) $expense->responsible_user_id === (int) $request->user()->id, 403,
+            'Чек к расходу прикладывает его автор или бухгалтер.');
+        if ($expense->status === 'confirmed') {
+            return back()->with('error', 'Расход уже подтверждён — чек заявки не меняется.');
+        }
+        if ($expense->material_id) {
+            return back()->with('error', 'Списанию со склада чек не нужен.');
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
+        ], ['file.required' => 'Прикрепите чек (фото или PDF).']);
+
+        if ($expense->file_path) {
+            Storage::disk('local')->delete($expense->file_path);
+        }
+        $expense->update(['file_path' => $request->file('file')->store('receipts', 'local')]);
+
+        return back()->with('success', 'Чек прикреплён к расходу.');
+    }
+
     public function receipt(Expense $expense): StreamedResponse
     {
         $this->authorize('view', $expense);
@@ -412,13 +444,15 @@ class ExpenseController extends Controller
             abort_unless(in_array(request()->user()->id, [$expense->responsible_user_id, $expense->employee_id], true), 403);
         }
 
-        abort_unless($expense->file_path && Storage::disk('local')->exists($expense->file_path), 404);
+        // ?kind=confirm — чек ОПЛАТЫ бухгалтера; без параметра — заявка менеджера.
+        $path = request()->query('kind') === 'confirm' ? $expense->confirm_file_path : $expense->file_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
 
-        $name = 'чек-' . $expense->id . '.' . pathinfo($expense->file_path, PATHINFO_EXTENSION);
+        $name = 'чек-' . $expense->id . '.' . pathinfo($path, PATHINFO_EXTENSION);
 
         // Отдаём inline — чек открывается в браузере на просмотр, без скачивания.
         // nosniff: файл загружен пользователем, запрещаем браузеру угадывать тип (защита от XSS).
-        return Storage::disk('local')->response($expense->file_path, $name, [
+        return Storage::disk('local')->response($path, $name, [
             'Content-Disposition' => 'inline; filename="' . $name . '"',
             'X-Content-Type-Options' => 'nosniff',
         ]);

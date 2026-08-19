@@ -84,8 +84,8 @@ const openDeal = (id) => router.get(route('deals.show', id));
 const marginBadge = (m) => m < 0 ? 'bg-rose-600 text-white ring-rose-600'
     : m >= 40 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : m >= 20 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200';
 const paidPct = (r) => r.budget > 0 ? Math.min(100, Math.round(r.paid / r.budget * 100)) : 0;
-// ЭСФ и won просрочкой не считаются; Акт утверждение — считается.
-const isOverdue = (r) => r.deadline && !r.is_won && !r.is_esf && new Date(r.deadline) < new Date(new Date().toDateString());
+// С ЭСФ и дальше (Оплата, Тендер закрыт) просрочкой не считается; Акт — считается.
+const isOverdue = (r) => r.deadline && !r.is_won && !r.is_post_esf && new Date(r.deadline) < new Date(new Date().toDateString());
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU') : '—';
 // Подсветка строк: won и Акт/ЭСФ — зелёный градиент (успешная / вот-вот);
 // Логистика/Сборка — жёлтый; остальные — обычные.

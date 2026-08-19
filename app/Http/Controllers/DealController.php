@@ -86,6 +86,7 @@ class DealController extends Controller
                 'id' => $s->id,
                 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.$companyCodes[$s->company_id] : ''),
                 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won,
+                'company_id' => $s->company_id, 'stage_type' => $s->stage_type,
             ]);
 
         $deals = $view === 'list'
@@ -482,8 +483,14 @@ class DealController extends Controller
 
         $today = now()->startOfDay();
 
+        // С «ЭСФ» и дальше (Оплата, Тендер закрыт) просрочка снимается
+        // автоматически: сделка уже у бухгалтера/закрыта по работе. Сравниваем
+        // ПОРЯДОК этапа с порядком ЭСФ своей воронки — промежуточные этапы
+        // после ЭСФ (например «Оплата» без типа) тоже не считаются просрочкой.
+        $esfOrders = \App\Models\DealStage::where('stage_type', 'esf')->pluck('order', 'company_id');
+
         $deals = Deal::query()
-            ->with(['responsible:id,name,avatar', 'stage:id,name,color'])
+            ->with(['responsible:id,name,avatar', 'stage:id,name,color,order'])
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where('company_id', $c))
             ->whereNotNull('deadline')
             ->whereDate('deadline', '<', $today)
@@ -494,6 +501,12 @@ class DealController extends Controller
             ->tap(fn ($q) => $this->scopeForViewer($q, $request->user()))
             ->orderBy('deadline')
             ->get()
+            ->filter(function ($d) use ($esfOrders) {
+                $esfOrder = $esfOrders[$d->company_id] ?? null;
+
+                return $esfOrder === null || ! $d->stage || $d->stage->order < $esfOrder;
+            })
+            ->values()
             ->map(function ($d) use ($today) {
                 $d->overdue_days = (int) \Illuminate\Support\Carbon::parse($d->deadline)->startOfDay()->diffInDays($today);
 

@@ -38,6 +38,15 @@ const preWonIds = computed(() => (esfIds.value.length ? esfIds.value : actIds.va
 const canAccounting = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
 const postActIds = computed(() => [...actIds.value, ...esfIds.value, ...wonIds.value]);
 
+// С «ЭСФ» и дальше (Оплата, Тендер закрыт) просрочка снимается — дата не краснеет.
+const pastEsfDeal = (deal) => {
+    const st = props.stages.find((s) => s.id === deal.deal_stage_id);
+    if (!st) return false;
+    if (st.is_won) return true;
+    const esf = props.stages.find((s) => s.stage_type === 'esf' && (!st.company_id || !s.company_id || s.company_id === st.company_id));
+    return !!esf && st.order >= esf.order;
+};
+
 const draggingId = ref(null);
 const onDrop = async (stage) => {
     const id = draggingId.value; draggingId.value = null;
@@ -239,7 +248,7 @@ const applyBinMatch = () => {
                                     </span>
                                     <span class="truncate text-[11px] text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
                                 </span>
-                                <span v-if="deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed') || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</span>
+                                <span v-if="deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsfDeal(deal)) || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</span>
                             </div>
                         </Link>
                         <div class="mt-2 flex items-center justify-between border-t border-slate-100 pt-1.5">
@@ -290,7 +299,7 @@ const applyBinMatch = () => {
                         <td class="px-4 py-2.5"><div class="max-w-40 truncate text-slate-500" :title="deal.client_name || deal.client?.name">{{ deal.client_name || deal.client?.name || '—' }}</div></td>
                         <td class="px-4 py-2.5"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
                         <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(deal.budget) }}</td>
-                        <td class="px-4 py-2.5" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}</td>
+                        <td class="px-4 py-2.5" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsfDeal(deal))">{{ formatDate(deal.deadline) }}</td>
                         <td class="px-4 py-2.5 text-slate-500">{{ deal.responsible?.name ?? '—' }}</td>
                     </tr>
                 </tbody>

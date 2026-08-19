@@ -57,6 +57,32 @@ class DealPartnerShareTest extends TestCase
         $this->assertEquals(0.0, PayrollService::partnerSum(1000000, null));
     }
 
+    public function test_partner_pct_defaults_to_five_percent_from_esf_stage(): void
+    {
+        // Правило от 19.08.2026: с «ЭСФ» и дальше доля партнёра по умолчанию
+        // 5%, если её не заполнили раньше; заполненную вручную не трогаем.
+        $admin = $this->user('admin');
+        // В тестовой воронке нет act/esf — работает ветка перехода на won-этап
+        // (preWon = второй с конца, как в StageTransitionService).
+        $funnel = DealStage::orderBy('order')->get();
+        $won = $funnel->firstWhere('is_won', true);
+        $preWon = $funnel->slice(-2, 1)->first();
+
+        $deal = Deal::create(['number' => 'D-P5', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И',
+            'budget' => 1000000, 'status' => 'active',
+            'deal_stage_id' => $preWon->id, 'responsible_user_id' => $admin->id]);
+
+        $this->actingAs($admin)->patch(route('deals.stage', $deal->id), ['deal_stage_id' => $won->id]);
+        $this->assertEquals(5.0, (float) $deal->fresh()->partner_pct);
+
+        // Заполненная доля при переходе не перетирается.
+        $deal2 = Deal::create(['number' => 'D-P6', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И',
+            'budget' => 1000000, 'partner_pct' => 12, 'status' => 'active',
+            'deal_stage_id' => $preWon->id, 'responsible_user_id' => $admin->id]);
+        $this->actingAs($admin)->patch(route('deals.stage', $deal2->id), ['deal_stage_id' => $won->id]);
+        $this->assertEquals(12.0, (float) $deal2->fresh()->partner_pct);
+    }
+
     public function test_deal_card_shows_partner_in_profit(): void
     {
         $admin = $this->user('admin');

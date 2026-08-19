@@ -81,7 +81,9 @@ class ExpenseConfirmationTest extends TestCase
         $this->assertSame('confirmed', $expense->status);
         $this->assertSame('cash', $expense->payment_method);
         $this->assertSame($this->financist->id, (int) $expense->confirmed_by);
-        $this->assertNotNull($expense->file_path);
+        // Чек бухгалтера — отдельное поле; заявка менеджера (file_path) не трогается.
+        $this->assertNotNull($expense->confirm_file_path);
+        $this->assertNull($expense->file_path);
         // Задача бухгалтера закрыта, автор уведомлён.
         $this->assertSame(0, Task::where('assignee_id', $this->financist->id)->where('status', '!=', 'done')->count());
         $this->assertSame(1, $this->manager->notifications()->count());

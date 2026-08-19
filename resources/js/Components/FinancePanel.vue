@@ -101,8 +101,32 @@ const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-dig
 const isImage = (path) => /\.(jpe?g|png|webp|heic)$/i.test(path ?? '');
 
 const receiptView = ref(null); // { url, image } — открытый на просмотр чек
-const openReceipt = (e) => { receiptView.value = { url: route('expenses.receipt', e.id), image: isImage(e.file_path) }; };
+// kind: 'request' — заявка/чек менеджера (file_path), 'confirm' — чек оплаты бухгалтера.
+const openReceipt = (e, kind = 'request') => {
+    const isConfirm = kind === 'confirm';
+    receiptView.value = {
+        url: route('expenses.receipt', e.id) + (isConfirm ? '?kind=confirm' : ''),
+        image: isImage(isConfirm ? e.confirm_file_path : e.file_path),
+    };
+};
 const closeReceipt = () => { receiptView.value = null; };
+
+// «➕ добавить чек» к существующему расходу (например, перенесённому из
+// предсделки): автор-менеджер или бухгалтер, пока расход не подтверждён.
+const attachInput = ref(null);
+const attachTarget = ref(null);
+const meId = computed(() => usePage().props.auth.user?.id);
+const canAttach = (e) => !e.material && e.status !== 'confirmed' && !e.file_path
+    && (canConfirm.value || e.responsible?.id === meId.value);
+const startAttach = (e) => { attachTarget.value = e.id; attachInput.value?.click(); };
+const onAttach = (ev) => {
+    const f = ev.target.files?.[0];
+    if (f && attachTarget.value) {
+        router.post(route('expenses.attachReceipt', attachTarget.value), { file: f }, { preserveScroll: true, forceFormData: true });
+    }
+    ev.target.value = '';
+    attachTarget.value = null;
+};
 
 const delInvoice = async (i) => { if (await confirmDialog({ title: 'Удалить счёт', message: 'Счёт будет удалён.', confirmText: 'Удалить', danger: true })) router.delete(route('invoices.destroy', i.id), { preserveScroll: true }); };
 const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалить расход', message: 'Расход будет удалён.', confirmText: 'Удалить', danger: true })) router.delete(route('expenses.destroy', e.id), { preserveScroll: true }); };
@@ -271,8 +295,8 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     Доступно: касса {{ money(balances.cash) }} · счёт {{ money(balances.bank) }}
                     <template v-if="overBalance"> — расход превышает остаток {{ expenseForm.payment_method === 'cash' ? 'кассы' : 'счёта' }}!</template>
                 </div>
-                <div v-if="expenseMode === 'other'" class="mt-2">
-                    <label class="mb-1 block text-xs font-medium text-slate-500">Чек (фото или PDF) — можно прикрепить сейчас, иначе бухгалтер добавит при подтверждении</label>
+                <div v-if="expenseMode !== 'material'" class="mt-2">
+                    <label class="mb-1 block text-xs font-medium text-slate-500">Заявка / чек менеджера (фото или PDF) — бухгалтер сверит его и приложит свой чек оплаты</label>
                     <input ref="receiptInput" type="file" accept="image/*,.pdf" @change="onReceipt"
                         class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
                     <div v-if="expenseForm.errors.file" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.file }}</div>
@@ -280,6 +304,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <div v-else class="mt-2 text-xs text-slate-400">{{ canConfirm ? 'Списание со склада — чек не требуется, остаток уменьшится сразу.' : 'Списание со склада — чек не требуется; остаток спишется после подтверждения бухгалтера.' }}</div>
                 <div class="mt-2"><PrimaryButton :disabled="expenseForm.processing || !canSubmitExpense" @click="addExpense">Добавить расход</PrimaryButton></div>
             </div>
+            <input ref="attachInput" type="file" accept="image/*,.pdf" class="hidden" @change="onAttach" />
             <div class="space-y-2">
                 <div v-for="e in expenses" :key="e.id" class="rounded-xl bg-slate-50 p-4 text-sm">
                     <div class="flex items-start justify-between gap-3">
@@ -294,12 +319,20 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                                 <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
                                 <span v-if="e.responsible">{{ e.responsible.name }}</span>
                                 <span>· {{ fmtDateTime(e.created_at) }}</span>
-                                <button v-if="e.file_path" type="button" @click="openReceipt(e)"
-                                    class="inline-flex items-center gap-1 font-medium text-indigo-600 transition-colors duration-150 hover:text-indigo-800">
-                                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                                    Посмотреть чек
-                                </button>
-                                <span v-else-if="!e.material" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">без чека</span>
+                            </div>
+                            <!-- Два чека рядом: заявка менеджера и чек оплаты бухгалтера — сверяются в один взгляд -->
+                            <div v-if="!e.material" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span class="inline-flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">
+                                    <span class="text-slate-400">заявка менеджера</span>
+                                    <button v-if="e.file_path" type="button" @click="openReceipt(e)" class="font-semibold text-indigo-600 transition-colors duration-150 hover:underline">посмотреть</button>
+                                    <button v-else-if="canAttach(e)" type="button" @click="startAttach(e)" class="font-semibold text-indigo-600 transition-colors duration-150 hover:underline">➕ добавить</button>
+                                    <span v-else class="text-slate-300">нет</span>
+                                </span>
+                                <span class="inline-flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">
+                                    <span class="text-slate-400">чек оплаты</span>
+                                    <button v-if="e.confirm_file_path" type="button" @click="openReceipt(e, 'confirm')" class="font-semibold text-emerald-600 transition-colors duration-150 hover:underline">посмотреть</button>
+                                    <span v-else class="text-slate-300">{{ e.status === 'confirmed' ? 'нет' : 'после подтверждения' }}</span>
+                                </span>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -327,8 +360,8 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                                 class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                                 :class="confirmForm.payment_method === 'bank' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
                         </div>
-                        <div v-if="!e.file_path" class="mt-2">
-                            <label class="mb-1 block text-xs font-medium text-slate-500">Чек (обязателен для подтверждения)</label>
+                        <div class="mt-2">
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Чек оплаты бухгалтера (обязателен) — заявка менеджера остаётся рядом для сверки</label>
                             <input ref="confirmInput" type="file" accept="image/*,.pdf" @change="onConfirmReceipt"
                                 class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-emerald-700 hover:file:bg-emerald-200" />
                         </div>
@@ -336,7 +369,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         <div v-if="confirmForm.errors.payment_method" class="mt-1 text-xs text-red-600">{{ confirmForm.errors.payment_method }}</div>
                         <div class="mt-2 flex gap-2">
                             <button class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700 disabled:opacity-50"
-                                :disabled="confirmForm.processing || (!e.file_path && !confirmForm.file)" @click="submitConfirm(e)">Подтвердить расход</button>
+                                :disabled="confirmForm.processing || (!e.confirm_file_path && !confirmForm.file)" @click="submitConfirm(e)">Подтвердить расход</button>
                             <button class="rounded-lg bg-white px-4 py-1.5 text-xs font-medium text-slate-500 ring-1 ring-slate-200 transition-colors duration-150 hover:bg-slate-100" @click="confirmFor = null">Отмена</button>
                         </div>
                     </div>

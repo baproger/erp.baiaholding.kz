@@ -61,7 +61,12 @@ const lockHint = (stage) => {
     if (stage.id === esfStage.value?.id) return 'Сначала «Акт утверждение» (галочка акта, срок 3 дня)';
     return 'Сначала «ЭСФ»';
 };
-const overdue = computed(() => isPastDue(props.deal.deadline, props.deal.status === 'closed'));
+// С «ЭСФ» и дальше (Оплата, Тендер закрыт) просрочка снимается автоматически.
+const pastEsf = computed(() => {
+    const esfIdx = props.stages.findIndex((s) => s.id === esfStage.value?.id);
+    return esfIdx !== -1 && currentStageIndex.value >= esfIdx;
+});
+const overdue = computed(() => !pastEsf.value && isPastDue(props.deal.deadline, props.deal.status === 'closed'));
 // Чисто визуальное: индекс текущего этапа для галочек пройденных шагов и % воронки.
 const currentStageIndex = computed(() => props.stages.findIndex((s) => s.id === props.deal.deal_stage_id));
 const funnelProgress = computed(() => (props.stages.length > 1 ? (Math.max(0, currentStageIndex.value) / (props.stages.length - 1)) * 100 : 0));
@@ -240,7 +245,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Срок</div>
-                            <div class="mt-1 text-sm font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed')">{{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span></div>
+                            <div class="mt-1 text-sm font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsf)">{{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span></div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Ответственный</div>
@@ -275,7 +280,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                             Задачи <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.tasks.length }}</span>
                         </h3>
                     </div>
-                    <div class="p-6">
+                    <div class="p-4">
                         <TaskPanel :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
                     </div>
                 </div>

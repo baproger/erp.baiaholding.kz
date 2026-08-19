@@ -16,7 +16,7 @@ class Expense extends Model
 
     protected $fillable = [
         'expenseable_type', 'expenseable_id', 'company_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
-        'responsible_user_id', 'employee_id', 'employee_payout', 'description', 'file_path', 'type', 'status',
+        'responsible_user_id', 'employee_id', 'employee_payout', 'description', 'file_path', 'confirm_file_path', 'type', 'status',
         'payment_method', 'confirmed_by', 'confirmed_at',
     ];
 
