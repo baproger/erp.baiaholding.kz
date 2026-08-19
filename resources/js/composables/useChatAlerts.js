@@ -126,9 +126,11 @@ const poll = async () => {
 
 const start = () => {
     poll();
-    // Передний план — раз в 10с; фон — раз в 30с (сервер фоновые вкладки не грузим тяжелее).
-    fgTimer = setInterval(() => { if (!document.hidden) poll(); }, 10000);
-    bgTimer = setInterval(() => { if (document.hidden) poll(); }, 30000);
+    // Передний план — раз в 20с; фон — раз в 60с. При 15–20 сотрудниках
+    // каждый лишний опрос умножается на все открытые вкладки — бейдж чата
+    // не обязан быть секундным (открытый чат опрашивается чаще сам).
+    fgTimer = setInterval(() => { if (!document.hidden) poll(); }, 20000);
+    bgTimer = setInterval(() => { if (document.hidden) poll(); }, 60000);
     window.addEventListener('pointerdown', askPermissionOnce);
     window.addEventListener('pointerdown', unlockAudio);
     window.addEventListener('keydown', unlockAudio);

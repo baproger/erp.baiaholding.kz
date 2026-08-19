@@ -20,7 +20,8 @@ const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Da
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 10000);
+    // 30с достаточно: заказы двигаются не каждую минуту, а лимит I/O хостинга не резиновый.
+    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 30000);
 });
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
 

@@ -468,16 +468,16 @@ const removeMember = async (p) => {
 
 watch(() => form.message, resizeInput);
 
-// Передний план — полный поллинг (4с); фон — только лёгкий state раз в 30с,
-// чтобы звук и уведомления работали, не нагружая сервер сообщениями.
+// Передний план — полный поллинг (8с); фон — только лёгкий state раз в 60с:
+// чат остаётся живым, а сервер не захлёбывается при 15–20 сотрудниках.
 let bgTimer = null;
 const onVisible = () => { if (!document.hidden) { loadMessages(); pollState(); } };
 onMounted(() => {
     if (activeChat.value) { markSeen(activeChat.value); loadMessages(true); }
     pollState();
     askNotifyPermission();
-    timer = setInterval(() => { if (!document.hidden) { loadMessages(); pollState(); } }, 4000);
-    bgTimer = setInterval(() => { if (document.hidden) pollState(); }, 30000);
+    timer = setInterval(() => { if (!document.hidden) { loadMessages(); pollState(); } }, 8000);
+    bgTimer = setInterval(() => { if (document.hidden) pollState(); }, 60000);
     document.addEventListener('visibilitychange', onVisible);
 });
 onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.removeEventListener('visibilitychange', onVisible); });
