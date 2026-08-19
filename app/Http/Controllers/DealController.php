@@ -91,7 +91,10 @@ class DealController extends Controller
 
         $deals = $view === 'list'
             ? (clone $base)->latest()->paginate(20)->withQueryString()
-            : (clone $base)->latest()->get();
+            // Канбан: страховочный потолок — 500 свежих активных сделок.
+            // Больше на доске всё равно не разглядеть, а страница и сервер
+            // не лягут, когда сделок станут тысячи (старые ищутся фильтрами).
+            : (clone $base)->latest()->limit(500)->get();
 
         return Inertia::render('Deals/Index', [
             'deals' => $deals,
