@@ -96,11 +96,15 @@ const ensurePush = async () => {
     }
 };
 
+let stateVer = 0; // версия состояния чата: сервер отвечает «без изменений» почти бесплатно
+
 const poll = async () => {
-    // Страница чата поллит /chat/state сама (4с) и сама озвучивает — не дублируем.
+    // Страница чата поллит /chat/state сама и сама озвучивает — не дублируем.
     try { if (route().current('chat.*')) return; } catch (e) { /* ziggy ещё не готов */ }
     try {
-        const { data } = await window.axios.get(route('chat.state'));
+        const { data } = await window.axios.get(route('chat.state'), { params: { ver: stateVer } });
+        if (data.unchanged) return; // ничего нового — сервер даже не считал непрочитанные
+        stateVer = data.ver ?? 0;
         const st = data.state || {};
         let total = 0;
         const alerts = [];

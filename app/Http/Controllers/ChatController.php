@@ -129,6 +129,16 @@ class ChatController extends Controller
     public function state(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        // Дешёвая проверка «менялось ли что-то»: MAX(id) сообщений — мгновенное
+        // чтение первичного ключа. Версия совпала с клиентской — отвечаем
+        // «без изменений», НЕ пересчитывая непрочитанные. Так ~95% опросов от
+        // всех вкладок всех сотрудников почти ничего не стоят серверу.
+        $ver = (int) ChatMessage::max('id');
+        if ($request->integer('ver') > 0 && $request->integer('ver') === $ver) {
+            return response()->json(['unchanged' => true, 'ver' => $ver]);
+        }
+
         $chats = $this->visibleChats($user)->with('lastMessage.user:id,name')->get(['id', 'updated_at']);
 
         $unread = ChatMessage::query()
@@ -137,7 +147,7 @@ class ChatController extends Controller
             ->whereRaw('id > COALESCE((select last_read_message_id from chat_reads where chat_reads.chat_id = chat_messages.chat_id and chat_reads.user_id = ?), 0)', [$user->id])
             ->selectRaw('chat_id, count(*) c')->groupBy('chat_id')->pluck('c', 'chat_id');
 
-        return response()->json(['state' => $chats->mapWithKeys(fn ($c) => [$c->id => [
+        return response()->json(['ver' => $ver, 'state' => $chats->mapWithKeys(fn ($c) => [$c->id => [
             'unread' => (int) ($unread[$c->id] ?? 0),
             'last' => $c->lastMessage ? [
                 'id' => $c->lastMessage->id,

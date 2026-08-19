@@ -81,9 +81,12 @@ const notifyBrowser = (title, body) => {
 // ---- Живые бейджи: лёгкий поллинг непрочитанных и последних сообщений ----
 const live = reactive({});   // chat_id -> { unread, last }
 let statePrev = null;
+let stateVer = 0; // сервер отвечает «без изменений» одной дешёвой проверкой
 const pollState = async () => {
     try {
-        const { data } = await window.axios.get(route('chat.state'));
+        const { data } = await window.axios.get(route('chat.state'), { params: { ver: stateVer } });
+        if (data.unchanged) return;
+        stateVer = data.ver ?? 0;
         const st = data.state || {};
         const alerts = [];
         for (const [id, s] of Object.entries(st)) {
@@ -97,6 +100,10 @@ const pollState = async () => {
         }
         statePrev = st;
         syncChatState(st); // бейдж «Чат» в меню + защита от повторного «дзыня» после ухода со страницы
+        // Новые сообщения в ОТКРЫТОМ чате качаем только когда они правда есть —
+        // раньше loadMessages ходил на сервер каждый тик даже в тишине.
+        const act = activeChat.value ? st[activeChat.value.id] : null;
+        if (act?.last?.id && act.last.id > lastId.value) loadMessages();
         if (alerts.length) {
             ding();
             if (document.hidden) {
@@ -471,12 +478,12 @@ watch(() => form.message, resizeInput);
 // Передний план — полный поллинг (8с); фон — только лёгкий state раз в 60с:
 // чат остаётся живым, а сервер не захлёбывается при 15–20 сотрудниках.
 let bgTimer = null;
-const onVisible = () => { if (!document.hidden) { loadMessages(); pollState(); } };
+const onVisible = () => { if (!document.hidden) pollState(); };
 onMounted(() => {
     if (activeChat.value) { markSeen(activeChat.value); loadMessages(true); }
     pollState();
     askNotifyPermission();
-    timer = setInterval(() => { if (!document.hidden) { loadMessages(); pollState(); } }, 8000);
+    timer = setInterval(() => { if (!document.hidden) pollState(); }, 8000);
     bgTimer = setInterval(() => { if (document.hidden) pollState(); }, 60000);
     document.addEventListener('visibilitychange', onVisible);
 });
