@@ -102,6 +102,20 @@ class StageTransitionService
                 $deal->partner_pct = 5;
             }
 
+            // С «ЭСФ» и дальше (Оплата, Тендер закрыт) открытые задачи сделки
+            // закрываются АВТОМАТИЧЕСКИ (правило от 19.08.2026): просрочка по
+            // ним гаснет, на задаче остаётся знак «авто». Гейт-задача самого
+            // ЭСФ создаётся ПОСЛЕ сохранения — её автозакрытие не касается.
+            if ($isForward && (($esfStage && $target->order >= $esfStage->order) || ($wonStage && $target->id === $wonStage->id))) {
+                $openTasks = $deal->tasks()->where('status', '!=', 'done')->get();
+                foreach ($openTasks as $t) {
+                    $t->update(['status' => 'done', 'completed_at' => now(), 'auto_completed' => true]);
+                }
+                if ($openTasks->isNotEmpty()) {
+                    \App\Support\NotificationResolver::tasks($openTasks->pluck('id'));
+                }
+            }
+
             $deal->deal_stage_id = $target->id;
 
             $deal->save();

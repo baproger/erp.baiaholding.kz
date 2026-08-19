@@ -87,6 +87,8 @@ const saveEdit = () => editForm.put(route('tasks.update', editing.value.id), { p
                     <div class="truncate text-[11px] text-slate-400">{{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date"> · {{ formatDateTime(t.due_date) }}</span></div>
                 </div>
                 <div class="flex flex-shrink-0 items-center gap-1.5">
+                    <span v-if="t.auto_completed" class="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-500"
+                        title="Закрыта автоматически: сделка перешла на «ЭСФ» и дальше">⚙ авто</span>
                     <button @click="advance(t)" title="Сменить статус"><StatusBadge :status="t.status" /></button>
                     <button class="rounded p-1 text-slate-300 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="remove(t)">
                         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>

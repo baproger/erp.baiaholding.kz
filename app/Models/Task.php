@@ -19,7 +19,7 @@ class Task extends Model
     protected $fillable = [
         'taskable_type', 'taskable_id', 'title', 'description', 'note',
         'assignee_id', 'creator_id', 'priority', 'status',
-        'start_date', 'due_date', 'parent_task_id', 'checklist', 'completed_at', 'overdue_notified_at',
+        'start_date', 'due_date', 'parent_task_id', 'checklist', 'completed_at', 'auto_completed', 'overdue_notified_at',
     ];
 
     protected $casts = [

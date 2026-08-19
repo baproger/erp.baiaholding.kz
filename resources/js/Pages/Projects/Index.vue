@@ -21,10 +21,10 @@ const onDrop = (stage) => {
     if (!id) return;
     const p = list.value.find((x) => x.id === id);
     if (!p || p.project_stage_id === stage.id) return;
-    router.patch(route('projects.stage', id), { project_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
+    router.patch(route('projects.stage', id), { project_stage_id: stage.id }, { preserveScroll: true, preserveState: true });
 };
 const switchView = (v) => router.get(route('projects.index'), { ...props.filters, view: v }, { preserveState: true });
-const advance = (p) => router.patch(route('projects.advance', p.id), {}, { preserveScroll: true, preserveState: false });
+const advance = (p) => router.patch(route('projects.advance', p.id), {}, { preserveScroll: true, preserveState: true });
 // Секции канбана: у BAIA два цеха («Металл цех» / «Ағаш цех») — своя строка
 // этапов на каждый; у ASU один цех (workshop=null) — одна секция без шапки.
 const workshopGroups = computed(() => {
@@ -38,7 +38,7 @@ const workshopGroups = computed(() => {
     return groups;
 });
 const lastStageOf = (g) => [...g.stages].reverse().find((s) => s.is_completed)?.id ?? g.stages[g.stages.length - 1]?.id;
-const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preserveScroll: true, preserveState: false });
+const sendToAct = (p) => router.post(route('projects.toAct', p.id), {}, { preserveScroll: true, preserveState: true });
 // Тайминг этапа: сколько заказ уже на текущем этапе (тикает раз в минуту).
 const nowTs = ref(Date.now());
 let durTimer = null;

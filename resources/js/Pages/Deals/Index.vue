@@ -62,9 +62,9 @@ const onDrop = async (stage) => {
     // Leaving the «Оплата успешно» stage needs confirmation.
     if (wonIds.value.includes(deal.deal_stage_id)
         && ! (await confirmDialog({ title: 'Сделка уже успешна', message: 'Сделка на этапе «Оплата успешно». Точно перевести её на другой этап?', confirmText: 'Перевести', danger: true }))) return;
-    router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, { preserveScroll: true, preserveState: false });
+    router.patch(route('deals.stage', id), { deal_stage_id: stage.id }, { preserveScroll: true, preserveState: true });
 };
-const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { preserveScroll: true, preserveState: false });
+const advance = (deal) => router.patch(route('deals.advance', deal.id), {}, { preserveScroll: true, preserveState: true });
 // ⏱ Сколько сделка на текущем этапе (как тайминг у заказов цеха).
 const stageTime = (deal) => {
     if (!deal.stage_entered_at) return null;
@@ -81,7 +81,7 @@ const toWorkshop = (deal, workshop = null) => {
     const options = props.workshopsByCompany[deal.company_id] ?? [];
     if (!workshop && options.length > 1) { workshopPickDeal.value = deal; return; }
     router.post(route('deals.toWorkshop', deal.id), { workshop: workshop ?? options[0] ?? null },
-        { preserveScroll: true, preserveState: false, onSuccess: () => (workshopPickDeal.value = null) });
+        { preserveScroll: true, preserveState: true, onSuccess: () => (workshopPickDeal.value = null) });
 };
 const switchView = (v) => router.get(route('deals.index'), { ...props.filters, view: v }, { preserveState: true });
 

@@ -159,27 +159,27 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
             </button>
         </template>
 
-        <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="flex items-center gap-2 overflow-x-auto pb-1">
+        <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1">
                 <button v-for="(stage, idx) in stages" :key="stage.id" @click="moveStage(stage.id)" :disabled="!can.update || stageLocked(stage)"
                     :title="stageLocked(stage) ? lockHint(stage) : ''"
                     :class="stage.id === deal.deal_stage_id
                         ? 'text-white shadow-md'
                         : currentStageIndex >= 0 && idx < currentStageIndex
                             ? 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100 hover:bg-indigo-100'
-                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'"
+                            : 'bg-white text-slate-500 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-slate-700'"
                     :style="stage.id === deal.deal_stage_id ? { backgroundColor: stage.color } : {}"
-                    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40">
-                    <svg v-if="currentStageIndex >= 0 && idx < currentStageIndex" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    class="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40">
+                    <svg v-if="currentStageIndex >= 0 && idx < currentStageIndex" class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                     {{ stage.name }}
                 </button>
             </div>
             <!-- Прогресс воронки -->
-            <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-slate-100">
                 <div class="h-full rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 transition-all duration-500 ease-out" :style="{ width: funnelProgress + '%' }"></div>
             </div>
             <!-- Галочка бухгалтера на этапах «Акт утверждение» / «ЭСФ» -->
-            <div v-if="stageTask" class="mt-4 flex flex-wrap items-center gap-2 rounded-xl px-4 py-3"
+            <div v-if="stageTask" class="mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2"
                 :class="stageTask.done ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-amber-50 ring-1 ring-amber-200'">
                 <span v-if="stageTask.done" class="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
                     <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
@@ -200,7 +200,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </template>
             </div>
 
-            <div class="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+            <div class="mt-3 flex flex-wrap gap-2">
                 <PrimaryButton v-if="(can.advance ?? can.update) && !isWorkshopStage && !isLastStage && !managerFrozen" @click="advance">Далее →</PrimaryButton>
                 <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop()" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
@@ -272,6 +272,40 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     </div>
                 </div>
 
+                <!-- Финансы сразу под информацией — расход вводится без скролла вниз -->
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
+                        <button :class="tab==='finance' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='finance'">Финансы</button>
+                        <button :class="tab==='docs' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='docs'">Документы</button>
+                        <button :class="tab==='custom' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
+                        <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
+                    </nav>
+                    <FinancePanel v-if="tab==='finance'" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
+                    <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
+                    <div v-else>
+                        <!-- Тайминг этапов сделки: каждый шаг — когда, сколько заняло и кто перевёл -->
+                        <div v-if="stageLogs.length" class="mb-5">
+                            <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">⏱ Тайминг этапов</div>
+                            <div class="space-y-1.5">
+                                <div v-for="(l, i) in stageLogs" :key="i" class="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm"
+                                    :class="l.open ? 'bg-indigo-50' : 'bg-slate-50'">
+                                    <div class="flex min-w-0 items-center gap-2">
+                                        <span class="font-medium text-slate-800">{{ l.stage }}</span>
+                                        <span v-if="l.open" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">сейчас</span>
+                                        <span v-if="l.mover" class="truncate text-[11px] text-slate-400">перевёл(а): {{ l.mover }}</span>
+                                    </div>
+                                    <div class="flex items-center gap-3 tabular-nums">
+                                        <span class="text-xs text-slate-400">{{ formatDateTime(l.entered_at) }}<template v-if="l.left_at"> → {{ formatDateTime(l.left_at) }}</template></span>
+                                        <b :class="l.open ? 'text-indigo-700' : 'text-slate-700'">{{ formatDuration(l.seconds) }}</b>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <HistoryPanel :history="history" />
+                    </div>
+                </div>
+
                 <!-- Задачи -->
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
@@ -308,40 +342,6 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     </div>
                     <div class="p-6">
                         <CommentPanel :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
-                    </div>
-                </div>
-
-                <!-- Второстепенное: Финансы / Документы (управление) / Доп. поля / История -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
-                        <button :class="tab==='finance' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='finance'">Финансы</button>
-                        <button :class="tab==='docs' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='docs'">Документы</button>
-                        <button :class="tab==='custom' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
-                        <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
-                    </nav>
-                    <FinancePanel v-if="tab==='finance'" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
-                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
-                    <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
-                    <div v-else>
-                        <!-- Тайминг этапов сделки: каждый шаг — когда, сколько заняло и кто перевёл -->
-                        <div v-if="stageLogs.length" class="mb-5">
-                            <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">⏱ Тайминг этапов</div>
-                            <div class="space-y-1.5">
-                                <div v-for="(l, i) in stageLogs" :key="i" class="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm"
-                                    :class="l.open ? 'bg-indigo-50' : 'bg-slate-50'">
-                                    <div class="flex min-w-0 items-center gap-2">
-                                        <span class="font-medium text-slate-800">{{ l.stage }}</span>
-                                        <span v-if="l.open" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">сейчас</span>
-                                        <span v-if="l.mover" class="truncate text-[11px] text-slate-400">перевёл(а): {{ l.mover }}</span>
-                                    </div>
-                                    <div class="flex items-center gap-3 tabular-nums">
-                                        <span class="text-xs text-slate-400">{{ formatDateTime(l.entered_at) }}<template v-if="l.left_at"> → {{ formatDateTime(l.left_at) }}</template></span>
-                                        <b :class="l.open ? 'text-indigo-700' : 'text-slate-700'">{{ formatDuration(l.seconds) }}</b>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <HistoryPanel :history="history" />
                     </div>
                 </div>
             </div>
