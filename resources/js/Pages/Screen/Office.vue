@@ -13,8 +13,8 @@ const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour:
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    // Рейтинг меняется нечасто — раз в минуту более чем достаточно для ТВ.
-    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 60000);
+    // Рейтинг меняется нечасто — 2 минуты достаточно, хостинг скажет спасибо.
+    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 120000);
 });
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
 

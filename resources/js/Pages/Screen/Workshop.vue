@@ -20,8 +20,9 @@ const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Da
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    // 30с достаточно: заказы двигаются не каждую минуту, а лимит I/O хостинга не резиновый.
-    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 30000);
+    // 2 минуты: табло пассивное, а лимит I/O хостинга не резиновый. Нажатие
+    // «Далее» на самом ТВ обновляет данные сразу, не дожидаясь таймера.
+    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 120000);
 });
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
 
