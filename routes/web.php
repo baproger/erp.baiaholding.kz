@@ -138,6 +138,7 @@ Route::middleware('auth')->group(function () {
     Route::put('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'update'])->name('finance.debts.update');
     Route::delete('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'destroy'])->name('finance.debts.destroy');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
+    Route::get('payroll/bonuses', [PayrollController::class, 'bonuses'])->name('payroll.bonuses');
     Route::post('payroll/adjustments', [PayrollController::class, 'storeAdjustment'])->name('payroll.adjustments.store');
     Route::delete('payroll/adjustments/{adjustment}', [PayrollController::class, 'destroyAdjustment'])->name('payroll.adjustments.destroy');
     Route::patch('payroll/salary/{user}', [PayrollController::class, 'updateSalary'])->name('payroll.salary');

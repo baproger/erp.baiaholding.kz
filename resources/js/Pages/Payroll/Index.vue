@@ -108,12 +108,14 @@ const companySections = computed(() => {
                         key: `${s.id}|${name}`, name, list, id,
                         norm: own ?? props.normHours,
                         override: own != null,
-                        base: sum('base'),
-                        bonus: sum('bonus'),
-                        deductions: sum('deductions'),
+                        base_day: sum('base_day'),
+                        base_night: sum('base_night'),
                         additions: sum('additions'),
-                        debt: sum('debt_charge'),
-                        final: sum('final'),
+                        trip: sum('trip'),
+                        gross: sum('gross'),
+                        adv: sum('adv_salary'),
+                        penalties: sum('penalties'),
+                        final: sum('salary_final'),
                     };
                 })
                 .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
@@ -122,12 +124,14 @@ const companySections = computed(() => {
                 id: s.id, name: s.name, groups,
                 people: groups.reduce((n, g) => n + g.list.length, 0),
                 totals: {
-                    base: counted.reduce((n, r) => n + (r.base || 0), 0),
-                    bonus: counted.reduce((n, r) => n + (r.bonus || 0), 0),
-                    deductions: counted.reduce((n, r) => n + (r.deductions || 0), 0),
+                    base_day: counted.reduce((n, r) => n + (r.base_day || 0), 0),
+                    base_night: counted.reduce((n, r) => n + (r.base_night || 0), 0),
                     additions: counted.reduce((n, r) => n + (r.additions || 0), 0),
-                    debt: counted.reduce((n, r) => n + (r.debt_charge || 0), 0),
-                    final: counted.reduce((n, r) => n + (r.final || 0), 0),
+                    trip: counted.reduce((n, r) => n + (r.trip || 0), 0),
+                    gross: counted.reduce((n, r) => n + (r.gross || 0), 0),
+                    adv: counted.reduce((n, r) => n + (r.adv_salary || 0), 0),
+                    penalties: counted.reduce((n, r) => n + (r.penalties || 0), 0),
+                    final: counted.reduce((n, r) => n + (r.salary_final || 0), 0),
                 },
             };
         })
@@ -162,17 +166,17 @@ const setMonth = () => router.get(route('payroll.index'), { month: monthSel.valu
 // Выбранный месяц ведомости запоминается за страницей.
 useStickyFilters('payroll', { monthSel, search, onlyWith }, setMonth);
 
-const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
+const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия', trip: 'Командировка' };
 // Аванс и долг — РАЗНЫЕ вещи, обе заводятся модалкой:
 // аванс — разовая выдача, каждый месяц своя сумма, удерживается целиком в этом
 // же месяце; долг — переходящий остаток, гасится фиксированной суммой в месяц
 // и только из бонуса. Аванс остаётся типом корректировки.
-const newAdjTypes = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия' };
+const newAdjTypes = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия', trip: 'Командировка' };
 // «2026-07» → «июль 2026» для заголовков (computed — месяц меняется без перезагрузки).
 const monthLabel = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
 // Короткий вариант для заголовка колонки — «август 2026 г.» её распирает.
 const monthShort = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' }));
-const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
+const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'trip' ? 'bg-sky-100 text-sky-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
 
 // Оклад: инлайн-правка (бухгалтер/админ).
 const editingSalary = ref(null);
@@ -195,14 +199,17 @@ const saveNorm = () => {
 };
 const editingHours = ref(null);
 const hoursVal = ref('');
-const editHours = (r) => { editingHours.value = r.uid; hoursVal.value = r.hours ?? ''; };
+const nightVal = ref(''); // ночные часы: ночной час = дневная ставка × 1.5
+const editHours = (r) => { editingHours.value = r.uid; hoursVal.value = r.hours ?? ''; nightVal.value = r.night_hours ?? ''; };
 const saveHours = (r) => router.patch(route('payroll.hours', r.uid), {
-    month: props.month, hours: hoursVal.value === '' ? null : Number(hoursVal.value),
+    month: props.month,
+    hours: hoursVal.value === '' ? null : Number(hoursVal.value),
+    night_hours: nightVal.value === '' ? null : Number(nightVal.value),
 }, { preserveScroll: true, onSuccess: () => (editingHours.value = null) });
 
 // Корректировка: отгул/больничный — днями (сумма авто = оклад/22 × дни) или суммой.
 const showAdj = ref(false);
-const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '', payment_method: 'cash' });
+const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '', payment_method: 'cash', source: 'salary' });
 const openAdj = (uid = '') => { adjForm.reset(); adjForm.user_id = uid; adjForm.date = new Date().toISOString().slice(0, 10); showAdj.value = true; };
 const submitAdj = () => adjForm.post(route('payroll.adjustments.store'), { preserveScroll: true, onSuccess: () => (showAdj.value = false) });
 
@@ -236,7 +243,7 @@ const delAdj = async (a) => {
         <template #header>
             <span class="truncate">{{ $t('page.payroll', 'Зарплата и бонусы') }}</span>
         </template>
-        <FinanceLayout title="Зарплата" subtitle="ведомость: оклад, бонус, удержания" active="payroll.index" :wide="leadership">
+        <FinanceLayout title="Зарплата" subtitle="оклад по часам (день/ночь), премии, штрафы, авансы из ЗП — бонусы на своей вкладке" active="payroll.index" :wide="leadership">
             <template #actions>
                 <label class="flex items-center gap-1 text-xs font-normal text-slate-400">месяц
                     <input v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
@@ -263,24 +270,27 @@ const delAdj = async (a) => {
             <!-- «К выплате» — тёмная итоговая плитка (§5): #1A3B5C, цифра emerald-300 -->
             <div class="overflow-hidden rounded-2xl border border-slate-200 shadow-md">
                 <div class="px-6 py-5" style="background-color:#1A3B5C">
-                    <div class="text-[11px] uppercase tracking-wide text-white/60">К выплате · {{ monthLabel }}</div>
-                    <div class="mt-1 whitespace-nowrap text-3xl font-bold tabular-nums text-emerald-300">{{ money(me?.final ?? me?.payout ?? 0) }}</div>
+                    <div class="text-[11px] uppercase tracking-wide text-white/60">Итого ЗП · {{ monthLabel }}</div>
+                    <div class="mt-1 whitespace-nowrap text-3xl font-bold tabular-nums text-emerald-300">{{ money(me?.salary_final ?? 0) }}</div>
+                    <div class="mt-0.5 text-[11px] text-white/50">бонусы — на вкладке «Бонусы»</div>
                 </div>
                 <div class="space-y-2 bg-white p-6 text-sm">
                     <div class="flex justify-between">
                         <span class="text-slate-500">Оклад<template v-if="me?.hours != null"> · {{ me.hours }} ч × {{ money(me.hourly_rate) }}/ч</template></span>
                         <span class="font-medium tabular-nums">{{ money(me?.base ?? me?.salary ?? 0) }}</span>
                     </div>
-                    <div class="flex justify-between"><span class="text-slate-500">Бонус по марже сделок</span><span class="font-medium tabular-nums text-emerald-600">{{ money(me?.bonus ?? 0) }}</span></div>
-                    <div v-if="me?.deductions" class="flex justify-between"><span class="text-slate-500">Удержания (отгул/больничный/штраф/аванс)</span><span class="font-medium tabular-nums text-rose-600">− {{ money(me.deductions) }}</span></div>
-                    <div v-if="me?.additions" class="flex justify-between"><span class="text-slate-500">Премии</span><span class="font-medium tabular-nums text-emerald-600">+ {{ money(me.additions) }}</span></div>
-                    <!-- Погашение долга вычитается из «К выплате» — без этой
-                         строки сумма сверху не сходилась бы с разбивкой. -->
-                    <div v-if="me?.debt_charge > 0" class="flex justify-between">
-                        <span class="text-slate-500">Погашение долга <span class="text-slate-400">(из бонуса)</span></span>
-                        <span class="font-medium tabular-nums text-amber-600">− {{ money(me.debt_charge) }}</span>
+                    <div v-if="me?.hours != null || me?.night_hours != null" class="flex justify-between">
+                        <span class="text-slate-500">Часы: день {{ me?.hours ?? 0 }} ч<template v-if="me?.night_hours"> · ночь {{ me.night_hours }} ч (×1.5)</template></span>
+                        <span class="text-slate-400 tabular-nums">{{ money(me?.hourly_rate ?? 0) }}/ч</span>
                     </div>
-                    <div class="flex justify-between"><span class="text-slate-500">Успешных сделок</span><span class="font-medium">{{ me?.closed ?? 0 }}</span></div>
+                    <div v-if="me?.penalties" class="flex justify-between"><span class="text-slate-500">Штрафы / отгулы / больничные</span><span class="font-medium tabular-nums text-rose-600">− {{ money(me.penalties) }}</span></div>
+                    <div v-if="me?.adv_salary" class="flex justify-between"><span class="text-slate-500">Аванс из ЗП</span><span class="font-medium tabular-nums text-rose-600">− {{ money(me.adv_salary) }}</span></div>
+                    <div v-if="me?.additions" class="flex justify-between"><span class="text-slate-500">Премии</span><span class="font-medium tabular-nums text-emerald-600">+ {{ money(me.additions) }}</span></div>
+                    <div v-if="me?.trip" class="flex justify-between"><span class="text-slate-500">Командировочные</span><span class="font-medium tabular-nums text-sky-600">+ {{ money(me.trip) }}</span></div>
+                    <Link :href="route('payroll.bonuses')" class="flex justify-between rounded-lg bg-emerald-50/60 px-2 py-1.5 transition-colors hover:bg-emerald-50">
+                        <span class="text-slate-500">Бонус за {{ monthShort }} <span class="text-indigo-600">→ вкладка «Бонусы»</span></span>
+                        <span class="font-medium tabular-nums text-emerald-600">{{ money(me?.bonus_final ?? 0) }}</span>
+                    </Link>
                 </div>
             </div>
 
@@ -425,25 +435,22 @@ const delAdj = async (a) => {
                     <div v-if="totals.base !== totals.salary" class="mt-0.5 truncate text-[11px] text-slate-400">по карточкам {{ money(totals.salary) }}</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <!-- Бонус месяца — главная цифра: «сколько заработали в августе».
-                         Общий («за всё время») оставлен подписью: именно он идёт
-                         в «К выплате», и путать их нельзя. -->
-                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонус за {{ monthShort }}</div>
-                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ money(totals.bonus_month) }}</div>
-                    <div class="mt-0.5 truncate text-[11px] text-slate-400" title="Именно этот бонус входит в «К выплате»">за всё время {{ money(totals.bonus) }}</div>
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Авансы из ЗП</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="totals.adv_salary > 0 ? 'text-rose-600' : 'text-slate-300'">{{ totals.adv_salary > 0 ? '−' + money(totals.adv_salary) : '—' }}</div>
+                    <div class="mt-0.5 truncate text-[11px] text-slate-400">авансы из бонуса — на вкладке «Бонусы»</div>
                 </div>
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Удержания / премии</div>
-                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="totals.deductions > 0 ? 'text-rose-600' : 'text-slate-300'">
-                        <template v-if="totals.deductions > 0">−{{ money(totals.deductions) }}</template>
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Штрафы / премии</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="totals.penalties > 0 ? 'text-rose-600' : 'text-slate-300'">
+                        <template v-if="totals.penalties > 0">−{{ money(totals.penalties) }}</template>
                         <template v-else>—</template>
                         <span v-if="totals.additions > 0" class="text-sm text-emerald-600"> +{{ money(totals.additions) }}</span>
                     </div>
                 </div>
                 <!-- Тёмная итоговая плитка (§5) -->
                 <div class="rounded-xl p-4 shadow-md" style="background-color:#1A3B5C">
-                    <div class="truncate text-[11px] uppercase tracking-wide text-white/60">К выплате · {{ monthLabel }}</div>
-                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money(totals.final) }}</div>
+                    <div class="truncate text-[11px] uppercase tracking-wide text-white/60">Итого ЗП · {{ monthLabel }}</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money(totals.salary_final) }}</div>
                 </div>
             </div>
 
@@ -456,21 +463,22 @@ const delAdj = async (a) => {
                         {{ s.name }}
                         <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">{{ s.people }} сотр.</span>
                     </h3>
-                    <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-emerald-700">{{ money(s.totals.final) }}</span>
+                    <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-emerald-700" title="Итого ЗП фирмы">{{ money(s.totals.final) }}</span>
                 </div>
                 <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                         <tr>
-                            <th class="px-6 py-2.5">Сотрудник</th>
-                            <th class="hidden sm:table-cell px-4 py-2.5 text-right" title="Отработанные часы за месяц. Пусто — полный оклад.">Часы</th>
-                            <th class="hidden sm:table-cell px-4 py-2.5 text-right">Оклад (начислено)</th>
-                            <th class="hidden sm:table-cell px-4 py-2.5 text-right">Бонус</th>
-                            <th class="hidden sm:table-cell px-4 py-2.5 text-right">Удержания / премии</th>
-                            <!-- Долг отдельной колонкой: он не удержание и не премия,
-                                 гасится только из бонуса. -->
-                            <th class="hidden sm:table-cell px-4 py-2.5 text-right" title="Погашение долга за месяц — только из бонуса, оклад не трогается">Долг за {{ monthShort }}</th>
-                            <th class="px-4 py-2.5 text-right">К выплате</th>
+                            <th class="px-6 py-2.5">Сотрудник · оклад</th>
+                            <th class="hidden sm:table-cell px-3 py-2.5 text-right" title="Часы за месяц: день и ночь. Пусто — полный оклад.">Часы д/н</th>
+                            <th class="hidden sm:table-cell px-3 py-2.5 text-right" title="Начислено за дневные часы">День</th>
+                            <th class="hidden sm:table-cell px-3 py-2.5 text-right" title="Начислено за ночные часы (ставка × 1.5)">Ночь</th>
+                            <th class="hidden lg:table-cell px-3 py-2.5 text-right">Премия</th>
+                            <th class="hidden lg:table-cell px-3 py-2.5 text-right" title="Командировочные">Команд.</th>
+                            <th class="hidden sm:table-cell px-3 py-2.5 text-right">Всего</th>
+                            <th class="hidden lg:table-cell px-3 py-2.5 text-right" title="Аванс из ЗП">Аванс</th>
+                            <th class="hidden lg:table-cell px-3 py-2.5 text-right" title="Штрафы, отгулы, больничные">Штраф</th>
+                            <th class="px-3 py-2.5 text-right">К выплате</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
@@ -505,16 +513,14 @@ const delAdj = async (a) => {
                                 </div>
                             </td>
                             <td class="hidden sm:table-cell"></td>
-                            <td class="hidden sm:table-cell px-4 py-2 text-right text-xs font-semibold tabular-nums text-slate-600">{{ money(g.base) }}</td>
-                            <td class="hidden sm:table-cell px-4 py-2 text-right text-xs font-semibold tabular-nums text-emerald-600">{{ money(g.bonus) }}</td>
-                            <td class="hidden sm:table-cell px-4 py-2 text-right text-xs font-semibold tabular-nums" :class="g.deductions > 0 ? 'text-rose-600' : 'text-slate-300'">
-                                {{ g.deductions > 0 ? '− ' + money(g.deductions) : (g.additions > 0 ? '' : '—') }}
-                                <span v-if="g.additions > 0" class="text-emerald-600"> + {{ money(g.additions) }}</span>
-                            </td>
-                            <td class="hidden sm:table-cell px-4 py-2 text-right text-xs font-semibold tabular-nums" :class="g.debt > 0 ? 'text-amber-600' : 'text-slate-300'">
-                                {{ g.debt > 0 ? '− ' + money(g.debt) : '—' }}
-                            </td>
-                            <td class="px-4 py-2 text-right text-sm font-bold tabular-nums text-emerald-700">{{ money(g.final) }}</td>
+                            <td class="hidden sm:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums text-slate-600">{{ money(g.base_day) }}</td>
+                            <td class="hidden sm:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.base_night > 0 ? 'text-indigo-600' : 'text-slate-300'">{{ g.base_night > 0 ? money(g.base_night) : '—' }}</td>
+                            <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.additions > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ g.additions > 0 ? money(g.additions) : '—' }}</td>
+                            <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.trip > 0 ? 'text-sky-600' : 'text-slate-300'">{{ g.trip > 0 ? money(g.trip) : '—' }}</td>
+                            <td class="hidden sm:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums text-slate-700">{{ money(g.gross) }}</td>
+                            <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.adv > 0 ? 'text-rose-600' : 'text-slate-300'">{{ g.adv > 0 ? '− ' + money(g.adv) : '—' }}</td>
+                            <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.penalties > 0 ? 'text-rose-600' : 'text-slate-300'">{{ g.penalties > 0 ? '− ' + money(g.penalties) : '—' }}</td>
+                            <td class="px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-700">{{ money(g.final) }}</td>
                         </tr>
                         <template v-if="expanded.has(g.key)">
                         <template v-for="r in g.list" :key="r.uid">
@@ -543,52 +549,57 @@ const delAdj = async (a) => {
                                 <!-- Часы за месяц: инлайн-правка бухгалтером/админом; пусто — полный оклад -->
                                 <td class="hidden sm:table-cell whitespace-nowrap px-4 py-2.5 text-right tabular-nums" @click.stop>
                                     <div v-if="editingHours === r.uid" class="flex items-center justify-end gap-1">
-                                        <input v-model="hoursVal" type="number" min="0" step="0.5" class="w-20 rounded-md border-slate-300 py-1 text-right text-xs"
+                                        <input v-model="hoursVal" type="number" min="0" step="0.5" placeholder="день" title="Дневные часы"
+                                            class="w-16 rounded-md border-slate-300 py-1 text-right text-xs"
+                                            @keydown.enter="saveHours(r)" @keydown.escape="editingHours = null" />
+                                        <input v-model="nightVal" type="number" min="0" step="0.5" placeholder="ночь" title="Ночные часы (×1.5)"
+                                            class="w-16 rounded-md border-indigo-300 py-1 text-right text-xs"
                                             @keydown.enter="saveHours(r)" @keydown.escape="editingHours = null" />
                                         <button class="rounded bg-emerald-600 px-1.5 py-1 text-[10px] font-bold text-white" @click="saveHours(r)">✓</button>
                                     </div>
                                     <button v-else-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600"
-                                        :title="'Отработанные часы за ' + monthLabel + ' (пусто — полный оклад). Ставка: ' + money(r.hourly_rate ?? 0) + '/ч'" @click="editHours(r)">
-                                        <span :class="r.hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">{{ r.hours != null ? r.hours + ' ч' : '—' }}</span>
+                                        :title="'Часы за ' + monthLabel + ': день и ночь (ночной час ×1.5). Пусто — полный оклад. Ставка дня: ' + money(r.hourly_rate ?? 0) + '/ч'" @click="editHours(r)">
+                                        <span :class="r.hours != null || r.night_hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">
+                                            <template v-if="r.hours != null || r.night_hours != null">{{ r.hours ?? 0 }} ч<template v-if="r.night_hours"> <span class="text-indigo-600">+ {{ r.night_hours }} н</span></template></template>
+                                            <template v-else>—</template>
+                                        </span>
                                         <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                     </button>
-                                    <span v-else :class="r.hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">{{ r.hours != null ? r.hours + ' ч' : '—' }}</span>
+                                    <span v-else :class="r.hours != null || r.night_hours != null ? 'font-medium text-slate-700' : 'text-slate-300'">
+                                        <template v-if="r.hours != null || r.night_hours != null">{{ r.hours ?? 0 }} ч<template v-if="r.night_hours"> + {{ r.night_hours }} н</template></template>
+                                        <template v-else>—</template>
+                                    </span>
                                 </td>
-                                <!-- Оклад: крупно — начислено; подписью — оклад по карточке и формула часов -->
-                                <td class="hidden sm:table-cell whitespace-nowrap px-4 py-2.5 text-right tabular-nums" @click.stop>
+                                <!-- День: начислено за дневные часы (или полный оклад); клик — правка оклада -->
+                                <td class="hidden sm:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" @click.stop>
                                     <div v-if="editingSalary === r.uid" class="flex items-center justify-end gap-1">
                                         <input v-model="salaryVal" type="number" min="0" class="w-28 rounded-md border-slate-300 py-1 text-right text-xs"
                                             @keydown.enter="saveSalary(r)" @keydown.escape="editingSalary = null" />
                                         <button class="rounded bg-emerald-600 px-1.5 py-1 text-[10px] font-bold text-white" @click="saveSalary(r)">✓</button>
                                     </div>
                                     <template v-else>
-                                        <button v-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600" title="Изменить оклад" @click="editSalary(r)">
-                                            <span :class="r.base > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base > 0 ? money(r.base) : '—' }}</span>
+                                        <button v-if="canManage" class="group inline-flex items-center gap-1 hover:text-indigo-600" :title="'Оклад ' + money(r.salary) + ' — нажмите, чтобы изменить'" @click="editSalary(r)">
+                                            <span :class="r.base_day > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base_day > 0 ? money(r.base_day) : '—' }}</span>
                                             <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                         </button>
-                                        <span v-else :class="r.base > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base > 0 ? money(r.base) : '—' }}</span>
-                                        <div v-if="r.hours != null" class="text-[10px] text-slate-400">оклад {{ money(r.salary) }} · {{ r.hours }} ч × {{ money(r.hourly_rate ?? 0) }}</div>
+                                        <span v-else :class="r.base_day > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base_day > 0 ? money(r.base_day) : '—' }}</span>
+                                        <div class="text-[10px] text-slate-400">оклад {{ money(r.salary) }}<template v-if="r.hours != null"> · {{ r.hours }} ч × {{ money(r.hourly_rate ?? 0) }}</template></div>
                                     </template>
                                 </td>
-                                <td class="hidden sm:table-cell whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="r.bonus > 0 ? 'font-medium text-emerald-600' : 'text-slate-300'">
-                                    {{ r.bonus > 0 ? money(r.bonus) : '—' }}
-                                    <div v-if="r.bonus_month > 0" class="text-[10px] font-normal text-slate-400" :title="'Бонус за ' + monthLabel">за {{ monthShort }}: {{ money(r.bonus_month) }}</div>
+                                <!-- Ночь: ставка × 1.5 -->
+                                <td class="hidden sm:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.base_night > 0 ? 'font-medium text-indigo-600' : 'text-slate-300'"
+                                    :title="r.night_hours ? r.night_hours + ' н × ' + money((r.hourly_rate ?? 0) * 1.5) : ''">
+                                    {{ r.base_night > 0 ? money(r.base_night) : '—' }}
                                 </td>
-                                <td class="hidden sm:table-cell whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="r.deductions > 0 ? 'text-rose-600 font-medium' : 'text-slate-300'">
-                                    <template v-if="r.deductions > 0">− {{ money(r.deductions) }}</template>
-                                    <template v-else>—</template>
-                                    <span v-if="r.additions > 0" class="text-emerald-600"> +{{ money(r.additions) }}</span>
-                                </td>
-                                <!-- Долг: удержание месяца, гасится только из бонуса.
-                                     Подсказкой — сколько останется после него. -->
-                                <td class="hidden sm:table-cell whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="r.debt_charge > 0 ? 'font-medium text-amber-600' : 'text-slate-300'"
-                                    :title="r.debt_charge > 0 ? 'Останется долга: ' + money(r.debt_after) : ''">
-                                    {{ r.debt_charge > 0 ? '− ' + money(r.debt_charge) : '—' }}
-                                </td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-right font-bold tabular-nums" :class="r.final > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ r.final > 0 ? money(r.final) : '—' }}</td>
+                                <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.additions > 0 ? 'font-medium text-emerald-600' : 'text-slate-300'">{{ r.additions > 0 ? '+ ' + money(r.additions) : '—' }}</td>
+                                <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.trip > 0 ? 'font-medium text-sky-600' : 'text-slate-300'">{{ r.trip > 0 ? '+ ' + money(r.trip) : '—' }}</td>
+                                <td class="hidden sm:table-cell whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(r.gross) }}</td>
+                                <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.adv_salary > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.adv_salary > 0 ? '− ' + money(r.adv_salary) : '—' }}</td>
+                                <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.penalties > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.penalties > 0 ? '− ' + money(r.penalties) : '—' }}</td>
+                                <td class="whitespace-nowrap px-3 py-2.5 text-right font-bold tabular-nums" :class="r.salary_final > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ r.salary_final > 0 ? money(r.salary_final) : '—' }}</td>
                             </tr>
                             <tr v-if="open.has(r.uid)" class="bg-slate-50/60">
-                                <td colspan="7" class="px-6 py-3">
+                                <td colspan="10" class="px-6 py-3">
                                     <!-- Финансы сделок сотрудника (из колонок убраны — здесь по требованию) -->
                                     <div v-if="r.budget > 0" class="mb-3 flex flex-wrap gap-2 text-[11px]">
                                         <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Сумма договоров <span class="font-semibold tabular-nums text-slate-700">{{ money(r.budget) }}</span></span>
@@ -737,15 +748,14 @@ const delAdj = async (a) => {
                         <tr>
                             <td class="px-6 py-3 text-slate-500">Итого</td>
                             <td class="hidden sm:table-cell"></td>
-                            <td class="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-right tabular-nums text-slate-900">{{ money(s.totals.base) }}</td>
-                            <td class="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-right tabular-nums text-emerald-600">{{ money(s.totals.bonus) }}</td>
-                            <td class="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-right tabular-nums" :class="s.totals.deductions > 0 ? 'text-rose-600' : 'text-slate-300'">
-                                {{ s.totals.deductions > 0 ? '− ' + money(s.totals.deductions) : '—' }}
-                            </td>
-                            <td class="hidden sm:table-cell whitespace-nowrap px-4 py-3 text-right tabular-nums" :class="s.totals.debt > 0 ? 'text-amber-600' : 'text-slate-300'">
-                                {{ s.totals.debt > 0 ? '− ' + money(s.totals.debt) : '—' }}
-                            </td>
-                            <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums text-emerald-700">{{ money(s.totals.final) }}</td>
+                            <td class="hidden sm:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums text-slate-900">{{ money(s.totals.base_day) }}</td>
+                            <td class="hidden sm:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums text-indigo-600">{{ s.totals.base_night > 0 ? money(s.totals.base_night) : '—' }}</td>
+                            <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums text-emerald-600">{{ s.totals.additions > 0 ? money(s.totals.additions) : '—' }}</td>
+                            <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums text-sky-600">{{ s.totals.trip > 0 ? money(s.totals.trip) : '—' }}</td>
+                            <td class="hidden sm:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums text-slate-900">{{ money(s.totals.gross) }}</td>
+                            <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="s.totals.adv > 0 ? 'text-rose-600' : 'text-slate-300'">{{ s.totals.adv > 0 ? '− ' + money(s.totals.adv) : '—' }}</td>
+                            <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="s.totals.penalties > 0 ? 'text-rose-600' : 'text-slate-300'">{{ s.totals.penalties > 0 ? '− ' + money(s.totals.penalties) : '—' }}</td>
+                            <td class="whitespace-nowrap px-3 py-3 text-right tabular-nums text-emerald-700">{{ money(s.totals.final) }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -756,7 +766,7 @@ const delAdj = async (a) => {
             <div v-if="!rows.length" class="mt-6 rounded-xl border border-slate-200 bg-white px-6 py-8 text-center text-sm text-slate-400 shadow-sm">Нет данных</div>
             <div v-else-if="filterActive && !companySections.length" class="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-8 text-center text-sm text-slate-400 shadow-sm">Ничего не найдено — измените поиск или отбор.</div>
             <!-- Шкала бонусов — только отдел продаж/финансист/админ -->
-            <p v-if="seesBonusScale" class="mt-3 text-xs text-slate-400">К выплате = оклад + бонус − удержания (отгул/больничный/штраф/аванс) + премии за выбранный месяц. Почасовой оклад: если сотруднику введены отработанные часы за месяц, оклад начисляется как часы × ставка за час (ставка = оклад ÷ норма часов месяца, норма — в шапке страницы); часы не введены — полный оклад. Отгул/больничный днями: удержание = оклад / 22 × дни. Остаток = сумма договора − налог {{ taxRate }}% − расходы. Бонус по марже сделки (остаток/сумма), выплачивается пропорционально оплаченной доле (оплачено/сумма): до 10% — нет; 11–15% — 5%; 16–20% — 7%; 21–30% — 10%; 31–40% — 13%; от 41% — 15% от остатка. Чистая прибыль компании = остаток − бонус.</p>
+            <p v-if="seesBonusScale" class="mt-3 text-xs text-slate-400">Итого ЗП = начислено по часам + премии − штрафы/отгулы/больничные − авансы из ЗП. Ночной час = дневная ставка × 1.5. Бонусы и авансы из бонуса — на вкладке «Бонусы». Почасовой оклад: если сотруднику введены отработанные часы за месяц, оклад начисляется как часы × ставка за час (ставка = оклад ÷ норма часов месяца, норма — в шапке страницы); часы не введены — полный оклад. Отгул/больничный днями: удержание = оклад / 22 × дни. Остаток = сумма договора − налог {{ taxRate }}% − расходы. Бонус по марже сделки (остаток/сумма), выплачивается пропорционально оплаченной доле (оплачено/сумма): до 10% — нет; 11–15% — 5%; 16–20% — 7%; 21–30% — 10%; 31–40% — 13%; от 41% — 15% от остатка. Чистая прибыль компании = остаток − бонус.</p>
         </template>
 
         <!-- Модалка корректировки -->
@@ -815,6 +825,16 @@ const delAdj = async (a) => {
                                 class="rounded-lg border px-3 py-1.5 text-sm font-medium">🏦 Банк</button>
                         </div>
                         <p class="mt-1 text-[11px] text-slate-400">Аванс автоматически попадёт в Расходы на Финансах (категория «Расходы по сотрудникам»)</p>
+                        <label class="mb-1 mt-3 block text-xs font-medium text-slate-500">Из чего удержать *</label>
+                        <div class="flex gap-2">
+                            <button type="button" @click="adjForm.source = 'salary'"
+                                :class="adjForm.source === 'salary' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                class="rounded-lg border px-3 py-1.5 text-sm font-medium">Из ЗП</button>
+                            <button type="button" @click="adjForm.source = 'bonus'"
+                                :class="adjForm.source === 'bonus' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                class="rounded-lg border px-3 py-1.5 text-sm font-medium">Из бонуса</button>
+                        </div>
+                        <p class="mt-1 text-[11px] text-slate-400">«Из ЗП» уменьшит итог зарплаты, «Из бонуса» — итог на вкладке «Бонусы».</p>
                         <p class="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
                             Аванс — <b>разовый</b>: удерживается целиком в этом месяце, сумма каждый месяц своя.
                             Если деньги выданы <b>в долг</b> и должны гаситься частями из бонусов — закройте это окно

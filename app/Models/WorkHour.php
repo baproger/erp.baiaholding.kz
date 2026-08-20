@@ -12,9 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class WorkHour extends Model
 {
-    protected $fillable = ['user_id', 'month', 'hours', 'created_by'];
+    protected $fillable = ['user_id', 'month', 'hours', 'night_hours', 'created_by'];
 
-    protected $casts = ['hours' => 'decimal:2'];
+    protected $casts = ['hours' => 'decimal:2', 'night_hours' => 'decimal:2'];
 
     public function user(): BelongsTo
     {

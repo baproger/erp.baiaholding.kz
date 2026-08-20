@@ -23,6 +23,21 @@ class PayrollController extends Controller
 
     public function index(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): Response
     {
+        return Inertia::render('Payroll/Index', $this->sheet($request, $payroll, $debts));
+    }
+
+    /**
+     * Страница «Бонусы»: та же ведомость, срез только бонусный —
+     * бонус за месяц − авансы из бонуса − удержания долгов = итого.
+     */
+    public function bonuses(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): Response
+    {
+        return Inertia::render('Payroll/Bonuses', $this->sheet($request, $payroll, $debts));
+    }
+
+    /** Общий расчёт ведомости для страниц «Зарплата» и «Бонусы». @return array<string, mixed> */
+    private function sheet(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): array
+    {
         $user = $request->user();
         abort_unless($user->can('payroll.view'), 403);
 
@@ -43,7 +58,7 @@ class PayrollController extends Controller
         // начислено = часы × ставка. Норма — одна на месяц для всех (Setting),
         // fallback — последняя использованная норма (work_norm_default).
         $normHours = (float) Setting::get('work_norm_'.$month, Setting::get('work_norm_default', 176));
-        $hoursByUser = WorkHour::where('month', $month)->pluck('hours', 'user_id');
+        $hoursByUser = WorkHour::where('month', $month)->get()->keyBy('user_id');
 
         // Single source of truth for the payroll math (shared with Analytics & Finance).
         $rows = $payroll->perUser(true)->sortByDesc('bonus')->values();
@@ -96,28 +111,54 @@ class PayrollController extends Controller
             // Переиспользуем уже посчитанный для долгов $bonusOfMonth.
             $r['bonus_month'] = (float) ($bonusOfMonth[$r['uid']] ?? 0);
             $adj = $adjustments->get($r['uid']) ?? collect();
-            $deductions = round((float) $adj->whereIn('type', PayrollAdjustment::DEDUCTIONS)->sum('amount'), 2);
+            // Аванс с ИСТОЧНИКОМ: «из ЗП» уменьшает итог зарплаты, «из бонуса» —
+            // итог бонуса (правило от 20.08.2026). Штрафы/отгулы — всегда из ЗП.
+            $advSalary = round((float) $adj->where('type', 'advance')->where('source', '!=', 'bonus')->sum('amount'), 2);
+            $advBonus = round((float) $adj->where('type', 'advance')->where('source', 'bonus')->sum('amount'), 2);
+            $penalties = round((float) $adj->whereIn('type', ['absence', 'sick', 'fine'])->sum('amount'), 2);
+            $deductions = round($penalties + $advSalary, 2);
             $additions = round((float) $adj->where('type', 'bonus')->sum('amount'), 2);
+            // Командировочные — начисление сверх оклада (колонка из Excel владельца).
+            $trip = round((float) $adj->where('type', 'trip')->sum('amount'), 2);
             $r['adjustments'] = $adj->map(fn ($a) => [
-                'id' => $a->id, 'type' => $a->type, 'days' => $a->days !== null ? (float) $a->days : null,
+                'id' => $a->id, 'type' => $a->type, 'source' => $a->source ?? 'salary',
+                'days' => $a->days !== null ? (float) $a->days : null,
                 'amount' => (float) $a->amount, 'date' => optional($a->date)->toDateString(),
                 'created_at' => optional($a->created_at)->toIso8601String(),
                 'note' => $a->note, 'creator' => $a->creator?->name,
             ])->values();
             $r['deductions'] = $deductions;
             $r['additions'] = $additions;
+            $r['penalties'] = $penalties;
+            $r['adv_salary'] = $advSalary;
+            $r['adv_bonus'] = $advBonus;
+            $r['trip'] = $trip;
 
-            // Почасовая база: часы введены → часы × (оклад ÷ норма отдела или общая); нет — полный оклад.
+            // Почасовая база: день + ночь (ночной час = дневная ставка × 1.5);
+            // часы не введены — полный оклад, как раньше.
             $deptId = $deptByUser[$r['uid']]?->department_id;
             $norm = (float) ($deptNorms[$deptId] ?? $normHours);
-            $hours = isset($hoursByUser[$r['uid']]) ? (float) $hoursByUser[$r['uid']] : null;
+            $wh = $hoursByUser[$r['uid']] ?? null;
+            $hours = $wh && $wh->hours !== null ? (float) $wh->hours : null;
+            $night = $wh && $wh->night_hours !== null ? (float) $wh->night_hours : null;
             $rate = $norm > 0 ? $r['salary'] / $norm : 0.0;
             $r['hours'] = $hours;
+            $r['night_hours'] = $night;
             $r['hourly_rate'] = $norm > 0 ? round($rate, 2) : null;
-            $r['base'] = $hours !== null && $norm > 0 ? round($hours * $rate, 2) : $r['salary'];
-            // К выплате = почасовая база (или оклад) + бонус − удержания + премии.
+            // День и ночь раздельно (колонки Excel владельца): ночь = ставка × 1.5.
+            $byHours = ($hours !== null || $night !== null) && $norm > 0;
+            $r['base_day'] = $byHours ? round(($hours ?? 0) * $rate, 2) : $r['salary'];
+            $r['base_night'] = $byHours ? round(($night ?? 0) * $rate * 1.5, 2) : 0.0;
+            $r['base'] = round($r['base_day'] + $r['base_night'], 2);
+            // ВСЕГО = день + ночь + премии + командировочные.
+            $r['gross'] = round($r['base'] + $additions + $trip, 2);
+            // Раздельные итоги: ЗП = ВСЕГО − штрафы − аванс(ЗП);
+            // бонус месяца − аванс(бонус) — долг удерживается ниже тоже из бонуса.
+            $r['salary_final'] = round($r['gross'] - $penalties - $advSalary, 2);
+            $r['bonus_final'] = round($r['bonus_month'] - $advBonus, 2);
+            // Легаси-поля (Финансы/Аналитика смотрят на общий свод) — не ломаем.
             $r['payout'] = round($r['base'] + $r['bonus'], 2);
-            $r['final'] = round($r['payout'] - $deductions + $additions, 2);
+            $r['final'] = round($r['payout'] - $deductions - $advBonus + $additions, 2);
             // Долг: удержание ТОЛЬКО из бонуса месяца и не больше месячного
             // платежа. Оклад не трогаем — нет бонуса, нет и удержания.
             $plan = $debtPlans[$r['uid']] ?? null;
@@ -127,6 +168,7 @@ class PayrollController extends Controller
             $r['debt_after'] = $plan['after'] ?? 0.0;
             $r['debts'] = $debtList[$r['uid']] ?? [];
             $r['final'] = round($r['final'] - $r['debt_charge'], 2);
+            $r['bonus_final'] = round($r['bonus_final'] - $r['debt_charge'], 2);
             $r['department'] = $deptByUser[$r['uid']]?->department?->name;
             $r['department_id'] = $deptId;
             // code — общий ключ одноимённых отделов BAIA/ASU: сотрудник обеих
@@ -156,7 +198,7 @@ class PayrollController extends Controller
                 || (int) $r['primary_company_id'] === $currentCompany)
             : $rows;
 
-        return Inertia::render('Payroll/Index', [
+        return [
             'rows' => $rows,
             'leadership' => $leadership,
             'canManage' => $this->canManage($request),
@@ -186,8 +228,17 @@ class PayrollController extends Controller
                 'debt_remaining' => (float) $counted->sum('debt_remaining'),
                 'final' => (float) $counted->sum('final'),
                 'company' => (float) $counted->sum('company'),
+                'penalties' => (float) $counted->sum('penalties'),
+                'trip' => (float) $counted->sum('trip'),
+                'gross' => (float) $counted->sum('gross'),
+                'base_day' => (float) $counted->sum('base_day'),
+                'base_night' => (float) $counted->sum('base_night'),
+                'adv_salary' => (float) $counted->sum('adv_salary'),
+                'adv_bonus' => (float) $counted->sum('adv_bonus'),
+                'salary_final' => (float) $counted->sum('salary_final'),
+                'bonus_final' => (float) $counted->sum('bonus_final'),
             ],
-        ]);
+        ];
     }
 
     /**
@@ -207,7 +258,10 @@ class PayrollController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
             // Для аванса: откуда выданы деньги (нал/банк) — уйдёт в Расходы.
             'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
+            // Источник аванса: из ЗП (умолчание) или из бонуса.
+            'source' => ['nullable', Rule::in(['salary', 'bonus'])],
         ]);
+        $data['source'] = $data['source'] ?? 'salary';
 
         // Автосумма для отгула/больничного: оклад / 22 рабочих дня × дни.
         if (empty($data['amount']) && ! empty($data['days']) && in_array($data['type'], ['absence', 'sick'], true)) {
@@ -363,9 +417,11 @@ class PayrollController extends Controller
         $data = $request->validate([
             'month' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'hours' => ['nullable', 'numeric', 'min:0', 'max:744'],
+            // Ночные часы: ночной час = дневная ставка × 1.5.
+            'night_hours' => ['nullable', 'numeric', 'min:0', 'max:744'],
         ]);
 
-        if ($data['hours'] === null) {
+        if ($data['hours'] === null && ($data['night_hours'] ?? null) === null) {
             WorkHour::where('user_id', $user->id)->where('month', $data['month'])->delete();
 
             return back()->with('success', 'Часы удалены — начисляется полный оклад.');
@@ -373,7 +429,7 @@ class PayrollController extends Controller
 
         WorkHour::updateOrCreate(
             ['user_id' => $user->id, 'month' => $data['month']],
-            ['hours' => $data['hours'], 'created_by' => $request->user()->id]
+            ['hours' => $data['hours'], 'night_hours' => $data['night_hours'] ?? null, 'created_by' => $request->user()->id]
         );
 
         return back()->with('success', 'Отработанные часы сохранены.');

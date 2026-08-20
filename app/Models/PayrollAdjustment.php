@@ -12,12 +12,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PayrollAdjustment extends Model
 {
-    public const TYPES = ['absence', 'sick', 'fine', 'advance', 'bonus'];
+    public const TYPES = ['absence', 'sick', 'fine', 'advance', 'bonus', 'trip'];
 
     /** Типы-удержания (минус к выплате). */
     public const DEDUCTIONS = ['absence', 'sick', 'fine', 'advance'];
 
-    protected $fillable = ['user_id', 'type', 'days', 'amount', 'date', 'note', 'created_by', 'expense_id', 'payment_method'];
+    protected $fillable = ['user_id', 'type', 'source', 'days', 'amount', 'date', 'note', 'created_by', 'expense_id', 'payment_method'];
 
     protected $casts = [
         'days' => 'decimal:2',

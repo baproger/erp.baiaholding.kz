@@ -24,6 +24,7 @@ const allTabs = [
     { name: 'Расходы', route: 'expenses.board', roles: ['admin', 'director', 'financist'] },
     { name: 'Мои расходы', route: 'myExpenses.index', perm: 'expense.create', hideForRoles: ['admin', 'financist'] },
     { name: 'Зарплата', route: 'payroll.index', perm: 'payroll.view' },
+    { name: 'Бонусы', route: 'payroll.bonuses', perm: 'payroll.view' },
 ];
 const visible = (i) => (!i.perm || perms.value.includes(i.perm))
     && (!i.leadershipOnly || isLeadership.value)
