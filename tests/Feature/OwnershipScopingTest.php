@@ -104,17 +104,17 @@ class OwnershipScopingTest extends TestCase
         $this->assertNotEquals('closed', $deal->status);
     }
 
-    public function test_manager_creating_deal_is_forced_as_responsible(): void
+    public function test_manager_cannot_create_deal_directly(): void
     {
+        // Правило от 20.08.2026: сделку напрямую создаёт только админ/финансист;
+        // менеджер выигрывает лот в предсделках («Выиграл ✓»).
         $mgr = $this->manager();
-        $other = $this->manager();
 
         $this->actingAs($mgr)->post(route('deals.store'), [
             'name' => 'X', 'client_name' => 'И', 'company_name' => 'ТОО', 'address' => 'адрес', 'budget' => 100,
-            'responsible_user_id' => $other->id, // попытка назначить другого
-        ])->assertRedirect();
+        ])->assertForbidden();
 
-        $this->assertSame($mgr->id, Deal::latest('id')->first()->responsible_user_id);
+        $this->assertSame(0, Deal::count());
     }
 
     // ---- Утечка сумм цеху ----

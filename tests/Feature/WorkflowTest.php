@@ -29,12 +29,19 @@ class WorkflowTest extends TestCase
         return $u;
     }
 
-    public function test_manager_can_create_deal(): void
+    public function test_only_accountant_creates_deal_directly(): void
     {
+        // Правило от 20.08.2026: напрямую — только админ/финансист;
+        // менеджер создаёт сделки через предсделки («Выиграл ✓»).
         $this->seedAll();
-        $emp = $this->user('manager');
 
-        $this->actingAs($emp)->post(route('deals.store'), ['name' => 'Тендер', 'client_name' => 'Иван', 'company_name' => 'ТОО Тендер', 'address' => 'Астана, пр. Мәңгілік Ел 1', 'budget' => 1000000])
+        $this->actingAs($this->user('manager'))
+            ->post(route('deals.store'), ['name' => 'Тендер', 'client_name' => 'Иван', 'company_name' => 'ТОО Тендер', 'address' => 'Астана, пр. Мәңгілік Ел 1', 'budget' => 1000000])
+            ->assertForbidden();
+        $this->assertEquals(0, Deal::count());
+
+        $this->actingAs($this->user('financist'))
+            ->post(route('deals.store'), ['name' => 'Тендер', 'client_name' => 'Иван', 'company_name' => 'ТОО Тендер', 'address' => 'Астана, пр. Мәңгілік Ел 1', 'budget' => 1000000])
             ->assertRedirect();
         $this->assertEquals(1, Deal::count());
     }

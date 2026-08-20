@@ -12,6 +12,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 import TextInput from '@/Components/TextInput.vue';
+import { SOURCES } from '@/utils/dealOptions';
 import { formatDate } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
@@ -72,7 +73,7 @@ const actionClass = (a) => a === 'call' ? 'bg-sky-50 text-sky-700'
     : 'bg-emerald-50 text-emerald-700';
 const SHORT_ACTIONS = ['call', 'offer'];
 
-const form = useForm({ action: 'participation', comment: '', lot_number: '', tender_deadline: '', bin: '', customer: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', assembly: '', commission: '' });
+const form = useForm({ action: 'participation', comment: '', lot_number: '', contract_number: '', tender_deadline: '', bin: '', customer: '', source: '', client_name: '', client_phone: '', product: '', contract_sum: '', purchase_price: '', partner_pct: '', delivery: '', assembly: '', commission: '' });
 // Короткая форма: у звонка и КП нет расчёта маржи.
 const isShort = computed(() => SHORT_ACTIONS.includes(form.action));
 // Срок окончания тендера: сегодня/прошёл у невыигранного лота — подсветка.
@@ -100,14 +101,30 @@ const checkLot = async () => {
     lotChecking.value = false;
 };
 
-const openCreate = () => { editingId.value = null; form.reset(); form.action = 'participation'; form.clearErrors(); lotCheck.value = null; showForm.value = true; };
+// Проверка № ДОГОВОРА: как у лота — дубликат показывается красным и блокируется валидацией.
+const contractCheck = ref(null);
+const contractChecking = ref(false);
+const checkContract = async () => {
+    if (!form.contract_number || contractChecking.value) return;
+    contractChecking.value = true;
+    try {
+        const { data } = await window.axios.get(route('preDeals.checkLot'), {
+            params: { lot_number: form.contract_number, ignore: editingId.value || undefined },
+        });
+        contractCheck.value = data;
+    } catch (e) { contractCheck.value = null; }
+    contractChecking.value = false;
+};
+
+const openCreate = () => { editingId.value = null; form.reset(); form.action = 'participation'; form.clearErrors(); lotCheck.value = null; contractCheck.value = null; showForm.value = true; };
 const openEdit = (p) => {
     editingId.value = p.id;
     form.clearErrors();
     lotCheck.value = null;
+    contractCheck.value = null;
     Object.assign(form, {
         action: p.action ?? 'participation', comment: p.comment ?? '',
-        lot_number: p.lot_number ?? '', tender_deadline: p.tender_deadline ? p.tender_deadline.slice(0, 10) : '', bin: p.bin ?? '', customer: p.customer ?? '',
+        lot_number: p.lot_number ?? '', contract_number: p.contract_number ?? '', tender_deadline: p.tender_deadline ? p.tender_deadline.slice(0, 10) : '', bin: p.bin ?? '', customer: p.customer ?? '', source: p.source ?? '',
         client_name: p.client_name ?? '', client_phone: p.client_phone ?? '', product: p.product,
         contract_sum: Number(p.contract_sum), purchase_price: Number(p.purchase_price),
         partner_pct: Number(p.partner_pct), delivery: Number(p.delivery), assembly: Number(p.assembly), commission: Number(p.commission),
@@ -260,7 +277,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                     </td>
                                     <td class="max-w-56 px-4 py-2.5">
                                         <div class="truncate font-medium text-slate-800" :title="p.customer">{{ p.customer || '—' }}<span v-if="p.bin" class="text-xs text-slate-400"> · {{ p.bin }}</span></div>
-                                        <div class="truncate text-[11px] text-slate-400" :title="p.product">{{ p.product }}</div>
+                                        <div class="truncate text-[11px] text-slate-400" :title="p.product">{{ p.product }}<span v-if="p.source" class="ml-1.5 rounded-full bg-sky-50 px-1.5 py-0.5 font-medium text-sky-700">{{ p.source }}</span></div>
                                         <div v-if="leadership" class="truncate text-[11px] text-slate-500">👤 {{ p.user?.name ?? '—' }}</div>
                                     </td>
                                     <td class="px-4 py-2.5 text-right">
@@ -365,8 +382,29 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                         <p v-if="lotCheck?.exists" class="mt-1 text-xs font-semibold text-rose-600">
                             ✗ Такой лот уже внесён<template v-if="lotCheck.manager"> — {{ lotCheck.manager }}</template><template v-if="lotCheck.date"> ({{ formatDate(lotCheck.date) }})</template><template v-if="lotCheck.status === 'confirmed'"> · уже выигран</template>
                         </p>
-                        <p v-else-if="lotCheck" class="mt-1 text-xs font-semibold text-emerald-600">✓ Свободен — можно заполнять</p>
+                        <p v-if="lotCheck?.deal" class="mt-1 text-xs font-semibold text-rose-600">
+                            ✗ По этому номеру уже есть договор {{ lotCheck.deal.number }}<template v-if="lotCheck.deal.manager"> — {{ lotCheck.deal.manager }}</template><template v-if="lotCheck.deal.date"> ({{ formatDate(lotCheck.deal.date) }})</template>
+                        </p>
+                        <p v-else-if="lotCheck && !lotCheck.exists" class="mt-1 text-xs font-semibold text-emerald-600">✓ Свободен — можно заполнять</p>
                         <InputError :message="form.errors.lot_number" class="mt-1" />
+                    </div>
+                    <div v-if="!isShort">
+                        <InputLabel value="№ договора" />
+                        <div class="mt-1 flex gap-2">
+                            <TextInput v-model="form.contract_number" class="w-full" @input="contractCheck = null" @keydown.enter.prevent="checkContract" />
+                            <button type="button" @click="checkContract" :disabled="!form.contract_number || contractChecking"
+                                class="shrink-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50 disabled:opacity-50">
+                                {{ contractChecking ? '…' : 'Проверить' }}
+                            </button>
+                        </div>
+                        <p v-if="contractCheck?.deal" class="mt-1 text-xs font-semibold text-rose-600">
+                            ✗ Такой номер договора уже есть — {{ contractCheck.deal.number }}<template v-if="contractCheck.deal.manager"> · {{ contractCheck.deal.manager }}</template><template v-if="contractCheck.deal.date"> ({{ formatDate(contractCheck.deal.date) }})</template>
+                        </p>
+                        <p v-else-if="contractCheck?.contract_lot" class="mt-1 text-xs font-semibold text-rose-600">
+                            ✗ Этот № договора уже указан на другом лоте<template v-if="contractCheck.contract_lot.manager"> — {{ contractCheck.contract_lot.manager }}</template><template v-if="contractCheck.contract_lot.date"> ({{ formatDate(contractCheck.contract_lot.date) }})</template>
+                        </p>
+                        <p v-else-if="contractCheck" class="mt-1 text-xs font-semibold text-emerald-600">✓ Свободен — можно заполнять</p>
+                        <InputError :message="form.errors.contract_number" class="mt-1" />
                     </div>
                     <div v-if="!isShort">
                         <InputLabel value="Срок окончания тендера" />
@@ -376,6 +414,14 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     </div>
                     <div><InputLabel value="БИН заказчика" /><TextInput v-model="form.bin" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Заказчик (компания)" /><TextInput v-model="form.customer" class="mt-1 w-full" /></div>
+                    <div>
+                        <InputLabel value="Источник (портал)" />
+                        <select v-model="form.source" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm">
+                            <option value="">—</option>
+                            <option v-for="src in SOURCES" :key="src" :value="src">{{ src }}</option>
+                        </select>
+                        <InputError :message="form.errors.source" class="mt-1" />
+                    </div>
                     <div><InputLabel value="Название товара *" /><TextInput v-model="form.product" class="mt-1 w-full" /><div v-if="form.errors.product" class="mt-1 text-xs text-red-600">{{ form.errors.product }}</div></div>
                     <div><InputLabel value="Имя клиента (контакт)" /><TextInput v-model="form.client_name" class="mt-1 w-full" /></div>
                     <div><InputLabel value="Телефон клиента" /><TextInput v-model="form.client_phone" class="mt-1 w-full" placeholder="+7 ___ ___ __ __" /></div>

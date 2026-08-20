@@ -24,8 +24,8 @@ class PreDeal extends Model
     public const SHORT_ACTIONS = ['call', 'offer'];
 
     protected $fillable = [
-        'company_id', 'user_id', 'action', 'comment', 'lot_number', 'tender_deadline', 'bin', 'customer',
-        'client_name', 'client_phone', 'product', 'contract_sum', 'purchase_price', 'partner_pct', 'partner_sum',
+        'company_id', 'user_id', 'action', 'comment', 'lot_number', 'contract_number', 'tender_deadline', 'bin', 'customer',
+        'client_name', 'client_phone', 'product', 'source', 'contract_sum', 'purchase_price', 'partner_pct', 'partner_sum',
         'delivery', 'assembly', 'commission', 'tax', 'remainder', 'margin', 'status', 'deal_id',
     ];
 

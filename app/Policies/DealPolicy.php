@@ -9,7 +9,10 @@ class DealPolicy
 {
     public function viewAny(User $user): bool { return $user->can('deal.viewAny'); }
     public function view(User $user, Deal $d): bool { return $user->can('deal.view') && $this->ownsOrLeads($user, $d); }
-    public function create(User $user): bool { return $user->can('deal.create'); }
+    // Напрямую сделку создаёт только админ/финансист (правило от 20.08.2026);
+    // менеджер создаёт сделки через предсделки — кнопкой «Выиграл ✓» (тот
+    // маршрут идёт мимо этой политики и продолжает работать).
+    public function create(User $user): bool { return $user->hasAnyRole(['admin', 'financist']) && $user->can('deal.create'); }
     public function update(User $user, Deal $d): bool { return $this->ownsOrLeads($user, $d) && ($user->can('deal.update') || $d->responsible_user_id === $user->id); }
     // Удаление сделки — ТОЛЬКО админ (менеджеру/директору/бухгалтеру нельзя).
     public function delete(User $user, Deal $d): bool { return $user->hasRole('admin') && $this->ownsOrLeads($user, $d); }

@@ -171,6 +171,8 @@ class PreDealController extends Controller
             'client_name' => ['nullable', 'string', 'max:255'],
             'client_phone' => ['nullable', 'string', 'max:40'],
             'product' => ['required', 'string', 'max:255'],
+            // Источник (портал) — тот же справочник, что у сделок.
+            'source' => ['nullable', \Illuminate\Validation\Rule::in(\App\Models\Deal::SOURCES)],
             'contract_sum' => ['required', 'numeric', 'min:1'],
         ];
 
@@ -180,6 +182,16 @@ class PreDealController extends Controller
                 // (при правке — без ложного срабатывания на самого себя).
                 'lot_number' => ['nullable', 'string', 'max:100',
                     \Illuminate\Validation\Rule::unique('pre_deals', 'lot_number')->ignore($ignore?->id)],
+                // № договора: как № лота — дубликат среди лотов И среди сделок
+                // (номер договора сделки — колонка bin) БЛОКИРУЕТ сохранение.
+                'contract_number' => ['nullable', 'string', 'max:100',
+                    \Illuminate\Validation\Rule::unique('pre_deals', 'contract_number')->ignore($ignore?->id),
+                    function ($attribute, $value, $fail) {
+                        $deal = \App\Models\Deal::where('bin', trim((string) $value))->latest()->first();
+                        if ($deal) {
+                            $fail('Такой номер договора уже есть у сделки '.$deal->number.' — добавить нельзя.');
+                        }
+                    }],
                 'tender_deadline' => ['nullable', 'date'],
                 'purchase_price' => ['nullable', 'numeric', 'min:0'],
                 'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -191,6 +203,7 @@ class PreDealController extends Controller
 
         $data = $request->validate($rules, [
             'lot_number.unique' => 'Такой № лота уже существует — этот лот уже внесён.',
+            'contract_number.unique' => 'Такой № договора уже существует.',
         ]);
 
         // Пришедшие «лишние» поля короткой формы игнорируем: тип записи —
@@ -242,7 +255,19 @@ class PreDealController extends Controller
             'ignore' => ['nullable', 'integer'],
         ]);
 
-        $existing = PreDeal::where('lot_number', trim($data['lot_number']))
+        $n = trim($data['lot_number']);
+        $existing = PreDeal::where('lot_number', $n)
+            ->when($data['ignore'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
+            ->with('user:id,name')->latest()->first();
+
+        // Проверяем и СДЕЛКИ: «Номер договора» сделки хранится в колонке bin
+        // (историческое имя), плюс внутренний номер (BAIA-…). deals.lot_number
+        // НЕ смотрим — там количество, а не номер.
+        $deal = Deal::where(fn ($q) => $q->where('bin', $n)->orWhere('number', $n))
+            ->with('responsible:id,name')->latest()->first();
+
+        // Такой № договора уже встречался на другом лоте — предупреждение.
+        $contractLot = PreDeal::where('contract_number', $n)
             ->when($data['ignore'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
             ->with('user:id,name')->latest()->first();
 
@@ -251,6 +276,15 @@ class PreDealController extends Controller
             'manager' => $existing?->user?->name,
             'date' => $existing?->created_at?->toDateString(),
             'status' => $existing?->status,
+            'deal' => $deal ? [
+                'number' => $deal->number,
+                'manager' => $deal->responsible?->name,
+                'date' => $deal->created_at?->toDateString(),
+            ] : null,
+            'contract_lot' => $contractLot ? [
+                'manager' => $contractLot->user?->name,
+                'date' => $contractLot->created_at?->toDateString(),
+            ] : null,
         ]);
     }
 
@@ -322,6 +356,8 @@ class PreDealController extends Controller
             'company_name' => $customer,
             'client_name' => $preDeal->client_name ?: ($preDeal->customer ?: '—'),
             'bin' => $preDeal->bin,
+            // Источник (портал) лота переносится в сделку.
+            'source' => $preDeal->source,
             'budget' => $preDeal->contract_sum,
             // Доля партнёра лота переносится в сделку (только %, сумма — от суммы договора).
             'partner_pct' => $preDeal->partner_pct !== null && (float) $preDeal->partner_pct > 0

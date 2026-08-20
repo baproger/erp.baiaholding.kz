@@ -174,7 +174,8 @@ const applyBinMatch = () => {
                 <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('kanban')">Канбан</button>
                 <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('list')">Список</button>
             </div>
-            <button class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openCreate">+ Новая сделка</button>
+            <!-- Создание сделки напрямую — только админ/финансист; менеджер выигрывает лот в Предсделках -->
+            <button v-if="can.create" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openCreate">+ Новая сделка</button>
         </template>
 
         <!-- Единый фильтр-бар: поиск, менеджер (руководству), этап, срок с—по -->
