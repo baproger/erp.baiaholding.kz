@@ -171,13 +171,15 @@ class CashBookController extends Controller
                 'employee' => null,
                 'payout' => null,
                 'deal_id' => $p->invoice?->invoiceable_type === 'deal' ? $p->invoice->invoiceable_id : null,
+                'resp_uid' => null, // ответственный — по сделке (ставится батчем ниже)
                 'at' => optional($p->created_at)->toIso8601String(),
             ]);
 
         $receipts = $this->receipts($kind, $companyId)->whereDate('date', $on)
-            ->get(['id', 'amount', 'source', 'note', 'date', 'created_at'])
+            ->get(['id', 'amount', 'source', 'note', 'date', 'created_at', 'created_by'])
             ->map(fn ($r) => [
                 'id' => 'rec-'.$r->id,
+                'resp_uid' => $r->created_by,
                 'kind' => 'in',
                 'amount' => (float) $r->amount,
                 'title' => $r->source ?: ($kind === 'cash' ? 'Поступление в кассу' : 'Поступление на счёт'),
@@ -192,9 +194,11 @@ class CashBookController extends Controller
         $expenses = $this->expenses($kind, $companyId)->whereDate('date', $on)
             ->with(['category:id,name', 'employee:id,name'])
             ->get(['id', 'amount', 'description', 'category_id', 'type', 'expenseable_type', 'expenseable_id',
-                'employee_id', 'employee_payout', 'date', 'created_at', 'company_id'])
+                'employee_id', 'employee_payout', 'date', 'created_at', 'company_id', 'responsible_user_id', 'confirmed_by'])
             ->map(fn ($e) => [
                 'id' => 'exp-'.$e->id,
+                // Ответственный: кто подал расход; у выплат — сам сотрудник; иначе кто подтвердил.
+                'resp_uid' => $e->responsible_user_id ?: ($e->employee_id ?: $e->confirmed_by),
                 'kind' => 'out',
                 'amount' => (float) $e->amount,
                 'title' => $e->description ?: 'Расход',
@@ -220,7 +224,27 @@ class CashBookController extends Controller
                 'at' => optional($e->created_at)->toIso8601String(),
             ]);
 
-        return $payments->concat($receipts)->concat($expenses)
-            ->sortBy('at')->values();
+        $ops = $payments->concat($receipts)->concat($expenses);
+
+        // Батчем: номер и ответственный сделки, имена ответственных по операциям —
+        // колонки «Ответственный» и «Сделка» в кассовой книге.
+        $deals = \App\Models\Deal::whereIn('id', $ops->pluck('deal_id')->filter()->unique())
+            ->with('responsible:id,name')->get(['id', 'number', 'responsible_user_id'])->keyBy('id');
+        $users = \App\Models\User::whereIn('id', $ops->pluck('resp_uid')->filter()->unique())
+            ->get(['id', 'name'])->keyBy('id');
+
+        return $ops->map(function ($op) use ($deals, $users) {
+            $deal = $op['deal_id'] ? $deals->get($op['deal_id']) : null;
+            $uid = $op['resp_uid'] ?: $deal?->responsible_user_id;
+            $u = $uid ? $users->get($uid) : null;
+            if (! $u && $deal?->responsible) {
+                $u = $deal->responsible;
+            }
+            $op['deal'] = $deal ? ['id' => $deal->id, 'number' => $deal->number] : null;
+            $op['responsible'] = $u ? ['id' => $u->id, 'name' => $u->name] : null;
+            unset($op['resp_uid']);
+
+            return $op;
+        })->sortBy('at')->values();
     }
 }

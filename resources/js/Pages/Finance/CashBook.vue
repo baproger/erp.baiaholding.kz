@@ -110,18 +110,29 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
                         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                             <tr>
                                 <th class="px-6 py-2.5 font-medium">Время</th>
+                                <th class="px-4 py-2.5 font-medium">Ответственный</th>
+                                <th class="px-4 py-2.5 font-medium">Сделка</th>
                                 <th class="px-4 py-2.5 font-medium">Операция</th>
                                 <th class="px-4 py-2.5 text-right font-medium">Сумма</th>
                                 <th class="hidden px-4 py-2.5 text-right font-medium sm:table-cell" title="Остаток в кассе после операции">Остаток</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
-                            <tr v-for="op in operations" :key="op.id" class="group transition-colors duration-150 hover:bg-slate-50/60">
+                            <tr v-for="op in operations" :key="op.id" class="group divide-x divide-slate-100 transition-colors duration-150 hover:bg-slate-50/60">
                                 <td class="whitespace-nowrap px-6 py-2.5 align-top text-xs tabular-nums text-slate-400">{{ time(op.at) }}</td>
+                                <!-- Ответственный: кто подал расход / внёс приход / ведёт сделку -->
+                                <td class="whitespace-nowrap px-4 py-2.5 align-top text-sm">
+                                    <Link v-if="op.responsible" :href="route('users.show', op.responsible.id)" class="font-medium text-slate-700 hover:text-indigo-600 hover:underline">{{ op.responsible.name }}</Link>
+                                    <span v-else class="text-slate-300">—</span>
+                                </td>
+                                <!-- Сделка: номер-ссылка -->
+                                <td class="whitespace-nowrap px-4 py-2.5 align-top">
+                                    <Link v-if="op.deal" :href="route('deals.show', op.deal.id)" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">{{ op.deal.number }}</Link>
+                                    <span v-else class="text-slate-300">—</span>
+                                </td>
                                 <td class="px-4 py-2.5">
                                     <div class="flex flex-wrap items-center gap-1.5">
-                                        <Link v-if="op.deal_id" :href="route('deals.show', op.deal_id)" class="truncate font-medium text-indigo-600 hover:underline">{{ op.title }}</Link>
-                                        <span v-else class="truncate font-medium text-slate-800">{{ op.title }}</span>
+                                        <span class="truncate font-medium text-slate-800">{{ op.title }}</span>
                                         <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
                                             :class="op.kind === 'in' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">{{ op.tag }}</span>
                                         <!-- Выплата сотруднику: кому и за что — ссылкой на карточку -->
@@ -148,7 +159,7 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
                         </tbody>
                         <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
                             <tr>
-                                <td class="whitespace-nowrap px-6 py-3 text-slate-500" colspan="2">Итого за день</td>
+                                <td class="whitespace-nowrap px-6 py-3 text-slate-500" colspan="4">Итого за день</td>
                                 <td class="px-4 py-3 text-right" colspan="2">
                                     <span class="inline-flex flex-wrap items-center justify-end gap-x-4 gap-y-1 tabular-nums">
                                         <span class="whitespace-nowrap text-emerald-600">+ {{ money(income) }}</span>
