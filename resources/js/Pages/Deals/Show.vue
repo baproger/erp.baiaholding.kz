@@ -290,8 +290,8 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
 
                 <!-- Из предварительной сделки: сразу перед Финансами — зелёное «стекло» (glassmorphism) -->
-                <div v-if="preDeal" class="overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 shadow-sm backdrop-blur">
-                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 bg-white/40 px-5 py-2.5">
+                <div v-if="preDeal" class="overflow-hidden rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-100/90 via-emerald-50/80 to-emerald-200/60 shadow-sm backdrop-blur">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/70 bg-white/50 px-5 py-2.5">
                         <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-emerald-700">
                             ◧ Из предварительной сделки
                             <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold normal-case tracking-normal text-emerald-700 ring-1 ring-emerald-200">{{ preDeal.action }}</span>
@@ -319,10 +319,10 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     <!-- Цифры лота: доставка/сборка уже перенесены в расходы сделки (подтверждены) -->
                     <div v-if="preDeal.purchase_price || preDeal.delivery || preDeal.assembly || preDeal.commission"
                         class="flex flex-wrap gap-2 border-t border-emerald-100/80 px-5 py-2.5 text-[11px]">
-                        <span v-if="preDeal.purchase_price" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">закуп <b class="tabular-nums">{{ money(preDeal.purchase_price) }}</b></span>
-                        <span v-if="preDeal.delivery" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">🚚 доставка, грузчики <b class="tabular-nums">{{ money(preDeal.delivery) }}</b></span>
-                        <span v-if="preDeal.assembly" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">🔧 сборка <b class="tabular-nums">{{ money(preDeal.assembly) }}</b></span>
-                        <span v-if="preDeal.commission" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">комиссия <b class="tabular-nums">{{ money(preDeal.commission) }}</b></span>
+                        <span v-if="preDeal.purchase_price" class="rounded-full bg-white/85 px-2.5 py-1 text-slate-700 ring-1 ring-emerald-200">закуп <b class="tabular-nums">{{ money(preDeal.purchase_price) }}</b></span>
+                        <span v-if="preDeal.delivery" class="rounded-full bg-white/85 px-2.5 py-1 text-slate-700 ring-1 ring-emerald-200">🚚 доставка, грузчики <b class="tabular-nums">{{ money(preDeal.delivery) }}</b></span>
+                        <span v-if="preDeal.assembly" class="rounded-full bg-white/85 px-2.5 py-1 text-slate-700 ring-1 ring-emerald-200">🔧 сборка <b class="tabular-nums">{{ money(preDeal.assembly) }}</b></span>
+                        <span v-if="preDeal.commission" class="rounded-full bg-white/85 px-2.5 py-1 text-slate-700 ring-1 ring-emerald-200">комиссия <b class="tabular-nums">{{ money(preDeal.commission) }}</b></span>
                     </div>
                     <p v-if="preDeal.comment" class="border-t border-emerald-100/80 px-5 py-2.5 text-sm text-slate-600">{{ preDeal.comment }}</p>
                 </div>
@@ -523,7 +523,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <div class="text-slate-800">{{ preDeal.client_name || '—' }}<a v-if="preDeal.client_phone" :href="'tel:' + preDeal.client_phone" class="ml-2 font-medium text-indigo-600 hover:underline">{{ preDeal.client_phone }}</a></div></div>
                 </div>
                 <!-- Расчёт лота — справочный: в расходы сделки не переносится -->
-                <div class="mt-5 rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 p-4 backdrop-blur">
+                <div class="mt-5 rounded-xl border border-emerald-300/70 bg-gradient-to-br from-emerald-100/90 via-emerald-50/80 to-emerald-200/60 p-4 backdrop-blur">
                     <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Расчёт лота (справочно)</div>
                     <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
                         <div class="flex justify-between"><span class="text-slate-500">Сумма договора</span><b class="tabular-nums text-slate-900">{{ money(preDeal.contract_sum) }}</b></div>

@@ -182,7 +182,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         </div>
 
         <!-- Invoices — доход: зелёное «стекло» -->
-        <div v-if="showInvoices" class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/70 via-white/60 to-emerald-100/40 p-4 backdrop-blur">
+        <div v-if="showInvoices" class="rounded-2xl border border-emerald-300/70 bg-gradient-to-br from-emerald-100/90 via-emerald-50/80 to-emerald-200/60 p-4 shadow-sm backdrop-blur">
             <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Аванс</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showInvoice = !showInvoice">+ Счёт</button>
@@ -231,7 +231,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         </div>
 
         <!-- Expenses — расход: красное «стекло» -->
-        <div v-if="showExpenses" class="rounded-2xl border border-rose-200/60 bg-gradient-to-br from-rose-50/70 via-white/60 to-rose-100/40 p-4 backdrop-blur">
+        <div v-if="showExpenses" class="rounded-2xl border border-rose-300/70 bg-gradient-to-br from-rose-100/90 via-rose-50/80 to-rose-200/60 p-4 shadow-sm backdrop-blur">
             <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Расходы</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showExpense = !showExpense">+ Расход</button>
@@ -314,7 +314,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
             <input ref="attachInput" type="file" accept="image/*,.pdf" class="hidden" @change="onAttach" />
             <div class="space-y-2">
                 <div v-for="e in expenses" :key="e.id" class="rounded-xl p-3.5 text-sm"
-                    :class="isLot(e) ? 'bg-gradient-to-r from-emerald-50/80 via-white/60 to-emerald-50/40 ring-1 ring-inset ring-emerald-100 backdrop-blur' : 'bg-white/70 ring-1 ring-inset ring-rose-100'">
+                    :class="isLot(e) ? 'bg-gradient-to-r from-emerald-100/90 via-emerald-50/80 to-white/80 ring-1 ring-inset ring-emerald-200 shadow-sm backdrop-blur' : 'bg-white/85 ring-1 ring-inset ring-rose-200/70 shadow-sm'">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <div>

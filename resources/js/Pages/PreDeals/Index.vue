@@ -375,7 +375,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     <div v-if="viewLot.client_name || viewLot.client_phone" class="sm:col-span-3"><div class="text-[11px] uppercase tracking-wide text-slate-400">Контакт клиента</div>
                         <div class="text-slate-800">{{ viewLot.client_name || '—' }}<a v-if="viewLot.client_phone" :href="'tel:' + viewLot.client_phone" class="ml-2 font-medium text-indigo-600 hover:underline">{{ viewLot.client_phone }}</a></div></div>
                 </div>
-                <div v-if="!SHORT_ACTIONS.includes(viewLot.action)" class="mt-5 rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 p-4 backdrop-blur">
+                <div v-if="!SHORT_ACTIONS.includes(viewLot.action)" class="mt-5 rounded-xl border border-emerald-300/70 bg-gradient-to-br from-emerald-100/90 via-emerald-50/80 to-emerald-200/60 p-4 backdrop-blur">
                     <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Расчёт лота (справочно)</div>
                     <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
                         <div class="flex justify-between"><span class="text-slate-500">Сумма договора</span><b class="tabular-nums text-slate-900">{{ money(viewLot.contract_sum) }}</b></div>
