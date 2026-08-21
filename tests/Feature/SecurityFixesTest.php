@@ -170,11 +170,13 @@ class SecurityFixesTest extends TestCase
         $asuDeal = $this->deal($asuMgr, $this->asu);
         $asuDeal->update(['bin' => '999888777', 'company_name' => 'ASU Клиент']);
 
-        $baiaMgr = $this->user('manager', $this->baia);
-        $resp = $this->actingAs($baiaMgr)->withSession(['company_id' => $this->baia->id])
+        // Подсказка по БИН живёт в форме «+ Новая сделка» — она у админа/финансиста
+        // (менеджер создаёт сделки через предсделки, правило от 20.08.2026).
+        $baiaFin = $this->user('financist', $this->baia);
+        $resp = $this->actingAs($baiaFin)->withSession(['company_id' => $this->baia->id])
             ->getJson(route('deals.binLookup', ['bin' => '999888777']));
 
-        // Менеджер BAIA не видит сделку ASU по её БИН.
+        // Финансист BAIA не видит сделку ASU по её БИН.
         $resp->assertOk()->assertJson(['match' => null, 'history' => []]);
     }
 

@@ -81,7 +81,10 @@ const del = async (e) => {
                                     <span class="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-500">{{ e.category ?? 'Без категории' }}</span>
                                     <span v-if="e.payout" class="rounded-full px-2.5 py-0.5 font-medium"
                                         :class="e.payout === 'Долг' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-700'">{{ e.payout }}</span>
-                                    <Link v-if="e.deal_id" :href="route('deals.show', e.deal_id)" class="font-medium text-indigo-600 hover:underline">по сделке ↗</Link>
+                                    <Link v-if="e.link" :href="route(e.link.route, e.link.id)" :title="e.link.name || ''"
+                                        class="inline-flex max-w-56 items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">
+                                        {{ e.link.route === 'projects.show' ? '🏭' : '📄' }} {{ e.link.number }}<span v-if="e.link.name" class="truncate font-normal text-indigo-500"> · {{ e.link.name }}</span>
+                                    </Link>
                                 </div>
                             </div>
                             <div v-if="e.author" class="text-right text-[11px] text-slate-400">подал
@@ -157,9 +160,14 @@ const del = async (e) => {
                                 <span v-if="e.payout" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
                                     :class="e.payout === 'Долг' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-700'">{{ e.payout }}</span>
                             </div>
-                            <div class="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+                            <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                                 <span>{{ e.category ?? 'Без категории' }}</span>
                                 <Link v-if="e.employee" :href="route('users.show', e.employee.id)" class="font-medium text-indigo-600 hover:underline">· {{ e.employee.name }}</Link>
+                                <!-- По какой сделке / заказу цеха — кликабельный номер -->
+                                <Link v-if="e.link" :href="route(e.link.route, e.link.id)" :title="e.link.name || ''"
+                                    class="inline-flex max-w-64 items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">
+                                    {{ e.link.route === 'projects.show' ? '🏭' : '📄' }} {{ e.link.number }}<span v-if="e.link.name" class="truncate font-normal text-indigo-500"> · {{ e.link.name }}</span>
+                                </Link>
                             </div>
                         </div>
                         <!-- Путь денег одной строкой: кто подал → кто подтвердил -->

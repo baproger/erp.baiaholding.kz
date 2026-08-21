@@ -34,19 +34,28 @@ class HandleInertiaRequests extends Middleware
                     'permissions' => $user->getAllPermissions()->pluck('name'),
                 ] : null,
                 // Firms the user may work in + the one currently selected (header switcher).
-                'companies' => $user ? $user->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code']) : [],
+                // Фирмы пользователя меняются редко — кэш на минуту снимает запрос с каждого перехода.
+                'companies' => $user
+                    ? \Illuminate\Support\Facades\Cache::remember('user_companies.'.$user->id, 60,
+                        fn () => $user->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code'])->toArray())
+                    : [],
                 'currentCompanyId' => $user ? \App\Support\CurrentCompany::id() : null,
             ],
-            'notifications' => fn () => $user ? [
-                'unread' => $user->unreadNotifications()->count(),
-                'items' => $user->notifications()->latest()->limit(10)->get()
-                    ->map(fn ($n) => [
-                        'id' => $n->id,
-                        'data' => $n->data,
-                        'read_at' => $n->read_at,
-                        'created_at' => $n->created_at,
-                    ]),
-            ] : ['unread' => 0, 'items' => []],
+            // Уведомления шапки — два запроса к БД на КАЖДЫЙ переход каждого
+            // сотрудника. Кэш на 15 секунд снимает эту нагрузку почти целиком;
+            // при новом уведомлении/прочтении кэш сбрасывается (NotificationCache).
+            'notifications' => fn () => $user
+                ? \Illuminate\Support\Facades\Cache::remember('notif_head.'.$user->id, 15, fn () => [
+                    'unread' => $user->unreadNotifications()->count(),
+                    'items' => $user->notifications()->latest()->limit(10)->get()
+                        ->map(fn ($n) => [
+                            'id' => $n->id,
+                            'data' => $n->data,
+                            'read_at' => $n->read_at,
+                            'created_at' => $n->created_at,
+                        ])->values()->all(),
+                ])
+                : ['unread' => 0, 'items' => []],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

@@ -35,7 +35,7 @@ class ExpenseBoardController extends Controller
         $pending = Expense::where('status', 'pending')
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
-            ->with(['responsible:id,name,avatar', 'category:id,name'])
+            ->with(['responsible:id,name,avatar', 'category:id,name', 'expenseable'])
             ->orderBy('date')->orderBy('id')
             ->get()
             ->map(fn ($e) => $this->row($e));
@@ -44,7 +44,7 @@ class ExpenseBoardController extends Controller
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
             ->whereDate('date', '>=', $start)->whereDate('date', '<=', $end)
-            ->with(['responsible:id,name', 'category:id,name', 'employee:id,name', 'confirmedBy:id,name'])
+            ->with(['responsible:id,name', 'category:id,name', 'employee:id,name', 'confirmedBy:id,name', 'expenseable'])
             ->orderByDesc('date')->orderByDesc('id')
             ->get()
             ->map(fn ($e) => $this->row($e));
@@ -92,6 +92,15 @@ class ExpenseBoardController extends Controller
             // остальное (PDF) — ссылкой.
             'is_image' => $e->file_path && preg_match('/\.(jpe?g|png|webp|gif)$/i', $e->file_path) === 1,
             'deal_id' => $e->expenseable_type === 'deal' ? $e->expenseable_id : null,
+            // Ссылка «по какой сделке / заказу цеха» — номер и заказчик.
+            'link' => $e->expenseable ? [
+                'route' => $e->expenseable_type === 'project' ? 'projects.show' : 'deals.show',
+                'id' => $e->expenseable_id,
+                'number' => $e->expenseable->number ?? null,
+                'name' => $e->expenseable_type === 'project'
+                    ? ($e->expenseable->deal?->company_name ?? $e->expenseable->name ?? null)
+                    : ($e->expenseable->company_name ?? null),
+            ] : null,
         ];
     }
 }

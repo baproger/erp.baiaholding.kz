@@ -133,8 +133,8 @@ const start = () => {
     // Передний план — раз в 20с; фон — раз в 60с. При 15–20 сотрудниках
     // каждый лишний опрос умножается на все открытые вкладки — бейдж чата
     // не обязан быть секундным (открытый чат опрашивается чаще сам).
-    fgTimer = setInterval(() => { if (!document.hidden) poll(); }, 20000);
-    bgTimer = setInterval(() => { if (document.hidden) poll(); }, 60000);
+    fgTimer = setInterval(() => { if (!document.hidden) poll(); }, 30000);
+    bgTimer = setInterval(() => { if (document.hidden) poll(); }, 120000);
     window.addEventListener('pointerdown', askPermissionOnce);
     window.addEventListener('pointerdown', unlockAudio);
     window.addEventListener('keydown', unlockAudio);
