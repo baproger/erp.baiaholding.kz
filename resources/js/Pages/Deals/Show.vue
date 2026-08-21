@@ -24,7 +24,7 @@ import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null } });
 
-const tab = ref('docs');
+const tab = ref('tasks');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
 const lastStage = computed(() => props.stages[props.stages.length - 1]);
 const isLastStage = computed(() => props.deal.deal_stage_id === lastStage.value?.id);
@@ -333,11 +333,15 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <!-- Документы / Доп. поля / История -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
+                        <button :class="tab==='tasks' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='tasks'">
+                            Задачи <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium tabular-nums text-indigo-700">{{ deal.tasks.length }}</span>
+                        </button>
                         <button :class="tab==='docs' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='docs'">Документы</button>
                         <button :class="tab==='custom' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
                         <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
                     </nav>
-                    <DocumentPanel v-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
+                    <TaskPanel v-if="tab==='tasks'" :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
+                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
                     <div v-else>
                         <!-- Тайминг этапов сделки: каждый шаг — когда, сколько заняло и кто перевёл -->
@@ -362,31 +366,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     </div>
                 </div>
 
-                <!-- Задачи -->
-                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-                        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                            <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m4 16 2 2 4-4M11 6h10M11 11h10M11 18h10"/></svg>
-                            Задачи <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.tasks.length }}</span>
-                        </h3>
-                    </div>
-                    <div class="p-4">
-                        <TaskPanel :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
-                    </div>
-                </div>
 
-                <!-- Документы (только если прикреплены) -->
-                <div v-if="deal.documents.length" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-                        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                            <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                            Документы <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.documents.length }}</span>
-                        </h3>
-                    </div>
-                    <div class="p-6">
-                        <DocumentPanel :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
-                    </div>
-                </div>
 
                 <!-- Комментарии -->
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
