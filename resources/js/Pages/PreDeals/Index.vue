@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
@@ -152,6 +152,8 @@ const del = async (p) => {
 
 // Раскрытие строки: действие и комментарий по лоту.
 const expanded = ref(null);
+// 👁 Полная информация о лоте в модалке (кнопка-глаз рядом с карандашом).
+const viewLot = ref(null);
 
 const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
     ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600';
@@ -309,6 +311,9 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                                             {{ actionLabels[p.action] ?? '—' }}</button>
                                     </td>
                                     <td class="whitespace-nowrap px-4 py-2.5 text-right">
+                                        <button class="mr-1 rounded p-1 text-slate-300 transition-colors hover:text-emerald-600" title="Информация о предсделке" @click="viewLot = p">
+                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        </button>
                                         <template v-if="p.status === 'confirmed'">
                                             <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">→ {{ p.deal?.number ?? 'сделка' }}</span>
                                             <button class="ml-1 rounded p-1 text-slate-300 transition-colors hover:text-amber-600" title="Вернуть в предварительные (нажали «Выиграл» случайно)" @click="revertDeal(p)">↩</button>
@@ -349,6 +354,50 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 </div>
             </div>
         </PageLayout>
+
+        <!-- 👁 Модалка просмотра лота: всё, что ввёл менеджер (зелёное «стекло» — расчёт справочный) -->
+        <Modal :show="!!viewLot" max-width="2xl" @close="viewLot = null">
+            <div v-if="viewLot" class="p-6">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Предварительная сделка</h2>
+                        <p class="mt-0.5 text-xs text-slate-400">внёс {{ viewLot.user?.name ?? '—' }} · {{ formatDate(viewLot.created_at) }}<template v-if="viewLot.deal"> · сделка <Link :href="route('deals.show', viewLot.deal.id)" class="font-semibold text-indigo-600 hover:underline">{{ viewLot.deal.number }}</Link></template></p>
+                    </div>
+                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="actionClass(viewLot.action)">{{ actionLabels[viewLot.action] ?? '—' }}</span>
+                </div>
+                <div class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">№ лота</div><div class="font-semibold text-slate-800">{{ viewLot.lot_number || '—' }}</div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">№ договора</div><div class="font-semibold text-slate-800">{{ viewLot.contract_number || '—' }}</div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">Источник (портал)</div><div class="font-semibold text-slate-800">{{ viewLot.source || '—' }}</div></div>
+                    <div class="sm:col-span-2"><div class="text-[11px] uppercase tracking-wide text-slate-400">Заказчик</div><div class="font-semibold text-slate-800">{{ viewLot.customer || '—' }}<span v-if="viewLot.bin" class="ml-1 text-xs font-normal text-slate-400">· БИН {{ viewLot.bin }}</span></div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">Срок тендера</div><div class="font-semibold" :class="viewLot.tender_deadline ? 'text-slate-800' : 'text-slate-300'">{{ viewLot.tender_deadline ? formatDate(viewLot.tender_deadline) : '—' }}</div></div>
+                    <div class="sm:col-span-3"><div class="text-[11px] uppercase tracking-wide text-slate-400">Товар</div><div class="font-semibold text-slate-800">{{ viewLot.product || '—' }}</div></div>
+                    <div v-if="viewLot.client_name || viewLot.client_phone" class="sm:col-span-3"><div class="text-[11px] uppercase tracking-wide text-slate-400">Контакт клиента</div>
+                        <div class="text-slate-800">{{ viewLot.client_name || '—' }}<a v-if="viewLot.client_phone" :href="'tel:' + viewLot.client_phone" class="ml-2 font-medium text-indigo-600 hover:underline">{{ viewLot.client_phone }}</a></div></div>
+                </div>
+                <div v-if="!SHORT_ACTIONS.includes(viewLot.action)" class="mt-5 rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 p-4 backdrop-blur">
+                    <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Расчёт лота (справочно)</div>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
+                        <div class="flex justify-between"><span class="text-slate-500">Сумма договора</span><b class="tabular-nums text-slate-900">{{ money(viewLot.contract_sum) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Закуп</span><b class="tabular-nums text-slate-700">{{ money(viewLot.purchase_price) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Партнёр<template v-if="Number(viewLot.partner_pct)"> · {{ Number(viewLot.partner_pct) }}%</template></span><b class="tabular-nums text-slate-700">{{ money(viewLot.partner_sum) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">🚚 Доставка</span><b class="tabular-nums text-slate-700">{{ money(viewLot.delivery) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">🔧 {{ assemblyLabel() }}</span><b class="tabular-nums text-slate-700">{{ money(viewLot.assembly) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Комиссия</span><b class="tabular-nums text-slate-700">{{ money(viewLot.commission) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Налог</span><b class="tabular-nums text-rose-600">{{ money(viewLot.tax) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Остаток</span><b class="tabular-nums text-slate-900">{{ money(viewLot.remainder) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Маржа</span><b class="tabular-nums" :class="Number(viewLot.margin) >= minMargin ? 'text-emerald-700' : 'text-rose-600'">{{ Number(viewLot.margin) }}%</b></div>
+                    </div>
+                    <p class="mt-2 text-[11px] text-slate-400">Цифры лота — план менеджера, в расходы сделки не переносятся.</p>
+                </div>
+                <div v-else class="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm"><span class="text-slate-500">Сумма договора</span> <b class="ml-2 tabular-nums text-slate-900">{{ money(viewLot.contract_sum) }}</b></div>
+                <p v-if="viewLot.comment" class="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ viewLot.comment }}</p>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton v-if="viewLot.status !== 'confirmed'" @click="openEdit(viewLot); viewLot = null">Изменить</SecondaryButton>
+                    <PrimaryButton @click="viewLot = null">Закрыть</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
 
         <!-- Модалка лота: живой расчёт §11 -->
         <Modal :show="showForm" max-width="2xl" @close="showForm = false">

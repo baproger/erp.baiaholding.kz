@@ -372,27 +372,11 @@ class PreDealController extends Controller
                 .'; закуп '.number_format((float) $preDeal->purchase_price, 0, '.', ' ')
                 .'; расчётная маржа '.$preDeal->margin.'%',
         ]);
-        // Доставка/грузчики и сборка из лота переносятся в сделку, чтобы не
-        // вносить их второй раз, но в статусе «ждёт бухгалтера» (pending):
-        // деньги физически ещё не потрачены, поэтому на маржу сделки и на
-        // кассу они не влияют, пока бухгалтер не подтвердит их чеком
-        // (просьба владельца 09.08.2026 — раньше подтверждались автоматом).
-        foreach ([['delivery', '🚚 Доставка'], ['assembly', '🔧 '.\App\Support\CompanyTerms::assembly($companyId)]] as [$type, $label]) {
-            $amount = (float) $preDeal->{$type};
-            if ($amount > 0) {
-                \App\Models\Expense::create([
-                    'company_id' => $companyId,
-                    'expenseable_type' => 'deal',
-                    'expenseable_id' => $deal->id,
-                    'type' => $type,
-                    'amount' => $amount,
-                    'date' => now()->toDateString(),
-                    'description' => 'Из лота'.($preDeal->lot_number ? ' №'.$preDeal->lot_number : '').': '.$label,
-                    'responsible_user_id' => $preDeal->user_id,
-                    'status' => 'pending',
-                ]);
-            }
-        }
+        // Цифры лота (доставка/сборка) — СПРАВОЧНЫЕ (правило от 21.08.2026):
+        // расходами сделки НЕ становятся — ни в маржу, ни в кассу, ни на
+        // страницу «Расходы». Они видны в блоке «Из предварительной сделки»
+        // на карточке; реальные расходы менеджер вводит в сделке вручную,
+        // и их подтверждает бухгалтер.
 
         $preDeal->update(['status' => 'confirmed', 'deal_id' => $deal->id]);
 

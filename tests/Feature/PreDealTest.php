@@ -31,11 +31,11 @@ class PreDealTest extends TestCase
         return $u;
     }
 
-    // «Выиграл ✓»: доставка/грузчики и сборка лота переносятся в сделку
-    // расходами (🚚/🔧), но в статусе «ждёт бухгалтера» — на маржу сделки и
-    // кассу не влияют, пока он не подтвердит их чеком. Маржа ЛОТА сборку
-    // учитывает; откат ↩ удаляет эти расходы и проходит.
-    public function test_confirm_creates_delivery_and_assembly_expenses(): void
+    // «Выиграл ✓»: цифры лота (доставка/сборка) — СПРАВОЧНЫЕ (правило от
+    // 21.08.2026): расходами сделки НЕ становятся — ни в маржу, ни в кассу,
+    // ни на «Расходы». Реальные расходы менеджер вводит в сделке вручную
+    // (pending → бухгалтер). Маржа ЛОТА доставку/сборку учитывает.
+    public function test_confirm_does_not_create_expenses_from_lot(): void
     {
         $mgr = $this->user('manager');
         $this->actingAs($mgr)->post(route('preDeals.store'), [
@@ -48,20 +48,13 @@ class PreDealTest extends TestCase
 
         $this->actingAs($mgr)->post(route('preDeals.confirm', $lot->id))->assertSessionHas('success');
         $deal = $lot->fresh()->deal;
-        $exp = $deal->expenses()->get()->keyBy('type');
-        $this->assertCount(2, $exp);
-        $this->assertEquals(100000.0, (float) $exp['delivery']->amount);
-        $this->assertEquals(50000.0, (float) $exp['assembly']->amount);
-        // Ждут бухгалтера: ни на маржу сделки, ни на кассу пока не влияют.
-        $this->assertSame('pending', $exp['assembly']->status);
-        $this->assertSame('pending', $exp['delivery']->status);
-        $this->assertNull($exp['assembly']->confirmed_by);
-        $this->assertNull($exp['assembly']->payment_method); // касса/банк не тронуты
+        $this->assertNotNull($deal);
+        $this->assertSame(0, $deal->expenses()->count());
+        $this->assertSame(0, \App\Models\Expense::count());
 
-        // Откат ↩: авто-расходы лота не блокируют и удаляются вместе со сделкой.
+        // Откат ↩ проходит, сделка удаляется, лот снова «В работе».
         $this->actingAs($mgr)->post(route('preDeals.revert', $lot->id))->assertSessionHas('success');
         $this->assertSame('new', $lot->fresh()->status);
-        $this->assertSame(0, \App\Models\Expense::count());
     }
 
     // Откат случайного «Выиграл ✓»: сделка удаляется, лот снова «В работе»;

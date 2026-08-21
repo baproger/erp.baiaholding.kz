@@ -20,6 +20,10 @@ const props = defineProps({
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
+// Расход, перенесённый из предсделки (лота): плановые цифры менеджера —
+// подписываем «из предсделки» и рисуем тем же зелёным «стеклом», что и блок
+// лота на карточке, чтобы сравнивать план и факт глазами.
+const isLot = (e) => (e.description || '').startsWith('Из лота');
 const barIncome = computed(() => { const t = (props.finance.income ?? 0) + (props.finance.expense ?? 0); return t > 0 ? (props.finance.income / t * 100) : 0; });
 const barExpense = computed(() => { const t = (props.finance.income ?? 0) + (props.finance.expense ?? 0); return t > 0 ? (props.finance.expense / t * 100) : 0; });
 // Визуальное: плавный рост полосы «Доход vs Расходы» после монтирования (0 → значение).
@@ -133,7 +137,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
 </script>
 
 <template>
-    <div class="space-y-6">
+    <div class="space-y-4">
         <!-- Summary -->
         <div class="space-y-4">
             <div class="grid grid-cols-3 gap-3">
@@ -170,9 +174,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
             </div>
         </div>
 
-        <!-- Invoices -->
-        <div>
-            <div class="mb-3 flex items-center justify-between">
+        <!-- Invoices — доход: зелёное «стекло» -->
+        <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/70 via-white/60 to-emerald-100/40 p-4 backdrop-blur">
+            <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Аванс</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showInvoice = !showInvoice">+ Счёт</button>
             </div>
@@ -215,17 +219,13 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         <button class="text-sm text-slate-500 transition-colors duration-150 hover:text-slate-700" @click="payFor = null">Отмена</button>
                     </div>
                 </div>
-                <div v-if="!invoices.length" class="flex flex-col items-center gap-3 py-8 text-center">
-                    <svg class="h-10 w-10 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
-                    <span class="text-sm text-slate-400">Счетов нет</span>
-                    <button class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showInvoice = !showInvoice">+ Счёт</button>
-                </div>
+                <div v-if="!invoices.length" class="rounded-lg border border-dashed border-slate-200 px-4 py-2.5 text-center text-xs text-slate-400">Счетов пока нет — «+ Счёт»</div>
             </div>
         </div>
 
-        <!-- Expenses -->
-        <div>
-            <div class="mb-3 flex items-center justify-between">
+        <!-- Expenses — расход: красное «стекло» -->
+        <div class="rounded-2xl border border-rose-200/60 bg-gradient-to-br from-rose-50/70 via-white/60 to-rose-100/40 p-4 backdrop-blur">
+            <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Расходы</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showExpense = !showExpense">+ Расход</button>
             </div>
@@ -306,7 +306,8 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
             </div>
             <input ref="attachInput" type="file" accept="image/*,.pdf" class="hidden" @change="onAttach" />
             <div class="space-y-2">
-                <div v-for="e in expenses" :key="e.id" class="rounded-xl bg-slate-50 p-4 text-sm">
+                <div v-for="e in expenses" :key="e.id" class="rounded-xl p-3.5 text-sm"
+                    :class="isLot(e) ? 'bg-gradient-to-r from-emerald-50/80 via-white/60 to-emerald-50/40 ring-1 ring-inset ring-emerald-100 backdrop-blur' : 'bg-white/70 ring-1 ring-inset ring-rose-100'">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <div>
@@ -321,7 +322,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                                 <span>· {{ fmtDateTime(e.created_at) }}</span>
                             </div>
                             <!-- Два чека рядом: заявка менеджера и чек оплаты бухгалтера — сверяются в один взгляд -->
-                            <div v-if="!e.material" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                            <div v-if="!e.material && !isLot(e)" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                                 <span class="inline-flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">
                                     <span class="text-slate-400">заявка менеджера</span>
                                     <button v-if="e.file_path" type="button" @click="openReceipt(e)" class="font-semibold text-indigo-600 transition-colors duration-150 hover:underline">посмотреть</button>
@@ -336,7 +337,8 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
+                            <span v-if="isLot(e)" class="rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" title="Плановая цифра менеджера из предсделки — подтверждения бухгалтера не требует">◧ из предсделки</span>
+                            <span v-else-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
                             <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Ждёт бухгалтера</span>
                             <span v-else class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Черновик</span>
                             <button v-if="canConfirm && e.status !== 'confirmed' && confirmFor !== e.id"

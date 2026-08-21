@@ -108,6 +108,9 @@ const destroy = async () => {
     }
 };
 
+// 👁 Модалка с полной информацией о предсделке (лоте), из которой выросла сделка.
+const showPreDeal = ref(false);
+
 const showEdit = ref(false);
 // input[type=date] принимает только YYYY-MM-DD, а бэкенд отдаёт ISO-дату со временем.
 const dateOnly = (v) => (v ?? '').slice(0, 10);
@@ -149,6 +152,12 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
         <PageLayout :title="`${deal.number} · ${deal.company_name || deal.name}`" :subtitle="stages[currentStageIndex]?.name">
         <template #actions>
+            <!-- 👁 Предсделка: рядом с карандашом — полная информация о лоте в модалке -->
+            <button v-if="preDeal" @click="showPreDeal = true" title="Информация о предсделке (лоте)"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-gradient-to-br from-emerald-50/90 to-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors duration-150 hover:from-emerald-100/90">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                Предсделка
+            </button>
             <button v-if="can.update" @click="openEdit" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">
                 <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16l-3.5.5L4 13z"/></svg>
                 Изменить
@@ -270,6 +279,44 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <div class="text-[11px] uppercase tracking-wide text-slate-400">Описание</div>
                         <p class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ deal.description }}</p>
                     </div>
+                </div>
+
+                        <!-- Из предварительной сделки: сразу перед Финансами — зелёное «стекло» (glassmorphism) -->
+                <div v-if="preDeal" class="overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 shadow-sm backdrop-blur">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 bg-white/40 px-5 py-2.5">
+                        <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                            ◧ Из предварительной сделки
+                            <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold normal-case tracking-normal text-emerald-700 ring-1 ring-emerald-200">{{ preDeal.action }}</span>
+                        </span>
+                        <Link :href="route('preDeals.index')" class="text-xs font-semibold text-emerald-700 hover:underline">Все лоты →</Link>
+                    </div>
+                    <div class="grid gap-x-6 gap-y-2 px-5 py-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                        <div v-if="preDeal.lot_number">
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">№ лота</div>
+                            <div class="font-semibold text-slate-800">{{ preDeal.lot_number }}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Внёс</div>
+                            <div class="font-semibold text-slate-800">{{ preDeal.manager ?? '—' }}<span class="ml-1 text-xs font-normal text-slate-400">{{ preDeal.created_at }}</span></div>
+                        </div>
+                        <div v-if="preDeal.tender_deadline">
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Срок тендера</div>
+                            <div class="font-semibold text-slate-800">{{ preDeal.tender_deadline }}</div>
+                        </div>
+                        <div v-if="preDeal.margin > 0">
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Расчётная маржа лота</div>
+                            <div class="font-semibold text-emerald-600">{{ preDeal.margin }}%</div>
+                        </div>
+                    </div>
+                    <!-- Цифры лота: доставка/сборка уже перенесены в расходы сделки (подтверждены) -->
+                    <div v-if="preDeal.purchase_price || preDeal.delivery || preDeal.assembly || preDeal.commission"
+                        class="flex flex-wrap gap-2 border-t border-emerald-100/80 px-5 py-2.5 text-[11px]">
+                        <span v-if="preDeal.purchase_price" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">закуп <b class="tabular-nums">{{ money(preDeal.purchase_price) }}</b></span>
+                        <span v-if="preDeal.delivery" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">🚚 доставка, грузчики <b class="tabular-nums">{{ money(preDeal.delivery) }}</b></span>
+                        <span v-if="preDeal.assembly" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">🔧 сборка <b class="tabular-nums">{{ money(preDeal.assembly) }}</b></span>
+                        <span v-if="preDeal.commission" class="rounded-full bg-white/70 px-2.5 py-1 text-slate-600 ring-1 ring-emerald-100">комиссия <b class="tabular-nums">{{ money(preDeal.commission) }}</b></span>
+                    </div>
+                    <p v-if="preDeal.comment" class="border-t border-emerald-100/80 px-5 py-2.5 text-sm text-slate-600">{{ preDeal.comment }}</p>
                 </div>
 
                 <!-- Финансы сразу под информацией — расход вводится без скролла вниз -->
@@ -446,6 +493,50 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
             </div>
         </Modal>
+        <!-- 👁 Модалка предсделки: всё, что менеджер ввёл в лоте -->
+        <Modal :show="showPreDeal" max-width="2xl" @close="showPreDeal = false">
+            <div v-if="preDeal" class="p-6">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Предварительная сделка</h2>
+                        <p class="mt-0.5 text-xs text-slate-400">лот, из которого выросла сделка {{ deal.number }} · внёс {{ preDeal.manager ?? '—' }} · {{ preDeal.created_at }}</p>
+                    </div>
+                    <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">{{ preDeal.action }}</span>
+                </div>
+                <div class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">№ лота</div><div class="font-semibold text-slate-800">{{ preDeal.lot_number || '—' }}</div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">№ договора</div><div class="font-semibold text-slate-800">{{ preDeal.contract_number || '—' }}</div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">Источник (портал)</div><div class="font-semibold text-slate-800">{{ preDeal.source || '—' }}</div></div>
+                    <div class="sm:col-span-2"><div class="text-[11px] uppercase tracking-wide text-slate-400">Заказчик</div><div class="font-semibold text-slate-800">{{ preDeal.customer || '—' }}<span v-if="preDeal.bin" class="ml-1 text-xs font-normal text-slate-400">· БИН {{ preDeal.bin }}</span></div></div>
+                    <div><div class="text-[11px] uppercase tracking-wide text-slate-400">Срок тендера</div><div class="font-semibold" :class="preDeal.tender_deadline ? 'text-slate-800' : 'text-slate-300'">{{ preDeal.tender_deadline || '—' }}</div></div>
+                    <div class="sm:col-span-3"><div class="text-[11px] uppercase tracking-wide text-slate-400">Товар</div><div class="font-semibold text-slate-800">{{ preDeal.product || '—' }}</div></div>
+                    <div class="sm:col-span-3" v-if="preDeal.client_name || preDeal.client_phone"><div class="text-[11px] uppercase tracking-wide text-slate-400">Контакт клиента</div>
+                        <div class="text-slate-800">{{ preDeal.client_name || '—' }}<a v-if="preDeal.client_phone" :href="'tel:' + preDeal.client_phone" class="ml-2 font-medium text-indigo-600 hover:underline">{{ preDeal.client_phone }}</a></div></div>
+                </div>
+                <!-- Расчёт лота — справочный: в расходы сделки не переносится -->
+                <div class="mt-5 rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 p-4 backdrop-blur">
+                    <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Расчёт лота (справочно)</div>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
+                        <div class="flex justify-between"><span class="text-slate-500">Сумма договора</span><b class="tabular-nums text-slate-900">{{ money(preDeal.contract_sum) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Закуп</span><b class="tabular-nums text-slate-700">{{ money(preDeal.purchase_price) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Партнёр<template v-if="preDeal.partner_pct"> · {{ preDeal.partner_pct }}%</template></span><b class="tabular-nums text-slate-700">{{ money(preDeal.partner_sum) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">🚚 Доставка</span><b class="tabular-nums text-slate-700">{{ money(preDeal.delivery) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">🔧 Сборка / работа</span><b class="tabular-nums text-slate-700">{{ money(preDeal.assembly) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Комиссия</span><b class="tabular-nums text-slate-700">{{ money(preDeal.commission) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Налог</span><b class="tabular-nums text-rose-600">{{ money(preDeal.tax) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Остаток</span><b class="tabular-nums text-slate-900">{{ money(preDeal.remainder) }}</b></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Маржа лота</span><b class="tabular-nums text-emerald-700">{{ preDeal.margin }}%</b></div>
+                    </div>
+                    <p class="mt-2 text-[11px] text-slate-400">Цифры лота — план менеджера. Реальные расходы вводятся в сделке вручную и подтверждаются бухгалтером.</p>
+                </div>
+                <p v-if="preDeal.comment" class="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ preDeal.comment }}</p>
+                <div class="mt-6 flex items-center justify-between gap-2">
+                    <Link :href="route('preDeals.index')" class="text-xs font-semibold text-emerald-700 hover:underline">Все лоты →</Link>
+                    <SecondaryButton @click="showPreDeal = false">Закрыть</SecondaryButton>
+                </div>
+            </div>
+        </Modal>
+
         <!-- Выбор цеха (BAIA: Металл / Ағаш) -->
         <Modal :show="showWorkshopPick" max-width="sm" @close="showWorkshopPick = false">
             <div class="p-6">
@@ -460,44 +551,6 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
             </div>
         </Modal>
-        <!-- Из предварительной сделки: в самом конце карточки, чтобы было видно,
-             что сделка выросла из лота, и с какими цифрами он считался. -->
-        <div v-if="preDeal" class="mt-6 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-3">
-                <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-violet-700">
-                    ◧ Из предварительной сделки
-                    <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold normal-case tracking-normal text-violet-700 ring-1 ring-violet-200">{{ preDeal.action }}</span>
-                </span>
-                <Link :href="route('preDeals.index')" class="text-xs font-semibold text-violet-700 hover:underline">Все лоты →</Link>
-            </div>
-            <div class="grid gap-x-6 gap-y-3 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <div v-if="preDeal.lot_number">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400">№ лота</div>
-                    <div class="font-semibold text-slate-800">{{ preDeal.lot_number }}</div>
-                </div>
-                <div>
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Внёс</div>
-                    <div class="font-semibold text-slate-800">{{ preDeal.manager ?? '—' }}<span class="ml-1 text-xs font-normal text-slate-400">{{ preDeal.created_at }}</span></div>
-                </div>
-                <div v-if="preDeal.tender_deadline">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Срок тендера</div>
-                    <div class="font-semibold text-slate-800">{{ preDeal.tender_deadline }}</div>
-                </div>
-                <div v-if="preDeal.margin > 0">
-                    <div class="text-[11px] uppercase tracking-wide text-slate-400">Расчётная маржа лота</div>
-                    <div class="font-semibold text-emerald-600">{{ preDeal.margin }}%</div>
-                </div>
-            </div>
-            <!-- Цифры лота — справочные: расходы уехали в сделку и ждут бухгалтера -->
-            <div v-if="preDeal.purchase_price || preDeal.delivery || preDeal.assembly || preDeal.commission"
-                class="flex flex-wrap gap-2 border-t border-violet-100 px-5 py-3 text-[11px]">
-                <span v-if="preDeal.purchase_price" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">закуп <b class="tabular-nums">{{ money(preDeal.purchase_price) }}</b></span>
-                <span v-if="preDeal.delivery" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">🚚 доставка, грузчики <b class="tabular-nums">{{ money(preDeal.delivery) }}</b></span>
-                <span v-if="preDeal.assembly" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">🔧 сборка <b class="tabular-nums">{{ money(preDeal.assembly) }}</b></span>
-                <span v-if="preDeal.commission" class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">комиссия <b class="tabular-nums">{{ money(preDeal.commission) }}</b></span>
-            </div>
-            <p v-if="preDeal.comment" class="border-t border-violet-100 px-5 py-3 text-sm text-slate-600">{{ preDeal.comment }}</p>
-        </div>
         </PageLayout>
     </AppLayout>
 </template>
