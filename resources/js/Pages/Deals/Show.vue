@@ -281,7 +281,12 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     </div>
                 </div>
 
-                        <!-- Из предварительной сделки: сразу перед Финансами — зелёное «стекло» (glassmorphism) -->
+                        <!-- Финансовая сводка — отдельным блоком выше предсделки: сумма, аванс, расходы, факт/план -->
+                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <FinancePanel section="summary" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+                </div>
+
+                <!-- Из предварительной сделки: сразу перед Финансами — зелёное «стекло» (glassmorphism) -->
                 <div v-if="preDeal" class="overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-white/60 to-emerald-100/50 shadow-sm backdrop-blur">
                     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 bg-white/40 px-5 py-2.5">
                         <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-emerald-700">
@@ -327,7 +332,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <button :class="tab==='custom' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
                         <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
                     </nav>
-                    <FinancePanel v-if="tab==='finance'" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+                    <FinancePanel v-if="tab==='finance'" section="operations" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
                     <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
                     <div v-else>

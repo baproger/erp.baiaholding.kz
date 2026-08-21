@@ -17,6 +17,9 @@ const props = defineProps({
     finance: { type: Object, default: () => ({ income: 0, invoiced: 0, expense: 0, profit: 0, margin: 0 }) },
     materials: { type: Array, default: () => [] }, // склад компании сделки (для расходов по материалам)
     balances: { type: Object, default: null }, // остатки касса/банк (видит бухгалтер/админ)
+    // Что рисовать: 'all' | 'summary' (плитки + факт/план) | 'operations' (аванс + расходы).
+    // На карточке сделки сводка стоит отдельным блоком выше предсделки.
+    section: { type: String, default: 'all' },
 });
 
 const money = (v) => new Intl.NumberFormat('ru-RU').format(v ?? 0) + ' ₸';
@@ -139,7 +142,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
 <template>
     <div class="space-y-4">
         <!-- Summary -->
-        <div class="space-y-4">
+        <div v-if="section !== 'operations'" class="space-y-4">
             <div class="grid grid-cols-3 gap-3">
                 <div class="rounded-xl bg-indigo-50 p-4"><div class="text-xs font-medium text-indigo-700">Сумма договора</div><div class="mt-0.5 text-lg font-bold tabular-nums text-indigo-700">{{ money(finance.budget) }}</div></div>
                 <div class="rounded-xl bg-emerald-50 p-4"><div class="text-xs font-medium text-emerald-700">Аванс (оплачено)</div><div class="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{{ money(finance.income) }}</div></div>
@@ -175,7 +178,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         </div>
 
         <!-- Invoices — доход: зелёное «стекло» -->
-        <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/70 via-white/60 to-emerald-100/40 p-4 backdrop-blur">
+        <div v-if="section !== 'summary'" class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/70 via-white/60 to-emerald-100/40 p-4 backdrop-blur">
             <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Аванс</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showInvoice = !showInvoice">+ Счёт</button>
@@ -224,7 +227,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         </div>
 
         <!-- Expenses — расход: красное «стекло» -->
-        <div class="rounded-2xl border border-rose-200/60 bg-gradient-to-br from-rose-50/70 via-white/60 to-rose-100/40 p-4 backdrop-blur">
+        <div v-if="section !== 'summary'" class="rounded-2xl border border-rose-200/60 bg-gradient-to-br from-rose-50/70 via-white/60 to-rose-100/40 p-4 backdrop-blur">
             <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Расходы</h4>
                 <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showExpense = !showExpense">+ Расход</button>
