@@ -24,7 +24,7 @@ import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null } });
 
-const tab = ref('finance');
+const tab = ref('docs');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
 const lastStage = computed(() => props.stages[props.stages.length - 1]);
 const isLastStage = computed(() => props.deal.deal_stage_id === lastStage.value?.id);
@@ -281,7 +281,10 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     </div>
                 </div>
 
-                        <!-- Финансовая сводка — отдельным блоком выше предсделки: сумма, аванс, расходы, факт/план -->
+                        <!-- Аванс (счета и оплаты) — самый верх финансов -->
+                <FinancePanel section="invoices" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+
+                <!-- Финансовая сводка — отдельным блоком выше предсделки: сумма, аванс, расходы, факт/план -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <FinancePanel section="summary" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
                 </div>
@@ -324,16 +327,17 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                     <p v-if="preDeal.comment" class="border-t border-emerald-100/80 px-5 py-2.5 text-sm text-slate-600">{{ preDeal.comment }}</p>
                 </div>
 
-                <!-- Финансы сразу под информацией — расход вводится без скролла вниз -->
+                <!-- Расходы — сразу под блоком предсделки: план лота и факт рядом -->
+                <FinancePanel section="expenses" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+
+                <!-- Документы / Доп. поля / История -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
-                        <button :class="tab==='finance' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='finance'">Финансы</button>
                         <button :class="tab==='docs' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='docs'">Документы</button>
                         <button :class="tab==='custom' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='custom'">Доп. поля</button>
                         <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
                     </nav>
-                    <FinancePanel v-if="tab==='finance'" section="operations" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
-                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
+                    <DocumentPanel v-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
                     <div v-else>
                         <!-- Тайминг этапов сделки: каждый шаг — когда, сколько заняло и кто перевёл -->
