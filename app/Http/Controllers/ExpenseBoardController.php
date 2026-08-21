@@ -83,6 +83,8 @@ class ExpenseBoardController extends Controller
             'payout' => match ($e->employee_payout) {
                 'advance' => 'Аванс',
                 'debt' => 'Долг',
+                'salary_payout' => 'Выплата ЗП',
+                'bonus_payout' => 'Выплата бонуса',
                 default => null,
             },
             'has_file' => (bool) $e->file_path,

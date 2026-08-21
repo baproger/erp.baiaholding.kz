@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
@@ -166,17 +166,17 @@ const setMonth = () => router.get(route('payroll.index'), { month: monthSel.valu
 // Выбранный месяц ведомости запоминается за страницей.
 useStickyFilters('payroll', { monthSel, search, onlyWith }, setMonth);
 
-const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия', trip: 'Командировка' };
+const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', payout: 'Выплата', bonus: 'Премия', trip: 'Командировка' };
 // Аванс и долг — РАЗНЫЕ вещи, обе заводятся модалкой:
 // аванс — разовая выдача, каждый месяц своя сумма, удерживается целиком в этом
 // же месяце; долг — переходящий остаток, гасится фиксированной суммой в месяц
 // и только из бонуса. Аванс остаётся типом корректировки.
-const newAdjTypes = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', bonus: 'Премия', trip: 'Командировка' };
+const newAdjTypes = { payout: 'Выплата', advance: 'Аванс', bonus: 'Премия', trip: 'Командировка', fine: 'Штраф', absence: 'Отгул', sick: 'Больничный' };
 // «2026-07» → «июль 2026» для заголовков (computed — месяц меняется без перезагрузки).
 const monthLabel = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
 // Короткий вариант для заголовка колонки — «август 2026 г.» её распирает.
 const monthShort = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' }));
-const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'trip' ? 'bg-sky-100 text-sky-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700';
+const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'trip' ? 'bg-sky-100 text-sky-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : t === 'payout' ? 'bg-slate-800 text-white' : 'bg-amber-100 text-amber-700';
 
 // Оклад: инлайн-правка (бухгалтер/админ).
 const editingSalary = ref(null);
@@ -211,6 +211,22 @@ const saveHours = (r) => router.patch(route('payroll.hours', r.uid), {
 const showAdj = ref(false);
 const adjForm = useForm({ user_id: '', type: 'absence', days: '', amount: '', date: new Date().toISOString().slice(0, 10), note: '', payment_method: 'cash', source: 'salary' });
 const openAdj = (uid = '') => { adjForm.reset(); adjForm.user_id = uid; adjForm.date = new Date().toISOString().slice(0, 10); showAdj.value = true; };
+// «Выплатить ЗП»: тип «Выплата» из ЗП, сумма — итог ведомости сотрудника (можно поправить).
+const rowOf = (uid) => props.rows.find((r) => String(r.uid) === String(uid));
+const payoutDefault = computed(() => {
+    const r = rowOf(adjForm.user_id);
+    if (!r) return 0;
+    return adjForm.source === 'bonus' ? Number(r.bonus_final || 0) : Number(r.salary_final || 0);
+});
+const openPayout = (uid = '') => {
+    openAdj(uid);
+    adjForm.type = 'payout'; adjForm.source = 'salary';
+    if (uid) adjForm.amount = payoutDefault.value > 0 ? payoutDefault.value : '';
+};
+// Выбрали сотрудника в форме выплаты — подставляем «к выплате» по ведомости.
+watch(() => [adjForm.user_id, adjForm.source, adjForm.type], () => {
+    if (adjForm.type === 'payout' && payoutDefault.value > 0 && !adjForm.amount) adjForm.amount = payoutDefault.value;
+});
 const submitAdj = () => adjForm.post(route('payroll.adjustments.store'), { preserveScroll: true, onSuccess: () => (showAdj.value = false) });
 
 // Долг сотрудника: выдаётся реальными деньгами (расход компании), дальше
@@ -260,6 +276,8 @@ const delAdj = async (a) => {
                         {{ allExpanded ? 'свернуть всё' : 'развернуть всё' }}
                     </button>
                 </template>
+                <button v-if="canManage" @click="openPayout()"
+                    class="whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">💵 Выплатить ЗП</button>
                 <button v-if="canManage" @click="openAdj()"
                     class="whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">+ Корректировка</button>
             </template>
@@ -685,7 +703,10 @@ const delAdj = async (a) => {
                                     <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
                                         <div class="mb-1 flex items-center justify-between">
                                             <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Корректировки · {{ monthLabel }}</span>
-                                            <button v-if="canManage" class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="openAdj(r.uid)">+ добавить</button>
+                                            <span v-if="canManage" class="flex items-center gap-3">
+                                                <button class="text-xs font-semibold text-emerald-700 hover:text-emerald-800" @click="openPayout(r.uid)">💵 выплатить ЗП</button>
+                                                <button class="text-xs font-medium text-indigo-600 hover:text-indigo-700" @click="openAdj(r.uid)">+ добавить</button>
+                                            </span>
                                         </div>
                                         <div v-if="r.adjustments?.length" class="divide-y divide-slate-50 text-xs">
                                             <div v-for="a in r.adjustments" :key="a.id" class="flex items-center justify-between gap-2 py-1.5">
@@ -772,7 +793,8 @@ const delAdj = async (a) => {
         <!-- Модалка корректировки -->
         <Modal :show="showAdj" @close="showAdj = false" max-width="lg">
             <div class="p-6">
-                <h2 class="mb-4 text-lg font-semibold text-slate-900">Корректировка ЗП</h2>
+                <h2 class="mb-1 text-lg font-semibold text-slate-900">{{ adjForm.type === 'payout' ? 'Выплата сотруднику' : 'Корректировка ЗП' }}</h2>
+                <p class="mb-4 text-xs text-slate-400">{{ adjForm.type === 'payout' ? 'Реальная выдача денег по ведомости — уйдёт в Расходы и уменьшит кассу/банк.' : 'Отгул, больничный, штраф, аванс, премия, командировка.' }}</p>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div class="sm:col-span-2">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Сотрудник *</label>
@@ -813,8 +835,8 @@ const delAdj = async (a) => {
                         <input v-model="adjForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
                         <div v-if="adjForm.errors.date" class="mt-1 text-xs text-red-600">{{ adjForm.errors.date }}</div>
                     </div>
-                    <!-- Аванс — реальные деньги: откуда выданы (уйдёт в Расходы на Финансах) -->
-                    <div v-if="adjForm.type === 'advance'">
+                    <!-- Аванс / Выплата — реальные деньги: откуда выданы (уйдёт в Расходы на Финансах) -->
+                    <div v-if="adjForm.type === 'advance' || adjForm.type === 'payout'">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Откуда выданы деньги *</label>
                         <div class="flex gap-2">
                             <button type="button" @click="adjForm.payment_method = 'cash'"
@@ -824,7 +846,7 @@ const delAdj = async (a) => {
                                 :class="adjForm.payment_method === 'bank' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
                                 class="rounded-lg border px-3 py-1.5 text-sm font-medium">🏦 Банк</button>
                         </div>
-                        <p class="mt-1 text-[11px] text-slate-400">Аванс автоматически попадёт в Расходы на Финансах (категория «Расходы по сотрудникам»)</p>
+                        <p class="mt-1 text-[11px] text-slate-400">{{ adjForm.type === 'payout' ? 'Выплата' : 'Аванс' }} автоматически попадёт в Расходы на Финансах (категория «Расходы по сотрудникам»)</p>
                         <label class="mb-1 mt-3 block text-xs font-medium text-slate-500">Из чего удержать *</label>
                         <div class="flex gap-2">
                             <button type="button" @click="adjForm.source = 'salary'"
@@ -835,20 +857,22 @@ const delAdj = async (a) => {
                                 class="rounded-lg border px-3 py-1.5 text-sm font-medium">Из бонуса</button>
                         </div>
                         <p class="mt-1 text-[11px] text-slate-400">«Из ЗП» уменьшит итог зарплаты, «Из бонуса» — итог на вкладке «Бонусы».</p>
-                        <p class="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+                        <p v-if="adjForm.type === 'payout' && adjForm.user_id" class="mt-1 text-[11px] text-slate-500">По ведомости к выплате: <b class="tabular-nums text-slate-800">{{ money(payoutDefault) }}</b>
+                            <button type="button" class="ml-1 font-semibold text-indigo-600 hover:underline" @click="adjForm.amount = payoutDefault">подставить</button></p>
+                        <p v-if="adjForm.type === 'advance'" class="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
                             Аванс — <b>разовый</b>: удерживается целиком в этом месяце, сумма каждый месяц своя.
                             Если деньги выданы <b>в долг</b> и должны гаситься частями из бонусов — закройте это окно
                             и нажмите «+ выдать долг» у сотрудника.
                         </p>
                     </div>
-                    <div :class="adjForm.type === 'absence' || adjForm.type === 'sick' || adjForm.type === 'advance' ? '' : 'sm:col-span-2'">
+                    <div :class="['absence', 'sick', 'advance', 'payout'].includes(adjForm.type) ? '' : 'sm:col-span-2'">
                         <label class="mb-1 block text-xs font-medium text-slate-500">Комментарий</label>
                         <input v-model="adjForm.note" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="Причина…" />
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="showAdj = false">Отмена</SecondaryButton>
-                    <PrimaryButton :disabled="adjForm.processing || !adjForm.user_id" @click="submitAdj">Сохранить</PrimaryButton>
+                    <PrimaryButton :disabled="adjForm.processing || !adjForm.user_id" @click="submitAdj">{{ adjForm.type === 'payout' ? '💵 Выплатить' : 'Сохранить' }}</PrimaryButton>
                 </div>
             </div>
         </Modal>

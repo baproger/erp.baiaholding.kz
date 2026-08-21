@@ -213,6 +213,8 @@ class CashBookController extends Controller
                 'payout' => match ($e->employee_payout) {
                     'advance' => 'Аванс',
                     'debt' => 'Долг',
+                    'salary_payout' => 'Выплата ЗП',
+                    'bonus_payout' => 'Выплата бонуса',
                     default => null,
                 },
                 'at' => optional($e->created_at)->toIso8601String(),

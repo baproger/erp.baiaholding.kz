@@ -27,12 +27,101 @@ class PayrollController extends Controller
     }
 
     /**
-     * Страница «Бонусы»: та же ведомость, срез только бонусный —
-     * бонус за месяц − авансы из бонуса − удержания долгов = итого.
+     * Страница «Бонусы» — ГОДОВАЯ таблица накоплений (правило от 21.08.2026):
+     * строки — менеджеры, 12 колонок-месяцев выбранного года (бонус заработан /
+     * выплачен), справа — за год, выплачено, и главное — «К выплате»:
+     * накопленный баланс за ВСЁ время (менеджеры копят бонусы месяцами).
+     * К выплате = Σ бонусов (всё время) − Σ выплат из бонуса (авансы «из
+     * бонуса» + погашения долгов).
      */
-    public function bonuses(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): Response
+    public function bonuses(Request $request, PayrollService $payroll): Response
     {
-        return Inertia::render('Payroll/Bonuses', $this->sheet($request, $payroll, $debts));
+        $user = $request->user();
+        abort_unless($user->can('payroll.view'), 403);
+        $leadership = $user->hasAnyRole(['admin', 'director', 'financist']);
+        $year = (int) ($request->integer('year') ?: now()->year);
+        $year = max(2020, min($year, (int) now()->year + 1));
+
+        // Бонус по месяцам года (12 срезов) и за всё время.
+        $byMonth = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $byMonth[$m] = $payroll->bonusByUserForMonth(sprintf('%d-%02d', $year, $m));
+        }
+        $allTime = $payroll->perUser(false)->keyBy('uid')->map(fn ($r) => (float) $r['bonus']);
+
+        // Выплаты из бонуса: авансы «из бонуса» + погашения долгов — по месяцам и за всё время.
+        $advAll = PayrollAdjustment::whereIn('type', ['advance', 'payout'])->where('source', 'bonus')
+            ->get(['user_id', 'amount', 'date']);
+        $debtAll = \App\Models\EmployeeDebtPayment::query()
+            ->join('employee_debts', 'employee_debts.id', '=', 'employee_debt_payments.employee_debt_id')
+            ->get(['employee_debts.user_id', 'employee_debt_payments.amount', 'employee_debt_payments.month']);
+        $paidMonth = [];   // uid => [m => sum]
+        $paidAllBy = [];   // uid => sum
+        foreach ($advAll as $a) {
+            $paidAllBy[$a->user_id] = ($paidAllBy[$a->user_id] ?? 0) + (float) $a->amount;
+            if ((int) $a->date->year === $year) {
+                $paidMonth[$a->user_id][(int) $a->date->month] = ($paidMonth[$a->user_id][(int) $a->date->month] ?? 0) + (float) $a->amount;
+            }
+        }
+        foreach ($debtAll as $d) {
+            $paidAllBy[$d->user_id] = ($paidAllBy[$d->user_id] ?? 0) + (float) $d->amount;
+            if (str_starts_with((string) $d->month, $year.'-')) {
+                $mm = (int) substr($d->month, 5, 2);
+                $paidMonth[$d->user_id][$mm] = ($paidMonth[$d->user_id][$mm] ?? 0) + (float) $d->amount;
+            }
+        }
+
+        // Кто в таблице: все, у кого есть бонус/выплаты; менеджер видит только себя.
+        $uids = collect(array_keys($paidAllBy))->merge($allTime->keys());
+        foreach ($byMonth as $col) {
+            $uids = $uids->merge($col->keys());
+        }
+        $uids = $uids->unique()->filter()->values();
+        if (! $leadership) {
+            $uids = $uids->filter(fn ($id) => (int) $id === (int) $user->id)->values();
+        }
+        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar'])->keyBy('id');
+
+        $rows = $uids->filter(fn ($id) => $people->has($id))->map(function ($uid) use ($byMonth, $paidMonth, $allTime, $paidAllBy, $people) {
+            $months = [];
+            $yearEarned = 0.0;
+            $yearPaid = 0.0;
+            for ($m = 1; $m <= 12; $m++) {
+                $b = round((float) ($byMonth[$m][$uid] ?? 0), 2);
+                $p = round((float) ($paidMonth[$uid][$m] ?? 0), 2);
+                $months[] = ['m' => $m, 'bonus' => $b, 'paid' => $p];
+                $yearEarned += $b;
+                $yearPaid += $p;
+            }
+            $earnedAll = round((float) ($allTime[$uid] ?? 0), 2);
+            $paidAll = round((float) ($paidAllBy[$uid] ?? 0), 2);
+
+            return [
+                'uid' => $uid,
+                'user' => $people[$uid]->name,
+                'avatar' => $people[$uid]->avatar,
+                'months' => $months,
+                'year_earned' => round($yearEarned, 2),
+                'year_paid' => round($yearPaid, 2),
+                'earned_all' => $earnedAll,
+                'paid_all' => $paidAll,
+                // Перенос с прошлых лет: что накопилось до этого года за вычетом тогдашних выплат.
+                'carry' => round(($earnedAll - $yearEarned) - ($paidAll - $yearPaid), 2),
+                'balance' => round($earnedAll - $paidAll, 2),
+            ];
+        })->sortByDesc('balance')->values();
+
+        return Inertia::render('Payroll/Bonuses', [
+            'rows' => $rows,
+            'year' => $year,
+            'leadership' => $leadership,
+            'canManage' => $this->canManage($request),
+            'totals' => [
+                'year_earned' => (float) $rows->sum('year_earned'),
+                'year_paid' => (float) $rows->sum('year_paid'),
+                'balance' => (float) $rows->sum('balance'),
+            ],
+        ]);
     }
 
     /** Общий расчёт ведомости для страниц «Зарплата» и «Бонусы». @return array<string, mixed> */
@@ -113,8 +202,9 @@ class PayrollController extends Controller
             $adj = $adjustments->get($r['uid']) ?? collect();
             // Аванс с ИСТОЧНИКОМ: «из ЗП» уменьшает итог зарплаты, «из бонуса» —
             // итог бонуса (правило от 20.08.2026). Штрафы/отгулы — всегда из ЗП.
-            $advSalary = round((float) $adj->where('type', 'advance')->where('source', '!=', 'bonus')->sum('amount'), 2);
-            $advBonus = round((float) $adj->where('type', 'advance')->where('source', 'bonus')->sum('amount'), 2);
+            // «Выплата» (payout) — прямая выдача денег по ведомости, считается как аванс своего источника.
+            $advSalary = round((float) $adj->whereIn('type', ['advance', 'payout'])->where('source', '!=', 'bonus')->sum('amount'), 2);
+            $advBonus = round((float) $adj->whereIn('type', ['advance', 'payout'])->where('source', 'bonus')->sum('amount'), 2);
             $penalties = round((float) $adj->whereIn('type', ['absence', 'sick', 'fine'])->sum('amount'), 2);
             $deductions = round($penalties + $advSalary, 2);
             $additions = round((float) $adj->where('type', 'bonus')->sum('amount'), 2);
@@ -279,7 +369,7 @@ class PayrollController extends Controller
         // АВАНС — реальные деньги из кассы/банка: фиксируем и в Финансах —
         // подтверждённый расход компании, категория «Расходы по сотрудникам»
         // (не «прочие»). Удаление корректировки удалит и расход.
-        if ($data['type'] === 'advance') {
+        if (in_array($data['type'], ['advance', 'payout'], true)) {
             $employee = User::find($data['user_id']);
             $category = \App\Models\ExpenseCategory::firstOrCreate(
                 ['name' => \App\Models\ExpenseCategory::EMPLOYEE],
@@ -292,13 +382,15 @@ class PayrollController extends Controller
                 'type' => 'direct',
                 'amount' => $data['amount'],
                 'date' => $data['date'],
-                'description' => 'Аванс сотруднику: '.$employee->name
+                'description' => ($data['type'] === 'payout'
+                        ? ($data['source'] === 'bonus' ? 'Выплата бонуса: ' : 'Выплата ЗП: ')
+                        : 'Аванс сотруднику: ').$employee->name
                     .(! empty($data['note']) ? ' — '.$data['note'] : ''),
                 'responsible_user_id' => $employee->id,
                 // Явная связь «кому выдали»: responsible_user_id у расхода по
                 // сделке значит «кто потратил», поэтому смыслы разведены.
                 'employee_id' => $employee->id,
-                'employee_payout' => 'advance',
+                'employee_payout' => $data['type'] === 'payout' ? ($data['source'] === 'bonus' ? 'bonus_payout' : 'salary_payout') : 'advance',
                 'status' => 'confirmed',
                 'payment_method' => $data['payment_method'] ?? 'cash',
                 'confirmed_by' => $request->user()->id,
@@ -310,9 +402,11 @@ class PayrollController extends Controller
 
         PayrollAdjustment::create($data);
 
-        return back()->with('success', $data['type'] === 'advance'
-            ? 'Аванс добавлен и зафиксирован в Расходах на Финансах.'
-            : 'Корректировка добавлена.');
+        return back()->with('success', match ($data['type']) {
+            'advance' => 'Аванс добавлен и зафиксирован в Расходах на Финансах.',
+            'payout' => ($data['source'] === 'bonus' ? 'Бонус выплачен' : 'ЗП выплачена').' — зафиксировано в Расходах на Финансах.',
+            default => 'Корректировка добавлена.',
+        });
     }
 
     /**

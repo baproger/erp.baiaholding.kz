@@ -1,218 +1,205 @@
 <script setup>
-// Страница «Бонусы»: отдельно от оклада (правило от 20.08.2026).
-// Итого бонус = бонус за месяц − авансы из бонуса − погашение долга.
+// «Бонусы» — годовая таблица накоплений: менеджеры × 12 месяцев.
+// Менеджеры иногда не берут бонус месяцами и копят — поэтому главная цифра
+// «К выплате» = накопленный баланс за всё время (заработано − выплачено).
 import { ref, computed } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
-import { money, formatDate } from '@/utils/format';
+import Modal from '@/Components/Modal.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import { money } from '@/utils/format';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 
-const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, totals: Object, companies: { type: Array, default: () => [] }, departments: { type: Array, default: () => [] }, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number });
+const props = defineProps({ rows: Array, year: Number, leadership: Boolean, canManage: Boolean, totals: Object });
 
-const me = computed(() => props.rows[0] ?? null);
-const monthLabel = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
-const monthShort = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' }));
+const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+const MONTHS_FULL = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const thisYear = new Date().getFullYear();
+const thisMonth = new Date().getMonth() + 1;
 
-// Период — по умолчанию текущий месяц (серверный фильтр, как на «Зарплате»).
-const monthSel = ref(props.month);
-const setMonth = () => router.get(route('payroll.bonuses'), { month: monthSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
-useStickyFilters('payroll-bonuses', { monthSel }, setMonth);
-
-// Шкала бонусов — коммерческая информация отдела продаж.
-const myRoles = usePage().props.auth.user?.roles ?? [];
-const seesBonusScale = ['manager', 'financist', 'admin'].some((r) => myRoles.includes(r));
-const BONUS_TIERS = [
-    { m: 'до 10%', b: 'бонуса нет', muted: true },
-    { m: '11% – 15%', b: '5% от остатка' },
-    { m: '16% – 20%', b: '7% от остатка' },
-    { m: '21% – 30%', b: '10% от остатка' },
-    { m: '31% – 40%', b: '13% от остатка' },
-    { m: 'от 41%', b: '15% от остатка' },
-];
+// Фильтр — год (по умолчанию текущий), запоминается за страницей.
+const yearSel = ref(props.year);
+const years = computed(() => { const a = []; for (let y = thisYear + 1; y >= 2024; y--) a.push(y); return a; });
+const setYear = () => router.get(route('payroll.bonuses'), { year: yearSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
+useStickyFilters('payroll-bonuses-year', { yearSel }, setYear);
 
 const search = ref('');
-// В ведомость бонусов попадают только те, у кого в месяце есть бонус,
-// аванс из бонуса или удержание долга — остальные строки лишь шумят.
-const list = computed(() => props.rows.filter((r) => {
-    const q = search.value.trim().toLowerCase();
-    if (q && !(r.user ?? '').toLowerCase().includes(q)) return false;
-    return (r.bonus_month || 0) !== 0 || (r.adv_bonus || 0) !== 0 || (r.debt_charge || 0) !== 0;
-}));
-const sums = computed(() => ({
-    bonus: list.value.reduce((n, r) => n + (r.bonus_month || 0), 0),
-    adv: list.value.reduce((n, r) => n + (r.adv_bonus || 0), 0),
-    debt: list.value.reduce((n, r) => n + (r.debt_charge || 0), 0),
-    final: list.value.reduce((n, r) => n + (r.bonus_final || 0), 0),
-}));
+const list = computed(() => props.rows
+    .filter((r) => (r.year_earned || 0) !== 0 || (r.year_paid || 0) !== 0 || (r.balance || 0) !== 0)
+    .filter((r) => !search.value.trim() || (r.user ?? '').toLowerCase().includes(search.value.trim().toLowerCase())));
+const me = computed(() => props.rows[0] ?? null);
 
-const open = ref(new Set());
-const toggle = (uid) => { const s = new Set(open.value); s.has(uid) ? s.delete(uid) : s.add(uid); open.value = s; };
+// Полная сумма в ячейке месяца без знака валюты (он в легенде): 288 000.
+const short = (v) => { const n = Math.round(Number(v || 0)); return n ? n.toLocaleString('ru-RU') : ''; };
+const isFuture = (m) => props.year > thisYear || (props.year === thisYear && m > thisMonth);
+const isCurrent = (m) => props.year === thisYear && m === thisMonth;
+const cellTitle = (r, c) => `${MONTHS_FULL[c.m - 1]} ${props.year}: заработано ${money(c.bonus)}${c.paid ? ' · выплачено ' + money(c.paid) : ''}`;
+const colSum = (m, key) => list.value.reduce((n, r) => n + (r.months[m - 1]?.[key] || 0), 0);
+
+// 💵 Выплатить бонус: реальная выдача денег из накопленного (тип «Выплата», источник «бонус»).
+// Сумма по умолчанию — весь остаток «К выплате» сотрудника; можно выдать часть.
+const showPay = ref(false);
+const payForm = useForm({ user_id: '', type: 'payout', source: 'bonus', amount: '', date: new Date().toISOString().slice(0, 10), payment_method: 'cash', note: '' });
+const payRow = computed(() => props.rows.find((r) => String(r.uid) === String(payForm.user_id)));
+const openPay = (uid = '') => {
+    payForm.reset(); payForm.type = 'payout'; payForm.source = 'bonus';
+    payForm.date = new Date().toISOString().slice(0, 10); payForm.user_id = uid;
+    const r = props.rows.find((x) => String(x.uid) === String(uid));
+    payForm.amount = r && r.balance > 0 ? r.balance : '';
+    showPay.value = true;
+};
+const onPayUser = () => { if (payRow.value && payRow.value.balance > 0) payForm.amount = payRow.value.balance; };
+const submitPay = () => payForm.post(route('payroll.adjustments.store'), { preserveScroll: true, onSuccess: () => (showPay.value = false) });
 </script>
 
 <template>
     <Head title="Бонусы" />
     <AppLayout>
         <template #header><span class="truncate">Бонусы</span></template>
-        <FinanceLayout title="Бонусы" subtitle="бонус по марже сделок − авансы из бонуса − погашение долга = итого" active="payroll.bonuses" :wide="leadership">
+        <FinanceLayout title="Бонусы" :subtitle="`накопление по месяцам ${year} · к выплате — баланс за всё время`" active="payroll.bonuses" :wide="true">
             <template #actions>
-                <label class="flex items-center gap-1 text-xs font-normal text-slate-400">месяц
-                    <input v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                <label class="flex items-center gap-1 text-xs font-normal text-slate-400">год
+                    <select v-model.number="yearSel" @change="setYear" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                        <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+                    </select>
                 </label>
                 <input v-if="leadership" v-model="search" type="search" placeholder="Поиск по сотруднику…"
                     class="w-44 rounded-lg border-slate-200 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                <button v-if="canManage" @click="openPay()"
+                    class="whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">💵 Выплатить бонус</button>
             </template>
 
-            <!-- Личная карточка сотрудника -->
-            <div v-if="!leadership" class="grid max-w-5xl grid-cols-1 items-start gap-4 lg:grid-cols-3">
-                <div class="space-y-4" :class="seesBonusScale ? 'lg:col-span-2' : 'lg:col-span-3'">
-                    <div class="overflow-hidden rounded-2xl border border-slate-200 shadow-md">
-                        <div class="px-6 py-5" style="background-color:#1A3B5C">
-                            <div class="text-[11px] uppercase tracking-wide text-white/60">Итого бонус · {{ monthLabel }}</div>
-                            <div class="mt-1 whitespace-nowrap text-3xl font-bold tabular-nums text-emerald-300">{{ money(me?.bonus_final ?? 0) }}</div>
-                        </div>
-                        <div class="space-y-2 bg-white p-6 text-sm">
-                            <div class="flex justify-between"><span class="text-slate-500">Бонус по марже за {{ monthShort }}</span><span class="font-medium tabular-nums text-emerald-600">{{ money(me?.bonus_month ?? 0) }}</span></div>
-                            <div v-if="me?.adv_bonus" class="flex justify-between"><span class="text-slate-500">Аванс из бонуса</span><span class="font-medium tabular-nums text-rose-600">− {{ money(me.adv_bonus) }}</span></div>
-                            <div v-if="me?.debt_charge > 0" class="flex justify-between"><span class="text-slate-500">Погашение долга</span><span class="font-medium tabular-nums text-amber-600">− {{ money(me.debt_charge) }}</span></div>
-                            <div class="flex justify-between"><span class="text-slate-500">Успешных сделок</span><span class="font-medium">{{ me?.closed ?? 0 }}</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Сделки, из которых сложился бонус -->
-                    <div v-if="me?.dealsList?.length" class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <table class="min-w-full divide-y divide-slate-100 text-xs">
-                            <thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-                                <tr><th class="px-3 py-2">Сделка</th><th class="px-3 py-2">Этап</th><th class="px-3 py-2 text-right">Сумма</th><th class="px-3 py-2 text-right">Оплачено</th><th class="px-3 py-2 text-right text-emerald-600">Бонус</th></tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-50">
-                                <tr v-for="d in me.dealsList" :key="d.id" class="hover:bg-slate-50">
-                                    <td class="px-3 py-2"><Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link> <span class="text-slate-400">{{ d.number }}</span></td>
-                                    <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
-                                    <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
-                                    <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
-                                    <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+            <!-- Плитки: за год заработано / выплачено / К ВЫПЛАТЕ (накоплено за всё время) -->
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Заработано за {{ year }}</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ money(leadership ? totals.year_earned : (me?.year_earned ?? 0)) }}</div>
                 </div>
-
-                <div v-if="seesBonusScale" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-4">
-                    <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Система бонусов — по марже сделки</div>
-                    <div class="mt-3 space-y-1.5 text-sm">
-                        <div v-for="t in BONUS_TIERS" :key="t.m" class="flex items-center justify-between rounded-lg px-3 py-1.5"
-                            :class="t.muted ? 'bg-slate-50 text-slate-400' : 'bg-emerald-50/50'">
-                            <span :class="t.muted ? '' : 'text-slate-600'">маржа {{ t.m }}</span>
-                            <span class="font-semibold tabular-nums" :class="t.muted ? '' : 'text-emerald-700'">{{ t.b }}</span>
-                        </div>
-                    </div>
-                    <p class="mt-3 text-[11px] text-slate-400">Маржа = (сумма договора − расходы) / сумма договора. Остаток = сумма − налог − расходы.</p>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Выплачено за {{ year }}</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="(leadership ? totals.year_paid : me?.year_paid) > 0 ? 'text-rose-600' : 'text-slate-300'">{{ money(leadership ? totals.year_paid : (me?.year_paid ?? 0)) }}</div>
+                    <div class="mt-0.5 text-[11px] text-slate-400">авансы из бонуса + погашение долгов</div>
+                </div>
+                <div class="rounded-xl p-4 shadow-md" style="background-color:#1A3B5C">
+                    <div class="truncate text-[11px] uppercase tracking-wide text-white/60">К выплате · накоплено за всё время</div>
+                    <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money(leadership ? totals.balance : (me?.balance ?? 0)) }}</div>
+                    <div class="mt-0.5 text-[11px] text-white/50">заработано − выплачено, с переносом с прошлых лет</div>
                 </div>
             </div>
 
-            <!-- Руководство: плитки + ведомость -->
-            <template v-else>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Бонусы за {{ monthShort }}</div>
-                        <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ money(sums.bonus) }}</div>
-                    </div>
-                    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Авансы из бонуса</div>
-                        <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="sums.adv > 0 ? 'text-rose-600' : 'text-slate-300'">{{ sums.adv > 0 ? '−' + money(sums.adv) : '—' }}</div>
-                    </div>
-                    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div class="truncate text-[11px] uppercase tracking-wide text-slate-400">Погашение долгов</div>
-                        <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums" :class="sums.debt > 0 ? 'text-amber-600' : 'text-slate-300'">{{ sums.debt > 0 ? '−' + money(sums.debt) : '—' }}</div>
-                    </div>
-                    <div class="rounded-xl p-4 shadow-md" style="background-color:#1A3B5C">
-                        <div class="truncate text-[11px] uppercase tracking-wide text-white/60">Итого бонус · {{ monthLabel }}</div>
-                        <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money(sums.final) }}</div>
-                    </div>
+            <!-- Таблица: сотрудник × 12 месяцев -->
+            <div class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+                    <h3 class="text-sm font-semibold text-slate-900">Бонусы по месяцам · {{ year }}
+                        <span class="ml-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">{{ list.length }} сотр.</span>
+                    </h3>
+                    <span class="text-[11px] text-slate-400">суммы в ₸ · <span class="font-semibold text-emerald-700">заработано</span> · <span class="text-rose-500">−выплачено</span> · пусто — бонуса не было</span>
                 </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                            <tr class="divide-x divide-slate-100">
+                                <th class="sticky left-0 z-10 bg-slate-50 px-6 py-2.5">Сотрудник</th>
+                                <th v-for="(mn, i) in MONTHS" :key="mn" class="px-2.5 py-2.5 text-right" :class="isCurrent(i + 1) ? 'bg-indigo-50 text-indigo-600' : ''">{{ mn }}</th>
+                                <th class="px-3 py-2.5 text-right">За год</th>
+                                <th class="px-3 py-2.5 text-right">Выплачено</th>
+                                <th class="px-3 py-2.5 text-right" title="Накопленный баланс за всё время (с переносом с прошлых лет)">К выплате</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="r in list" :key="r.uid" class="divide-x divide-slate-100 transition-colors duration-150 hover:bg-slate-50/60">
+                                <td class="sticky left-0 z-10 bg-white px-6 py-2">
+                                    <div class="flex items-center gap-2.5">
+                                        <Avatar :name="r.user" :src="r.avatar" :size="28" />
+                                        <div class="min-w-0 leading-tight">
+                                            <div class="truncate font-medium text-slate-900">{{ r.user }}</div>
+                                            <div v-if="r.carry" class="text-[10px] tabular-nums" :class="r.carry > 0 ? 'text-slate-400' : 'text-rose-400'" title="Перенос с прошлых лет: накопленный остаток до этого года">перенос {{ money(r.carry) }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td v-for="c in r.months" :key="c.m" class="whitespace-nowrap px-2.5 py-2.5 text-right text-sm tabular-nums leading-tight"
+                                    :class="isCurrent(c.m) ? 'bg-indigo-50/40' : ''" :title="cellTitle(r, c)">
+                                    <template v-if="c.bonus || c.paid">
+                                        <div :class="c.bonus > 0 ? 'font-semibold text-emerald-700' : 'text-slate-300'">{{ c.bonus ? short(c.bonus) : '—' }}</div>
+                                        <div v-if="c.paid" class="text-xs text-rose-500">−{{ short(c.paid) }}</div>
+                                    </template>
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">{{ money(r.year_earned) }}</td>
+                                <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="r.year_paid > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.year_paid > 0 ? '− ' + money(r.year_paid) : '—' }}</td>
+                                <td class="whitespace-nowrap px-3 py-2 text-right font-bold tabular-nums" :class="r.balance > 0 ? 'text-emerald-600' : (r.balance < 0 ? 'text-rose-600' : 'text-slate-300')">
+                                    {{ money(r.balance) }}
+                                    <button v-if="canManage && r.balance > 0" class="ml-2 rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100" title="Выплатить бонус" @click="openPay(r.uid)">💵 выплатить</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot v-if="leadership && list.length" class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
+                            <tr class="divide-x divide-slate-100">
+                                <td class="sticky left-0 z-10 bg-slate-50 px-6 py-3 text-slate-500">Итого</td>
+                                <td v-for="m in 12" :key="m" class="whitespace-nowrap px-2.5 py-3 text-right text-sm tabular-nums leading-tight">
+                                    <div class="text-emerald-700">{{ colSum(m, 'bonus') ? short(colSum(m, 'bonus')) : '' }}</div>
+                                    <div v-if="colSum(m, 'paid')" class="text-xs text-rose-500">−{{ short(colSum(m, 'paid')) }}</div>
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-3 text-right tabular-nums text-emerald-700">{{ money(totals.year_earned) }}</td>
+                                <td class="whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="totals.year_paid > 0 ? 'text-rose-600' : 'text-slate-300'">{{ totals.year_paid > 0 ? '− ' + money(totals.year_paid) : '—' }}</td>
+                                <td class="whitespace-nowrap px-3 py-3 text-right tabular-nums text-emerald-700">{{ money(totals.balance) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div v-if="!list.length" class="px-6 py-10 text-center text-sm text-slate-400">За {{ year }} бонусов и выплат нет</div>
+            </div>
+            <p class="mt-3 text-xs text-slate-400">К выплате = Σ бонусов по марже за всё время − Σ выплат из бонуса (авансы «из бонуса» на «Зарплате» + погашения долгов). Менеджер может не брать бонус месяцами — остаток копится и переносится между годами («перенос» под именем). В ячейке месяца: зелёным — заработано, красным — выплачено в этом месяце.</p>
 
-                <div class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-                        <h3 class="text-sm font-semibold text-slate-900">Бонусы · {{ monthLabel }}
-                            <span class="ml-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">{{ list.length }} сотр.</span>
-                        </h3>
-                        <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-emerald-700">{{ money(sums.final) }}</span>
+            <!-- Модалка выплаты бонуса -->
+            <Modal :show="showPay" max-width="lg" @close="showPay = false">
+                <div class="p-6">
+                    <h2 class="mb-1 text-lg font-semibold text-slate-900">Выплатить бонус</h2>
+                    <p class="mb-4 text-xs text-slate-400">Реальная выдача денег из накопленного бонуса — уйдёт в Расходы и уменьшит кассу/банк. Можно выплатить часть, остаток продолжит копиться.</p>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="sm:col-span-2">
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Сотрудник *</label>
+                            <select v-model="payForm.user_id" @change="onPayUser" class="w-full rounded-md border-slate-300 text-sm shadow-sm">
+                                <option value="">— выберите —</option>
+                                <option v-for="r in rows" :key="r.uid" :value="r.uid">{{ r.user }} — к выплате {{ money(r.balance) }}</option>
+                            </select>
+                            <div v-if="payForm.errors.user_id" class="mt-1 text-xs text-red-600">{{ payForm.errors.user_id }}</div>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Сумма, ₸ *</label>
+                            <input v-model="payForm.amount" type="number" min="0" step="0.01" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                            <p v-if="payRow" class="mt-1 text-[11px] text-slate-500">Накоплено к выплате: <b class="tabular-nums text-slate-800">{{ money(payRow.balance) }}</b>
+                                <button type="button" class="ml-1 font-semibold text-indigo-600 hover:underline" @click="payForm.amount = payRow.balance">всё</button></p>
+                            <div v-if="payForm.errors.amount" class="mt-1 text-xs text-red-600">{{ payForm.errors.amount }}</div>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Дата *</label>
+                            <input v-model="payForm.date" type="date" class="w-full rounded-md border-slate-300 text-sm shadow-sm" />
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Откуда выданы деньги *</label>
+                            <div class="flex gap-2">
+                                <button type="button" @click="payForm.payment_method = 'cash'"
+                                    :class="payForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                    class="rounded-lg border px-3 py-1.5 text-sm font-medium">💵 Наличные</button>
+                                <button type="button" @click="payForm.payment_method = 'bank'"
+                                    :class="payForm.payment_method === 'bank' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'"
+                                    class="rounded-lg border px-3 py-1.5 text-sm font-medium">🏦 Банк</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-500">Комментарий</label>
+                            <input v-model="payForm.note" type="text" class="w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="За какой период…" />
+                        </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-sm">
-                            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                                <tr class="divide-x divide-slate-100">
-                                    <th class="px-6 py-2.5">Сотрудник</th>
-                                    <th class="px-4 py-2.5 text-right">Бонус за {{ monthShort }}</th>
-                                    <th class="px-4 py-2.5 text-right">Аванс из бонуса</th>
-                                    <th class="px-4 py-2.5 text-right" title="Погашение долга — только из бонуса">Долг за {{ monthShort }}</th>
-                                    <th class="px-4 py-2.5 text-right">Итого бонус</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-50">
-                                <template v-for="r in list" :key="r.uid">
-                                    <tr class="group cursor-pointer divide-x divide-slate-100 transition-colors duration-150 hover:bg-slate-50/60" @click="toggle(r.uid)">
-                                        <td class="px-6 py-2.5">
-                                            <div class="flex items-center gap-2.5">
-                                                <svg class="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200" :class="open.has(r.uid) ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l5 5-5 5"/></svg>
-                                                <Avatar :name="r.user" :src="r.avatar" :size="32" />
-                                                <div class="min-w-0 leading-tight">
-                                                    <div class="truncate font-medium text-slate-900">{{ r.user }}</div>
-                                                    <div v-if="r.deals > 0" class="text-[11px] text-slate-400">{{ r.deals }} сделок · {{ r.closed }} успешных</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="r.bonus_month > 0 ? 'font-medium text-emerald-600' : 'text-slate-300'">{{ r.bonus_month > 0 ? money(r.bonus_month) : '—' }}</td>
-                                        <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="r.adv_bonus > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.adv_bonus > 0 ? '− ' + money(r.adv_bonus) : '—' }}</td>
-                                        <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums" :class="r.debt_charge > 0 ? 'font-medium text-amber-600' : 'text-slate-300'"
-                                            :title="r.debt_charge > 0 ? 'Останется долга: ' + money(r.debt_after) : ''">{{ r.debt_charge > 0 ? '− ' + money(r.debt_charge) : '—' }}</td>
-                                        <td class="whitespace-nowrap px-4 py-2.5 text-right font-bold tabular-nums" :class="r.bonus_final > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ money(r.bonus_final) }}</td>
-                                    </tr>
-                                    <tr v-if="open.has(r.uid)" class="bg-slate-50/60">
-                                        <td colspan="5" class="px-6 py-3">
-                                            <div v-if="r.dealsList?.length" class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                                                <table class="min-w-full divide-y divide-slate-100 text-xs">
-                                                    <thead class="text-left uppercase tracking-wide text-slate-400">
-                                                        <tr><th class="px-3 py-2">Сделка</th><th class="px-3 py-2">Этап</th><th class="px-3 py-2 text-right">Сумма</th><th class="px-3 py-2 text-right">Оплачено</th><th class="px-3 py-2 text-right text-emerald-600">Бонус</th></tr>
-                                                    </thead>
-                                                    <tbody class="divide-y divide-slate-50">
-                                                        <tr v-for="d in r.dealsList" :key="d.id" class="hover:bg-slate-50">
-                                                            <td class="px-3 py-2"><Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link> <span class="text-slate-400">{{ d.number }}</span></td>
-                                                            <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
-                                                            <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
-                                                            <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
-                                                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            <div v-else class="py-1 text-center text-xs text-slate-400">Нет сделок за период</div>
-                                            <!-- Аванс из бонуса и долг детально — в корректировках на «Зарплате» -->
-                                            <div v-if="r.adjustments?.some((a) => a.type === 'advance' && a.source === 'bonus')" class="mt-2 text-[11px] text-slate-500">
-                                                Авансы из бонуса:
-                                                <span v-for="a in r.adjustments.filter((a) => a.type === 'advance' && a.source === 'bonus')" :key="a.id" class="ml-1 rounded-full bg-rose-50 px-2 py-0.5 font-medium tabular-nums text-rose-600">− {{ money(a.amount) }} · {{ formatDate(a.date) }}</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                            <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
-                                <tr class="divide-x divide-slate-100">
-                                    <td class="px-6 py-3 text-slate-500">Итого</td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums text-emerald-600">{{ money(sums.bonus) }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums" :class="sums.adv > 0 ? 'text-rose-600' : 'text-slate-300'">{{ sums.adv > 0 ? '− ' + money(sums.adv) : '—' }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums" :class="sums.debt > 0 ? 'text-amber-600' : 'text-slate-300'">{{ sums.debt > 0 ? '− ' + money(sums.debt) : '—' }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums text-emerald-700">{{ money(sums.final) }}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <SecondaryButton @click="showPay = false">Отмена</SecondaryButton>
+                        <PrimaryButton :disabled="payForm.processing || !payForm.user_id || !(Number(payForm.amount) > 0)" @click="submitPay">💵 Выплатить</PrimaryButton>
                     </div>
-                    <div v-if="!list.length" class="px-6 py-10 text-center text-sm text-slate-400">За {{ monthLabel }} бонусов, авансов из бонуса и удержаний долга нет</div>
                 </div>
-                <p class="mt-3 text-xs text-slate-400">Итого бонус = бонус по марже за месяц − авансы из бонуса − погашение долга. Аванс «из бонуса» заводится на «Зарплате» кнопкой «+ Корректировка» → Аванс → «Из бонуса». Долг гасится автоматически и только из бонуса.</p>
-            </template>
+            </Modal>
         </FinanceLayout>
     </AppLayout>
 </template>
