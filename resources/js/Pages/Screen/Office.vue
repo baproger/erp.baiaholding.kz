@@ -10,13 +10,38 @@ const props = defineProps({ screen: Object, plan: Number, month: String, monthLa
 const clock = ref('');
 let clockTimer = null, refreshTimer = null;
 const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+// ---- Живучесть ТВ (правило от 22.08.2026): сервер временно недоступен
+// (перегруз, деплой, лимит хостинга) — экран НЕ ломается: глушим модалки
+// ошибок Inertia, оставляем последние данные и пробуем позже с растущей
+// паузой (2 → 4 → 8 мин, максимум 10). Ожил — возвращаемся к обычному ритму.
+const BASE_MS = 120000;
+let failures = 0;
+let nextTryAt = Date.now() + BASE_MS;
+const safeReload = () => {
+    let ok = false;
+    router.reload({
+        preserveScroll: true,
+        onSuccess: () => { ok = true; failures = 0; },
+        onFinish: () => {
+            if (!ok) failures = Math.min(failures + 1, 3);
+            nextTryAt = Date.now() + Math.min(BASE_MS * 2 ** failures, 600000);
+        },
+    });
+};
+let offInvalid = null, offException = null;
+
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    // Рейтинг меняется нечасто — 2 минуты достаточно, хостинг скажет спасибо.
-    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 120000);
+    // Тик каждые 30с, но реальное обновление — по расписанию живучести
+    // (обычно раз в 2 минуты; при недоступном сервере пауза растёт до 10).
+    refreshTimer = setInterval(() => { if (Date.now() >= nextTryAt) safeReload(); }, 30000);
+    // Ошибка сервера не должна заслонять табло страницей/модалкой.
+    offInvalid = router.on('invalid', (e) => e.preventDefault());
+    offException = router.on('exception', (e) => e.preventDefault());
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); offInvalid?.(); offException?.(); });
 
 const title = computed(() => ['Офис', props.screen?.company].filter(Boolean).join(' · '));
 const leave = () => router.post(route('screen.leave'));

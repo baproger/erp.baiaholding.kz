@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import Avatar from '@/Components/Avatar.vue';
 import { formatDate, formatDuration } from '@/utils/format';
 
 const props = defineProps({ screen: Object, stages: Array, projects: Array });
@@ -17,14 +18,41 @@ let clockTimer = null, refreshTimer = null;
 const nowTs = ref(Date.now());
 const tick = () => { clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); nowTs.value = Date.now(); };
 const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Date(p.stage_entered_at).getTime()) / 1000) : null;
+// Сколько заказ ВСЕГО в цехе (с момента отправки) — как на странице «Цех».
+const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(p.created_at).getTime()) / 1000) : null;
+
+// ---- Живучесть ТВ (правило от 22.08.2026): сервер временно недоступен
+// (перегруз, деплой, лимит хостинга) — экран НЕ ломается: глушим модалки
+// ошибок Inertia, оставляем последние данные и пробуем позже с растущей
+// паузой (2 → 4 → 8 мин, максимум 10). Ожил — возвращаемся к обычному ритму.
+const BASE_MS = 120000;
+let failures = 0;
+let nextTryAt = Date.now() + BASE_MS;
+const safeReload = () => {
+    let ok = false;
+    router.reload({
+        preserveScroll: true,
+        onSuccess: () => { ok = true; failures = 0; },
+        onFinish: () => {
+            if (!ok) failures = Math.min(failures + 1, 3);
+            nextTryAt = Date.now() + Math.min(BASE_MS * 2 ** failures, 600000);
+        },
+    });
+};
+let offInvalid = null, offException = null;
+
 onMounted(() => {
     tick();
     clockTimer = setInterval(tick, 1000);
-    // 2 минуты: табло пассивное, а лимит I/O хостинга не резиновый. Нажатие
-    // «Далее» на самом ТВ обновляет данные сразу, не дожидаясь таймера.
-    refreshTimer = setInterval(() => router.reload({ preserveScroll: true }), 120000);
+    // Тик каждые 30с, но реальное обновление — по расписанию живучести
+    // (обычно раз в 2 минуты; при недоступном сервере пауза растёт до 10).
+    refreshTimer = setInterval(() => { if (Date.now() >= nextTryAt) safeReload(); }, 30000);
+    // Ошибка сервера не должна заслонять табло страницей/модалкой.
+    offInvalid = router.on('invalid', (e) => e.preventDefault());
+    offException = router.on('exception', (e) => e.preventDefault());
+
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); offInvalid?.(); offException?.(); });
 
 const title = computed(() => [props.screen?.company, props.screen?.workshop].filter(Boolean).join(' · ') || 'Цех');
 const leave = () => router.post(route('screen.leave'));
@@ -92,19 +120,22 @@ const complete = (p) => {
                 </div>
                 <div class="flex-1 space-y-2.5 px-3 pb-3">
                     <div v-for="p in byStage(stage.id)" :key="p.id" class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
-                        <!-- Компакт для ТВ: номер + таймер, ТОВАР крупно (2 строки максимум),
-                             заказчик одной строкой, ответственный и срок -->
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="truncate rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600" :title="p.number">{{ p.deal_number || p.number }}</span>
-                            <span v-if="onStage(p)" class="flex-shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-sm font-bold tabular-nums text-indigo-600" title="Время на этапе">⏱ {{ onStage(p) }}</span>
+                        <!-- Как карточка на странице «Цех»: товар + номер, адрес,
+                             ответственный с аватаром, «в цехе + на этапе», срок -->
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div class="min-w-0 line-clamp-2 break-words text-lg font-bold leading-snug text-slate-900" :title="p.product || p.name">{{ p.product || p.name }}</div>
+                            <span class="flex-shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700" :title="p.number">{{ p.deal_number || p.number }}</span>
                         </div>
-                        <div class="mt-1 line-clamp-2 break-words text-lg font-bold leading-snug text-slate-900" :title="p.product || p.name">{{ p.product || p.name }}</div>
-                        <div v-if="p.product" class="mt-0.5 truncate text-xs text-slate-400" :title="p.name">{{ p.name }}</div>
-                        <div v-if="p.description" class="mt-1 line-clamp-2 text-sm leading-snug text-slate-500" :title="p.description">{{ p.description }}</div>
-                        <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                            <span v-if="p.responsible" class="font-semibold text-slate-700" title="Ответственный">👤 {{ p.responsible }}</span>
-                            <span v-if="p.deadline" class="whitespace-nowrap font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></span>
+                        <div v-if="p.address" class="mt-1 line-clamp-2 text-sm leading-snug text-slate-500" :title="p.address">📍 {{ p.address }}</div>
+                        <div v-if="p.responsible" class="mt-1.5 flex items-center gap-1.5">
+                            <Avatar :name="p.responsible" :size="22" />
+                            <span class="truncate text-sm font-medium text-slate-700">{{ p.responsible }}</span>
                         </div>
+                        <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums text-slate-400">
+                            <span title="Сколько заказ находится в цехе">⏱ в цехе <b class="text-slate-700">{{ inWorkshop(p) ?? '—' }}</b></span>
+                            <span v-if="onStage(p)">на этапе {{ onStage(p) }}</span>
+                        </div>
+                        <div v-if="p.deadline" class="mt-1 text-sm font-semibold" :class="p.overdue ? 'text-rose-600' : 'text-slate-600'">⏰ {{ formatDate(p.deadline) }}<span v-if="p.overdue"> · просрочен!</span></div>
                         <div v-if="p.note" class="mt-2 line-clamp-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm leading-snug text-amber-700" :title="p.note">📌 {{ p.note }}</div>
                         <!-- Крупные кнопки, чтобы удобно жать с ТВ/планшета цеха:
                              «Далее» — следующий этап; на «Отправке» — «Готово» (в Логистику) -->

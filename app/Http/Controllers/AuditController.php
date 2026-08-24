@@ -10,6 +10,35 @@ use Inertia\Response;
 
 class AuditController extends Controller
 {
+    /**
+     * Аудит → Ошибки: журнал серверных ошибок сайта. ТОЛЬКО админ; удаления
+     * не существует — ни маршрута, ни кнопки (требование владельца 22.08.2026).
+     */
+    public function errors(\Illuminate\Http\Request $request): \Inertia\Response
+    {
+        abort_unless($request->user()->hasRole('admin'), 403);
+
+        return \Inertia\Inertia::render('Audit/Errors', [
+            'errors' => \App\Models\ErrorLog::with('user:id,name')
+                ->when($request->string('search')->toString(), fn ($q, $t) => $q->where(fn ($w) => $w
+                    ->where('message', 'like', "%{$t}%")->orWhere('exception', 'like', "%{$t}%")->orWhere('url', 'like', "%{$t}%")))
+                ->latest('created_at')->paginate(30)->withQueryString()
+                ->through(fn ($e) => [
+                    'id' => $e->id,
+                    'exception' => class_basename($e->exception),
+                    'message' => $e->message,
+                    'file' => $e->file ? $e->file.':'.$e->line : null,
+                    'url' => $e->url,
+                    'method' => $e->method,
+                    'user' => $e->user?->name,
+                    'ip' => $e->ip,
+                    'trace' => \Illuminate\Support\Str::limit($e->trace, 4000),
+                    'at' => $e->created_at?->toIso8601String(),
+                ]),
+            'filters' => $request->only('search'),
+        ]);
+    }
+
     /** Русские названия таблиц журнала. */
     private const TABLE_LABELS = [
         'deals' => 'Сделки', 'projects' => 'Заказы цеха', 'tasks' => 'Задачи',

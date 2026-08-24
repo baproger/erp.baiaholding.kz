@@ -26,4 +26,34 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // Журнал ошибок (Аудит → Ошибки, только админ): пишем каждую СЕРВЕРНУЮ
+        // ошибку в БД. Клиентские (404/403/419, валидация, разлогин) не шумят.
+        // Запись в try/catch: падение журнала не должно прятать саму ошибку.
+        $exceptions->report(function (\Throwable $e): void {
+            if ($e instanceof \Illuminate\Validation\ValidationException
+                || $e instanceof \Illuminate\Auth\AuthenticationException
+                || $e instanceof \Illuminate\Auth\Access\AuthorizationException
+                || $e instanceof \Illuminate\Session\TokenMismatchException
+                || ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $e->getStatusCode() < 500)) {
+                return;
+            }
+            try {
+                \App\Models\ErrorLog::create([
+                    'exception' => mb_substr(get_class($e), 0, 191),
+                    'message' => mb_substr($e->getMessage() ?: '(без сообщения)', 0, 60000),
+                    'file' => mb_substr($e->getFile(), 0, 255),
+                    'line' => (int) $e->getLine(),
+                    'url' => request() ? mb_substr(request()->fullUrl(), 0, 512) : null,
+                    'method' => request()?->method(),
+                    'user_id' => auth()->id(),
+                    'ip' => request()?->ip(),
+                    'trace' => mb_substr($e->getTraceAsString(), 0, 60000),
+                    'created_at' => now(),
+                ]);
+            } catch (\Throwable) {
+                // журнал недоступен (миграция не накатана, БД лежит) — молчим,
+                // стандартный лог-файл Laravel всё равно получит ошибку
+            }
+        });
     })->create();

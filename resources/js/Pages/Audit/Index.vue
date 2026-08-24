@@ -34,6 +34,8 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
 
         <PageLayout title="Аудит" subtitle="журнал изменений">
             <template #actions>
+                <Link :href="route('audit.errors')"
+                    class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 shadow-sm transition-colors duration-150 hover:bg-rose-100">⚠ Ошибки сайта</Link>
                 <select v-model="fTable" @change="apply" class="rounded-full border-slate-200 bg-white py-1 pl-3 pr-8 text-xs font-medium text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все разделы</option>
                     <option v-for="t in tables" :key="t.value" :value="t.value">{{ t.label }}</option>

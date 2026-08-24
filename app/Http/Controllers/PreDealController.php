@@ -354,7 +354,9 @@ class PreDealController extends Controller
             'number' => $numbers->generate($company),
             'name' => $customer,
             'company_name' => $customer,
-            'client_name' => $preDeal->client_name ?: ($preDeal->customer ?: '—'),
+            // client_name сделки исторически = ТОВАР (см. Сводный отчёт/цех);
+            // контакт клиента лота остаётся в description ниже.
+            'client_name' => $preDeal->product ?: ($preDeal->customer ?: '—'),
             'bin' => $preDeal->bin,
             // Источник (портал) лота переносится в сделку.
             'source' => $preDeal->source,

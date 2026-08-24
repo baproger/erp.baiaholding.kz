@@ -55,12 +55,19 @@ class WorkshopScreenController extends Controller
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
                 ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
                 ->latest('entered_at')->limit(1)])
-            ->latest()->get()
+            ->latest()->get();
+
+        // У сделок из лотов товар хранится в лоте (старые сделки писали в
+        // client_name контакт клиента) — подстраховываемся товаром лота.
+        $lotProducts = \App\Models\PreDeal::whereIn('deal_id', $projects->pluck('deal_id')->filter())
+            ->pluck('product', 'deal_id');
+
+        $projects = $projects
             ->map(fn ($p) => [
                 'id' => $p->id, 'number' => $p->number,
                 'name' => $p->deal?->company_name ?: $p->name,
-                // Товар — client_name сделки (как на канбане цеха).
-                'product' => $p->deal?->client_name,
+                // Товар — client_name сделки (как на канбане цеха) либо товар лота.
+                'product' => $lotProducts[$p->deal_id] ?? $p->deal?->client_name,
                 // Номер сделки (BAIA-089) — цех ищет заказ по нему.
                 'deal_number' => $p->deal?->number,
                 'stage_id' => $p->project_stage_id,
@@ -71,6 +78,8 @@ class WorkshopScreenController extends Controller
                 'note' => $p->deal?->note,
                 'responsible' => $p->responsible?->name,
                 'stage_entered_at' => $p->stage_entered_at,
+                // Когда заказ отправлен в цех — для таймера «в цехе».
+                'created_at' => optional($p->created_at)->toIso8601String(),
             ]);
 
         return Inertia::render('Screen/Workshop', [
