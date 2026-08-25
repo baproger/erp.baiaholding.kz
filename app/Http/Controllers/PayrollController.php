@@ -118,12 +118,12 @@ class PayrollController extends Controller
             ->join('employee_debts', 'employee_debts.id', '=', 'employee_debt_payments.employee_debt_id')
             ->where('employee_debts.user_id', $uid)
             ->orderByDesc('employee_debt_payments.month')
-            ->get(['employee_debt_payments.amount', 'employee_debt_payments.month', 'employee_debts.description'])
+            ->get(['employee_debt_payments.amount', 'employee_debt_payments.month', 'employee_debts.note'])
             ->map(fn ($d) => [
                 'label' => 'Погашение долга из бонуса',
                 'date' => $d->month.'-01',
                 'amount' => (float) $d->amount,
-                'note' => $d->description,
+                'note' => $d->note,
             ]);
         $paidRows = $payoutRows->concat($debtRows)->sortByDesc('date')->values();
 

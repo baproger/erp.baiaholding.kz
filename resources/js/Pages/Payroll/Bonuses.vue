@@ -107,7 +107,7 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                 <div class="rounded-xl p-4 shadow-md" style="background-color:#1A3B5C">
                     <div class="truncate text-[11px] uppercase tracking-wide text-white/60">К выплате · накоплено за всё время</div>
                     <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-emerald-300">{{ money(leadership ? totals.balance : (me?.balance ?? 0)) }}</div>
-                    <div class="mt-0.5 text-[11px] text-white/50">заработано − выплачено, с переносом с прошлых лет</div>
+                    <div class="mt-0.5 text-[11px] text-white/50">заработано − выплачено за все годы, не только {{ year }}</div>
                 </div>
             </div>
 
@@ -125,9 +125,9 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                             <tr class="divide-x divide-slate-100">
                                 <th class="sticky left-0 z-10 bg-slate-50 px-6 py-2.5">Сотрудник</th>
                                 <th v-for="(mn, i) in MONTHS" :key="mn" class="px-2.5 py-2.5 text-right" :class="isCurrent(i + 1) ? 'bg-indigo-50 text-indigo-600' : ''">{{ mn }}</th>
-                                <th class="px-3 py-2.5 text-right">За год</th>
-                                <th class="px-3 py-2.5 text-right">Выплачено</th>
-                                <th class="px-3 py-2.5 text-right" title="Накопленный баланс за всё время (с переносом с прошлых лет)">К выплате</th>
+                                <th class="cursor-help px-3 py-2.5 text-right underline decoration-dotted underline-offset-4" :title="'Бонусы, заработанные по сделкам ' + year + ' года (по дате договора). Бонус начисляется пропорционально оплате клиента'">За год</th>
+                                <th class="cursor-help px-3 py-2.5 text-right underline decoration-dotted underline-offset-4" :title="'Выплачено из бонуса в ' + year + ' году: авансы «из бонуса», выплаты, погашения долгов'">Выплачено</th>
+                                <th class="cursor-help px-3 py-2.5 text-right underline decoration-dotted underline-offset-4" title="Накоплено за ВСЁ время работы (все годы, не только выбранный): заработано − выплачено. Нажмите на сумму — покажем раскладку по сделкам">К выплате</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
@@ -172,7 +172,7 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                 </div>
                 <div v-if="!list.length" class="px-6 py-10 text-center text-sm text-slate-400">За {{ year }} бонусов и выплат нет</div>
             </div>
-            <p class="mt-3 text-xs text-slate-400">К выплате = Σ бонусов по марже за всё время − Σ выплат из бонуса (авансы «из бонуса» на «Зарплате» + погашения долгов). Менеджер может не брать бонус месяцами — остаток копится и переносится между годами («перенос» под именем). В ячейке месяца: зелёным — заработано, красным — выплачено в этом месяце.</p>
+            <p class="mt-3 text-xs text-slate-400">💡 <b>К выплате</b> — накоплено за все годы работы, поэтому может быть больше нуля даже при пустом годе (бонус пришёл из других лет). Нажмите на сумму — откроется раскладка: из каких сделок, что ждёт оплаты клиента, что уже выплачено. <b>Перенос</b> под именем — остаток на 1 января {{ year }} года. В ячейке месяца: зелёным — заработано, красным — выплачено.</p>
 
             <!-- Модалка выплаты бонуса -->
             <Modal :show="showPay" max-width="lg" @close="showPay = false">
