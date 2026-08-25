@@ -273,6 +273,12 @@ class DealController extends Controller
                 'bonus' => $dealBonus, 'bonusRate' => round($dealBonusRate * 100, 1),
                 'bonusManual' => $bonusOverride !== null,
                 'company' => round($dealRemainder - $dealBonus, 2),
+                // Тот же % маржи, что в Сводном отчёте: (остаток + налог) / сумма.
+                'marginPct' => $dealMarginPct,
+                // Чистая маржа для бейджа на карточке: чистая прибыль / сумма
+                // (уже за вычетом налога, расходов, партнёра и ЗП сотрудника).
+                // Ступень бонуса по-прежнему считается от marginPct — не менять!
+                'netMarginPct' => $dealBudget > 0 ? round(($dealRemainder - $dealBonus) / $dealBudget * 100, 1) : 0.0,
             ],
             'chatId' => $dealChat->id,
             'workshops' => \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null),
