@@ -287,7 +287,11 @@ class DealController extends Controller
                 ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
                 ->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),
-            'finance' => $finance->summaryFor($deal),
+            // margin заменяем на ЧИСТУЮ маржу по договору — чтобы «Маржа» в
+            // сводке совпадала с бейджем прибыли и Сводным отчётом (54.4% везде).
+            'finance' => array_merge($finance->summaryFor($deal), [
+                'margin' => $dealBudget > 0 ? round(($dealRemainder - $dealBonus) / $dealBudget * 100, 1) : 0.0,
+            ]),
             'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => DealStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             'can' => [

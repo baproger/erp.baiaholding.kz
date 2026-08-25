@@ -421,7 +421,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                                 <span class="whitespace-nowrap text-xl font-bold tabular-nums" :class="profit.company >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(profit.company) }}</span>
                                 <span class="cursor-help rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
                                     :class="profit.netMarginPct >= 0 ? 'bg-emerald-400/20 text-emerald-300' : 'bg-rose-400/20 text-rose-300'"
-                                    title="Чистая маржа = чистая прибыль ÷ сумма договора × 100 (после налога, расходов, партнёра и ЗП сотрудника). Ступень бонуса менеджера считается от коммерческой маржи без налога — она в Сводном отчёте">чистая маржа {{ profit.netMarginPct }}%</span>
+                                    title="Чистая маржа = чистая прибыль ÷ сумма договора × 100 (после налога, расходов, партнёра и ЗП сотрудника). Эта же цифра — в Сводном отчёте и в сводке ниже. Ступень бонуса менеджера система считает отдельно, от маржи без налога и ЗП">чистая маржа {{ profit.netMarginPct }}%</span>
                             </div>
                         </div>
                     </div>

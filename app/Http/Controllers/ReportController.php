@@ -125,7 +125,11 @@ class ReportController extends Controller
                 'partner_pct' => $d->partner_pct !== null ? (float) $d->partner_pct : null,
                 'tax' => $tax,
                 'remainder' => $remainder,
-                'margin' => PayrollService::marginPct($budget, $remainder, $tax),
+                // ЧИСТАЯ маржа = доход фирмы / сумма договора — одна и та же
+                // цифра, что на бейдже карточки сделки (правило от 25.08.2026:
+                // маржа по сделке везде одинаковая). Ступень бонуса внутри
+                // по-прежнему от коммерческой маржи (marginBonus выше).
+                'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
                 'bonus' => $bonus,
                 'company' => $company,
                 'manager' => $d->responsible?->name,
