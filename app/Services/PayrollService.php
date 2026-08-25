@@ -252,6 +252,53 @@ class PayrollService
         })->mapWithKeys(fn ($v, $uid) => [(int) $uid => (float) $v]);
     }
 
+    /**
+     * Бонус, заработанный по сделкам ДО даты (дата договора, без неё — дата
+     * создания). Нужен «переносу» на странице Бонусы: только прошлые годы,
+     * без захвата будущих относительно выбранного года.
+     *
+     * @return Collection<int, float>
+     */
+    public function bonusByUserBefore(string $beforeDate): Collection
+    {
+        $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
+
+        $deals = Deal::won()->forCurrentCompany()->whereNotNull('responsible_user_id')
+            ->where(fn ($q) => $q
+                ->where(fn ($c) => $c->whereNotNull('contract_date')->where('contract_date', '<', $beforeDate))
+                ->orWhere(fn ($c) => $c->whereNull('contract_date')->where('created_at', '<', $beforeDate)))
+            ->get(['id', 'budget', 'partner_pct', 'bonus_rate_override', 'responsible_user_id']);
+
+        if ($deals->isEmpty()) {
+            return collect();
+        }
+
+        $ids = $deals->pluck('id');
+        $paidByDeal = Payment::query()
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->where('invoices.invoiceable_type', 'deal')
+            ->whereIn('invoices.invoiceable_id', $ids)
+            ->groupBy('invoices.invoiceable_id')
+            ->selectRaw('invoices.invoiceable_id as did, SUM(payments.amount) as v')->pluck('v', 'did');
+        $expenseByDeal = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', $ids)
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
+
+        return $deals->groupBy('responsible_user_id')->map(function ($rows) use ($paidByDeal, $expenseByDeal, $taxRate) {
+            return round($rows->sum(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate) {
+                $budget = (float) $d->budget;
+                $expense = (float) ($expenseByDeal[$d->id] ?? 0);
+                $tax = round($budget * $taxRate, 2);
+                $remainder = round($budget - $tax - $expense - self::partnerSum($budget, $d->partner_pct), 2);
+                $paid = (float) ($paidByDeal[$d->id] ?? 0);
+                $payRatio = $budget > 0 ? min(1, $paid / $budget) : 0;
+
+                return self::marginBonus($budget, $remainder, $tax,
+                    $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null) * $payRatio;
+            }), 2);
+        })->mapWithKeys(fn ($v, $uid) => [(int) $uid => (float) $v]);
+    }
+
     public function perUser(bool $includeAllActive = false): Collection
     {
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;

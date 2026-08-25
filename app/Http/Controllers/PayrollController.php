@@ -35,8 +35,10 @@ class PayrollController extends Controller
      * бонуса» + погашения долгов).
      */
     /**
-     * Разбивка «переноса» на странице Бонусы: из каких выигранных сделок
-     * (до 1 января выбранного года) и каких выплат сложилась сумма.
+     * Разбивка «К выплате» на странице Бонусы (клик по «переносу» или сумме):
+     * из каких выигранных сделок сложился бонус ЗА ВСЁ ВРЕМЯ, какие сделки
+     * ещё не оплачены клиентом (бонус ждёт оплаты), и какие выплаты/удержания
+     * были. Итог совпадает с колонкой «К выплате».
      * Доступ: руководство — по любому сотруднику, менеджер — только по себе.
      */
     public function bonusCarry(Request $request, PayrollService $payroll)
@@ -49,15 +51,11 @@ class PayrollController extends Controller
         if (! $leadership) {
             $uid = $viewer->id;
         }
-        $year = max(2020, min((int) ($request->integer('year') ?: now()->year), (int) now()->year + 1));
-        $before = $year.'-01-01';
 
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
         $deals = \App\Models\Deal::won()->forCurrentCompany()
             ->where('responsible_user_id', $uid)
-            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'contract_date', 'created_at'])
-            ->filter(fn ($d) => ($d->contract_date?->toDateString() ?? $d->created_at->toDateString()) < $before)
-            ->values();
+            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'contract_date', 'created_at']);
 
         $ids = $deals->pluck('id');
         $paidByDeal = \App\Models\Payment::query()
@@ -70,29 +68,45 @@ class PayrollController extends Controller
             ->whereIn('expenseable_id', $ids)
             ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
 
-        $earned = $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate) {
+        $earned = collect();   // бонус уже начислен (клиент оплатил)
+        $pending = collect();  // бонус ждёт оплаты клиента
+        foreach ($deals as $d) {
             $budget = (float) $d->budget;
             $expense = (float) ($expenseByDeal[$d->id] ?? 0);
             $tax = round($budget * $taxRate, 2);
             $remainder = round($budget - $tax - $expense - PayrollService::partnerSum($budget, $d->partner_pct), 2);
-            $paid = (float) ($paidByDeal[$d->id] ?? 0);
-            $ratio = $budget > 0 ? min(1, $paid / $budget) : 0;
-            $bonus = round(PayrollService::marginBonus($budget, $remainder, $tax,
-                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null) * $ratio, 2);
-
-            return [
+            $clientPaid = (float) ($paidByDeal[$d->id] ?? 0);
+            $ratio = $budget > 0 ? min(1, $clientPaid / $budget) : 0;
+            $fullBonus = PayrollService::marginBonus($budget, $remainder, $tax,
+                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
+            $bonus = round($fullBonus * $ratio, 2);
+            $waiting = round($fullBonus - $bonus, 2);
+            $row = [
                 'id' => $d->id,
                 'number' => $d->number,
                 'customer' => $d->company_name,
                 'date' => $d->contract_date?->toDateString() ?? $d->created_at->toDateString(),
                 'bonus' => $bonus,
             ];
-        })->filter(fn ($r) => $r['bonus'] != 0)->sortByDesc('date')->values();
+            if ($bonus != 0) {
+                $earned->push($row);
+            }
+            // Клиент оплатил не всё — остаток бонуса «заморожен» до оплаты.
+            if ($waiting > 0.009) {
+                $pending->push($row + [
+                    'waiting' => $waiting,
+                    'budget' => $budget,
+                    'client_paid' => round($clientPaid, 2),
+                ]);
+            }
+        }
+        $earned = $earned->sortByDesc('date')->values();
+        $pending = $pending->sortByDesc('waiting')->values();
 
-        // Выплаты до года: авансы/выплаты «из бонуса» + погашения долгов.
+        // Выплаты за всё время: авансы/выплаты «из бонуса» + погашения долгов.
         $typeRu = ['advance' => 'Аванс из бонуса', 'payout' => 'Выплата бонуса'];
         $payoutRows = PayrollAdjustment::whereIn('type', ['advance', 'payout'])->where('source', 'bonus')
-            ->where('user_id', $uid)->whereDate('date', '<', $before)
+            ->where('user_id', $uid)
             ->orderByDesc('date')->get(['type', 'amount', 'date', 'note'])
             ->map(fn ($a) => [
                 'label' => $typeRu[$a->type] ?? $a->type,
@@ -103,14 +117,13 @@ class PayrollController extends Controller
         $debtRows = \App\Models\EmployeeDebtPayment::query()
             ->join('employee_debts', 'employee_debts.id', '=', 'employee_debt_payments.employee_debt_id')
             ->where('employee_debts.user_id', $uid)
-            ->where('employee_debt_payments.month', '<', substr($before, 0, 7))
             ->orderByDesc('employee_debt_payments.month')
-            ->get(['employee_debt_payments.amount', 'employee_debt_payments.month'])
+            ->get(['employee_debt_payments.amount', 'employee_debt_payments.month', 'employee_debts.description'])
             ->map(fn ($d) => [
                 'label' => 'Погашение долга из бонуса',
                 'date' => $d->month.'-01',
                 'amount' => (float) $d->amount,
-                'note' => null,
+                'note' => $d->description,
             ]);
         $paidRows = $payoutRows->concat($debtRows)->sortByDesc('date')->values();
 
@@ -118,12 +131,13 @@ class PayrollController extends Controller
         $paidSum = round($paidRows->sum('amount'), 2);
 
         return response()->json([
-            'year' => $year,
             'earned' => $earned,
+            'pending' => $pending,
+            'pending_sum' => round($pending->sum('waiting'), 2),
             'paid' => $paidRows,
             'earned_sum' => $earnedSum,
             'paid_sum' => $paidSum,
-            'carry' => round($earnedSum - $paidSum, 2),
+            'balance' => round($earnedSum - $paidSum, 2),
         ]);
     }
 
@@ -141,6 +155,7 @@ class PayrollController extends Controller
             $byMonth[$m] = $payroll->bonusByUserForMonth(sprintf('%d-%02d', $year, $m));
         }
         $allTime = $payroll->perUser(false)->keyBy('uid')->map(fn ($r) => (float) $r['bonus']);
+        $earnedBefore = $payroll->bonusByUserBefore($year.'-01-01');
 
         // Выплаты из бонуса: авансы «из бонуса» + погашения долгов — по месяцам и за всё время.
         $advAll = PayrollAdjustment::whereIn('type', ['advance', 'payout'])->where('source', 'bonus')
@@ -150,14 +165,21 @@ class PayrollController extends Controller
             ->get(['employee_debts.user_id', 'employee_debt_payments.amount', 'employee_debt_payments.month']);
         $paidMonth = [];   // uid => [m => sum]
         $paidAllBy = [];   // uid => sum
+        $paidBefore = [];  // uid => выплачено ДО 1 января выбранного года
         foreach ($advAll as $a) {
             $paidAllBy[$a->user_id] = ($paidAllBy[$a->user_id] ?? 0) + (float) $a->amount;
+            if ((int) $a->date->year < $year) {
+                $paidBefore[$a->user_id] = ($paidBefore[$a->user_id] ?? 0) + (float) $a->amount;
+            }
             if ((int) $a->date->year === $year) {
                 $paidMonth[$a->user_id][(int) $a->date->month] = ($paidMonth[$a->user_id][(int) $a->date->month] ?? 0) + (float) $a->amount;
             }
         }
         foreach ($debtAll as $d) {
             $paidAllBy[$d->user_id] = ($paidAllBy[$d->user_id] ?? 0) + (float) $d->amount;
+            if ((int) substr((string) $d->month, 0, 4) < $year) {
+                $paidBefore[$d->user_id] = ($paidBefore[$d->user_id] ?? 0) + (float) $d->amount;
+            }
             if (str_starts_with((string) $d->month, $year.'-')) {
                 $mm = (int) substr($d->month, 5, 2);
                 $paidMonth[$d->user_id][$mm] = ($paidMonth[$d->user_id][$mm] ?? 0) + (float) $d->amount;
@@ -175,7 +197,7 @@ class PayrollController extends Controller
         }
         $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar'])->keyBy('id');
 
-        $rows = $uids->filter(fn ($id) => $people->has($id))->map(function ($uid) use ($byMonth, $paidMonth, $allTime, $paidAllBy, $people) {
+        $rows = $uids->filter(fn ($id) => $people->has($id))->map(function ($uid) use ($byMonth, $paidMonth, $allTime, $paidAllBy, $people, $earnedBefore, $paidBefore) {
             $months = [];
             $yearEarned = 0.0;
             $yearPaid = 0.0;
@@ -198,8 +220,9 @@ class PayrollController extends Controller
                 'year_paid' => round($yearPaid, 2),
                 'earned_all' => $earnedAll,
                 'paid_all' => $paidAll,
-                // Перенос с прошлых лет: что накопилось до этого года за вычетом тогдашних выплат.
-                'carry' => round(($earnedAll - $yearEarned) - ($paidAll - $yearPaid), 2),
+                // Перенос с прошлых лет: строго ДО 1 января выбранного года
+                // (раньше сюда ошибочно попадали и будущие годы).
+                'carry' => round((float) ($earnedBefore[$uid] ?? 0) - (float) ($paidBefore[$uid] ?? 0), 2),
                 'balance' => round($earnedAll - $paidAll, 2),
             ];
         })->sortByDesc('balance')->values();

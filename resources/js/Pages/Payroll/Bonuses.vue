@@ -26,8 +26,8 @@ const years = computed(() => { const a = []; for (let y = thisYear + 1; y >= 202
 const setYear = () => router.get(route('payroll.bonuses'), { year: yearSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
 useStickyFilters('payroll-bonuses-year', { yearSel }, setYear);
 
-// Разбивка «переноса»: клик по строчке под именем → модалка, из каких
-// сделок (до 1 января выбранного года) и выплат сложилась сумма.
+// Разбивка «К выплате»: клик по «переносу» или по сумме → модалка, из каких
+// сделок сложился бонус за всё время, что ждёт оплаты клиента, что выплачено.
 const carryModal = ref(false);
 const carryFor = ref(null);
 const carryData = ref(null);
@@ -38,7 +38,7 @@ const openCarry = async (r) => {
     carryModal.value = true;
     carryLoading.value = true;
     try {
-        const res = await fetch(route('payroll.bonuses.carry', { user: r.uid, year: props.year }), { headers: { Accept: 'application/json' } });
+        const res = await fetch(route('payroll.bonuses.carry', { user: r.uid }), { headers: { Accept: 'application/json' } });
         carryData.value = await res.json();
     } catch (e) {
         carryData.value = { error: true };
@@ -151,7 +151,7 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                                 <td class="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">{{ money(r.year_earned) }}</td>
                                 <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="r.year_paid > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.year_paid > 0 ? '− ' + money(r.year_paid) : '—' }}</td>
                                 <td class="whitespace-nowrap px-3 py-2 text-right font-bold tabular-nums" :class="r.balance > 0 ? 'text-emerald-600' : (r.balance < 0 ? 'text-rose-600' : 'text-slate-300')">
-                                    {{ money(r.balance) }}
+                                    <button class="underline decoration-dotted underline-offset-4 transition-colors hover:text-indigo-600" title="Из чего сложилась сумма — сделки, ожидание оплаты, выплаты" @click="openCarry(r)">{{ money(r.balance) }}</button>
                                     <button v-if="canManage && r.balance > 0" class="ml-2 rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100" title="Выплатить бонус" @click="openPay(r.uid)">💵 выплатить</button>
                                 </td>
                             </tr>
@@ -227,8 +227,8 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                 <div class="p-6">
                     <div class="flex items-start justify-between gap-3">
                         <div>
-                            <h2 class="text-lg font-bold text-slate-900">Перенос — {{ carryFor?.user }}</h2>
-                            <p class="text-sm text-slate-400">всё, что заработано и выплачено до 1 января {{ year }} года</p>
+                            <h2 class="text-lg font-bold text-slate-900">К выплате — {{ carryFor?.user }}</h2>
+                            <p class="text-sm text-slate-400">из чего сложилась сумма: за всё время работы</p>
                         </div>
                         <button @click="carryModal = false" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100">✕</button>
                     </div>
@@ -252,7 +252,29 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                                     <span class="flex-shrink-0 text-xs tabular-nums text-slate-400">{{ d.date }}</span>
                                     <span class="flex-shrink-0 font-semibold tabular-nums text-emerald-700">{{ money(d.bonus) }}</span>
                                 </a>
-                                <div v-if="!carryData.earned.length" class="px-3 py-4 text-center text-xs text-slate-400">Сделок с бонусом до {{ year }} года нет</div>
+                                <div v-if="!carryData.earned.length" class="px-3 py-4 text-center text-xs text-slate-400">Начисленных бонусов пока нет</div>
+                            </div>
+                        </div>
+
+                        <!-- Ждёт оплаты клиента: сделка выиграна, но счета не оплачены -
+                             бонус за неоплаченную долю не начисляется -->
+                        <div v-if="carryData.pending?.length" class="mt-3 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-amber-100/50 p-3">
+                            <div class="flex items-baseline justify-between px-1">
+                                <span class="text-xs font-bold uppercase tracking-wide text-amber-700">⏳ Ждёт оплаты клиента — бонус ещё не начислен</span>
+                                <span class="font-bold tabular-nums text-amber-700">{{ money(carryData.pending_sum) }}</span>
+                            </div>
+                            <div class="mt-2 max-h-48 divide-y divide-amber-100 overflow-y-auto rounded-lg bg-white/70">
+                                <a v-for="d in carryData.pending" :key="d.id" :href="route('deals.show', d.id)" target="_blank"
+                                    class="block px-3 py-1.5 text-sm transition-colors hover:bg-amber-50">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="min-w-0 truncate">
+                                            <span class="font-semibold text-indigo-700">{{ d.number }}</span>
+                                            <span class="ml-1.5 text-slate-500">{{ d.customer }}</span>
+                                        </span>
+                                        <span class="flex-shrink-0 font-semibold tabular-nums text-amber-700">+{{ money(d.waiting) }}</span>
+                                    </div>
+                                    <div class="mt-0.5 text-xs tabular-nums text-slate-400">клиент оплатил {{ money(d.client_paid) }} из {{ money(d.budget) }}</div>
+                                </a>
                             </div>
                         </div>
 
@@ -268,14 +290,15 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                                     <span class="flex-shrink-0 text-xs tabular-nums text-slate-400">{{ pp.date }}</span>
                                     <span class="flex-shrink-0 font-semibold tabular-nums text-rose-600">−{{ money(pp.amount) }}</span>
                                 </div>
-                                <div v-if="!carryData.paid.length" class="px-3 py-4 text-center text-xs text-slate-400">Выплат до {{ year }} года не было</div>
+                                <div v-if="!carryData.paid.length" class="px-3 py-4 text-center text-xs text-slate-400">Выплат не было</div>
                             </div>
                         </div>
 
                         <div class="mt-4 flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white">
-                            <span class="text-sm font-medium">Итого перенос на 1 января {{ year }}</span>
-                            <span class="text-lg font-bold tabular-nums" :class="carryData.carry >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(carryData.carry) }}</span>
+                            <span class="text-sm font-medium">Итого к выплате сейчас</span>
+                            <span class="text-lg font-bold tabular-nums" :class="carryData.balance >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(carryData.balance) }}</span>
                         </div>
+                        <p v-if="carryData.pending?.length" class="mt-2 text-xs text-slate-400">⏳ Янтарный блок в итог не входит: этот бонус добавится сам, когда клиенты оплатят счета по сделкам.</p>
                     </template>
                 </div>
             </Modal>
