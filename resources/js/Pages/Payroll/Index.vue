@@ -377,18 +377,23 @@ const delAdj = async (a) => {
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="d in me.dealsList" :key="d.id" class="hover:bg-slate-50">
-                            <td class="px-3 py-2">
-                                                        <Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link>
-                                                        <span class="text-slate-400">{{ d.number }}</span>
-                                                        <!-- Из какого действия по лоту выросла сделка -->
-                                                        <span v-if="d.lot_action" class="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700" title="Сделка из предварительной сделки">◧ {{ d.lot_action }}</span>
-                                                    </td>
-                            <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
-                            <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
-                            <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
-                                {{ money(d.bonus) }}
-                                <span v-if="d.bonus_manual" class="ml-1 rounded bg-amber-100 px-1 py-px text-[9px] font-bold uppercase text-amber-700" :title="'Ручной % финансиста: ' + d.bonus_rate + '%'">{{ d.bonus_rate }}%</span>
+                            <td class="max-w-[24rem] px-3 py-2">
+                                <!-- Длинные названия госзаказчиков: максимум 2 строки, полное — в подсказке -->
+                                <Link :href="route('deals.show', d.id)" class="line-clamp-2 break-words font-medium leading-snug text-indigo-600 hover:underline" :title="d.company">{{ d.company }}</Link>
+                                <div class="mt-1 flex flex-wrap items-center gap-1">
+                                    <span class="rounded bg-indigo-50 px-1.5 py-px text-[10px] font-semibold tabular-nums text-indigo-700">{{ d.number }}</span>
+                                    <span v-if="d.lot_action" class="rounded bg-violet-100 px-1.5 py-px text-[10px] font-semibold text-violet-700" title="Сделка из предварительной сделки">◧ {{ d.lot_action }}</span>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2"><span :class="d.is_won ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'" class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span></td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right">
+                                <span class="font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</span>
+                                <!-- Ставка видна ВСЕГДА: янтарная — ручная финансиста, зелёная — авто от маржи -->
+                                <span class="ml-1 rounded px-1.5 py-px text-[10px] font-bold tabular-nums"
+                                    :class="d.bonus_manual ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'"
+                                    :title="d.bonus_manual ? 'Ручной % финансиста по этой сделке' : 'Авто-ставка от маржи сделки (см. шкалу справа)'">{{ d.bonus_rate }}%{{ d.bonus_manual ? ' ✎' : '' }}</span>
                             </td>
                         </tr>
                     </tbody>
@@ -737,20 +742,22 @@ const delAdj = async (a) => {
                                             </thead>
                                             <tbody class="divide-y divide-slate-50">
                                                 <tr v-for="d in r.dealsList" :key="d.id" class="hover:bg-slate-50">
-                                                    <td class="px-3 py-2">
-                                                        <Link :href="route('deals.show', d.id)" class="font-medium text-indigo-600 hover:underline">{{ d.company }}</Link>
-                                                        <span class="ml-1 text-slate-400">{{ d.number }}</span>
+                                                    <td class="max-w-[24rem] px-3 py-2">
+                                                        <Link :href="route('deals.show', d.id)" class="line-clamp-2 break-words font-medium leading-snug text-indigo-600 hover:underline" :title="d.company">{{ d.company }}</Link>
+                                                        <span class="mt-1 inline-block rounded bg-indigo-50 px-1.5 py-px text-[10px] font-semibold tabular-nums text-indigo-700">{{ d.number }}</span>
                                                     </td>
                                                     <td class="px-3 py-2">
-                                                        <span :class="d.is_won ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span>
+                                                        <span :class="d.is_won ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'" class="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium">{{ d.stage }}</span>
                                                     </td>
-                                                    <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
-                                                    <td class="px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
-                                                    <td class="px-3 py-2 text-right tabular-nums text-rose-600">{{ money(d.expense) }}</td>
-                                                    <td class="px-3 py-2 text-right tabular-nums text-rose-600">{{ money(d.tax) }}</td>
-                                                    <td class="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
-                                                        {{ money(d.bonus) }}
-                                                        <span v-if="d.bonus_manual" class="ml-1 rounded bg-amber-100 px-1 py-px text-[9px] font-bold uppercase text-amber-700" :title="'Ручной % финансиста: ' + d.bonus_rate + '%'">{{ d.bonus_rate }}%</span>
+                                                    <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700">{{ money(d.budget) }}</td>
+                                                    <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="d.paid >= d.budget ? 'text-emerald-600' : 'text-slate-500'">{{ money(d.paid) }}</td>
+                                                    <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums text-rose-600">{{ money(d.expense) }}</td>
+                                                    <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums text-rose-600">{{ money(d.tax) }}</td>
+                                                    <td class="whitespace-nowrap px-3 py-2 text-right">
+                                                        <span class="font-semibold tabular-nums text-emerald-600">{{ money(d.bonus) }}</span>
+                                                        <span class="ml-1 rounded px-1.5 py-px text-[10px] font-bold tabular-nums"
+                                                            :class="d.bonus_manual ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'"
+                                                            :title="d.bonus_manual ? 'Ручной % финансиста по этой сделке' : 'Авто-ставка от маржи сделки'">{{ d.bonus_rate }}%{{ d.bonus_manual ? ' ✎' : '' }}</span>
                                                     </td>
                                                 </tr>
                                             </tbody>
