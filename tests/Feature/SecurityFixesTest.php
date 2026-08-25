@@ -134,6 +134,27 @@ class SecurityFixesTest extends TestCase
         $this->assertTrue($admin->fresh()->is_active);
     }
 
+    // Правило от 25.08.2026: аккаунт админа не удаляется через систему НИКЕМ —
+    // даже другим админом (на проде 24.08 удалили админа). Только смена роли.
+    public function test_admin_cannot_be_deleted_even_by_another_admin(): void
+    {
+        $admin = $this->user('admin');
+        $second = $this->user('admin');
+
+        $this->actingAs($second)->delete(route('users.destroy', $admin->id))->assertForbidden();
+        $this->assertNull($admin->fresh()->deleted_at);
+    }
+
+    public function test_admin_cannot_self_delete_via_profile(): void
+    {
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin)->delete(route('profile.destroy'), ['password' => 'password'])
+            ->assertSessionHasErrors('password');
+        $this->assertNull($admin->fresh()->deleted_at);
+        $this->assertAuthenticatedAs($admin);
+    }
+
     public function test_admin_can_assign_admin_role(): void
     {
         $admin = $this->user('admin');

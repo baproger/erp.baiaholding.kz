@@ -26,6 +26,27 @@ const years = computed(() => { const a = []; for (let y = thisYear + 1; y >= 202
 const setYear = () => router.get(route('payroll.bonuses'), { year: yearSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
 useStickyFilters('payroll-bonuses-year', { yearSel }, setYear);
 
+// Разбивка «переноса»: клик по строчке под именем → модалка, из каких
+// сделок (до 1 января выбранного года) и выплат сложилась сумма.
+const carryModal = ref(false);
+const carryFor = ref(null);
+const carryData = ref(null);
+const carryLoading = ref(false);
+const openCarry = async (r) => {
+    carryFor.value = r;
+    carryData.value = null;
+    carryModal.value = true;
+    carryLoading.value = true;
+    try {
+        const res = await fetch(route('payroll.bonuses.carry', { user: r.uid, year: props.year }), { headers: { Accept: 'application/json' } });
+        carryData.value = await res.json();
+    } catch (e) {
+        carryData.value = { error: true };
+    } finally {
+        carryLoading.value = false;
+    }
+};
+
 const search = ref('');
 const list = computed(() => props.rows
     .filter((r) => (r.year_earned || 0) !== 0 || (r.year_paid || 0) !== 0 || (r.balance || 0) !== 0)
@@ -116,7 +137,7 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                                         <Avatar :name="r.user" :src="r.avatar" :size="28" />
                                         <div class="min-w-0 leading-tight">
                                             <div class="truncate font-medium text-slate-900">{{ r.user }}</div>
-                                            <div v-if="r.carry" class="text-[10px] tabular-nums" :class="r.carry > 0 ? 'text-slate-400' : 'text-rose-400'" title="Перенос с прошлых лет: накопленный остаток до этого года">перенос {{ money(r.carry) }}</div>
+                                            <button v-if="r.carry" @click="openCarry(r)" class="text-[10px] tabular-nums underline decoration-dotted underline-offset-2 transition-colors hover:text-indigo-600" :class="r.carry > 0 ? 'text-slate-400' : 'text-rose-400'" title="Перенос с прошлых лет — нажмите, чтобы увидеть, из чего сложилась сумма">перенос {{ money(r.carry) }}</button>
                                         </div>
                                     </div>
                                 </td>
@@ -198,6 +219,64 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                         <SecondaryButton @click="showPay = false">Отмена</SecondaryButton>
                         <PrimaryButton :disabled="payForm.processing || !payForm.user_id || !(Number(payForm.amount) > 0)" @click="submitPay">💵 Выплатить</PrimaryButton>
                     </div>
+                </div>
+            </Modal>
+
+            <!-- Разбивка переноса: сделки до выбранного года и выплаты из бонуса -->
+            <Modal :show="carryModal" max-width="2xl" @close="carryModal = false">
+                <div class="p-6">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-900">Перенос — {{ carryFor?.user }}</h2>
+                            <p class="text-sm text-slate-400">всё, что заработано и выплачено до 1 января {{ year }} года</p>
+                        </div>
+                        <button @click="carryModal = false" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100">✕</button>
+                    </div>
+
+                    <div v-if="carryLoading" class="py-10 text-center text-sm text-slate-400">Загрузка…</div>
+                    <div v-else-if="carryData?.error" class="py-10 text-center text-sm text-rose-500">Не удалось загрузить — попробуйте ещё раз</div>
+                    <template v-else-if="carryData">
+                        <!-- Заработано: бонусы по выигранным сделкам -->
+                        <div class="mt-4 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-emerald-100/50 p-3">
+                            <div class="flex items-baseline justify-between px-1">
+                                <span class="text-xs font-bold uppercase tracking-wide text-emerald-700">Заработано по сделкам</span>
+                                <span class="font-bold tabular-nums text-emerald-700">{{ money(carryData.earned_sum) }}</span>
+                            </div>
+                            <div class="mt-2 max-h-48 divide-y divide-emerald-100 overflow-y-auto rounded-lg bg-white/70">
+                                <a v-for="d in carryData.earned" :key="d.id" :href="route('deals.show', d.id)" target="_blank"
+                                    class="flex items-center justify-between gap-3 px-3 py-1.5 text-sm transition-colors hover:bg-emerald-50">
+                                    <span class="min-w-0 truncate">
+                                        <span class="font-semibold text-indigo-700">{{ d.number }}</span>
+                                        <span class="ml-1.5 text-slate-500">{{ d.customer }}</span>
+                                    </span>
+                                    <span class="flex-shrink-0 text-xs tabular-nums text-slate-400">{{ d.date }}</span>
+                                    <span class="flex-shrink-0 font-semibold tabular-nums text-emerald-700">{{ money(d.bonus) }}</span>
+                                </a>
+                                <div v-if="!carryData.earned.length" class="px-3 py-4 text-center text-xs text-slate-400">Сделок с бонусом до {{ year }} года нет</div>
+                            </div>
+                        </div>
+
+                        <!-- Выплачено: авансы/выплаты из бонуса и погашения долгов -->
+                        <div class="mt-3 rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50/80 to-rose-100/50 p-3">
+                            <div class="flex items-baseline justify-between px-1">
+                                <span class="text-xs font-bold uppercase tracking-wide text-rose-700">Выплачено / удержано</span>
+                                <span class="font-bold tabular-nums text-rose-700">−{{ money(carryData.paid_sum) }}</span>
+                            </div>
+                            <div class="mt-2 max-h-48 divide-y divide-rose-100 overflow-y-auto rounded-lg bg-white/70">
+                                <div v-for="(pp, i) in carryData.paid" :key="i" class="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                                    <span class="min-w-0 truncate text-slate-600">{{ pp.label }}<span v-if="pp.note" class="ml-1 text-xs text-slate-400">· {{ pp.note }}</span></span>
+                                    <span class="flex-shrink-0 text-xs tabular-nums text-slate-400">{{ pp.date }}</span>
+                                    <span class="flex-shrink-0 font-semibold tabular-nums text-rose-600">−{{ money(pp.amount) }}</span>
+                                </div>
+                                <div v-if="!carryData.paid.length" class="px-3 py-4 text-center text-xs text-slate-400">Выплат до {{ year }} года не было</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white">
+                            <span class="text-sm font-medium">Итого перенос на 1 января {{ year }}</span>
+                            <span class="text-lg font-bold tabular-nums" :class="carryData.carry >= 0 ? 'text-emerald-300' : 'text-rose-300'">{{ money(carryData.carry) }}</span>
+                        </div>
+                    </template>
                 </div>
             </Modal>
         </FinanceLayout>

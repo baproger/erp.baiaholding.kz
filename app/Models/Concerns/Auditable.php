@@ -27,6 +27,13 @@ trait Auditable
         ));
         static::updated(function ($model) {
             foreach ($model->getChanges() as $field => $new) {
+                // Смену пароля фиксируем как факт (кто и когда) — значения
+                // маскируем: хэши в журнале не нужны и опасны.
+                if ($field === 'password') {
+                    $model->writeAudit('updated', 'password', '•••', '•••');
+
+                    continue;
+                }
                 if (in_array($field, $model->auditExclude, true)) {
                     continue;
                 }

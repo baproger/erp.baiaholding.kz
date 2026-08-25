@@ -397,14 +397,11 @@ class UserController extends Controller
     public function destroy(Request $request, User $user): RedirectResponse
     {
         $this->authorize('delete', $user);
-        // Администратора деактивирует только администратор.
-        if ($user->hasRole('admin') && ! $request->user()->hasRole('admin')) {
-            abort(403, 'Администратора деактивирует только администратор.');
-        }
-        // Последнего активного админа нельзя деактивировать — иначе система
-        // останется без владельца (Gate::before на admin).
-        if ($user->hasRole('admin') && $this->activeAdminCount() <= 1) {
-            abort(403, 'Нельзя деактивировать последнего администратора.');
+        // Аккаунт администратора не удаляется через систему НИКЕМ — даже
+        // другим админом (24.08.2026 на проде удалили админа). Чтобы убрать
+        // админа, сначала смените ему роль — смена роли пишется в аудит.
+        if ($user->hasRole('admin')) {
+            abort(403, 'Аккаунт администратора удалить нельзя. Сначала смените ему роль.');
         }
 
         // Soft-delete + deactivate rather than hard removal.

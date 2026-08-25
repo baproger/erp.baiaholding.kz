@@ -139,6 +139,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('finance/debts/{debt}', [\App\Http\Controllers\DebtController::class, 'destroy'])->name('finance.debts.destroy');
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::get('payroll/bonuses', [PayrollController::class, 'bonuses'])->name('payroll.bonuses');
+    // Разбивка «переноса»: из каких сделок/выплат до выбранного года сумма.
+    Route::get('payroll/bonuses/carry', [PayrollController::class, 'bonusCarry'])->name('payroll.bonuses.carry');
     Route::post('payroll/adjustments', [PayrollController::class, 'storeAdjustment'])->name('payroll.adjustments.store');
     Route::delete('payroll/adjustments/{adjustment}', [PayrollController::class, 'destroyAdjustment'])->name('payroll.adjustments.destroy');
     Route::patch('payroll/salary/{user}', [PayrollController::class, 'updateSalary'])->name('payroll.salary');

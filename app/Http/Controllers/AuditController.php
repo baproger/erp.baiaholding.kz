@@ -68,7 +68,7 @@ class AuditController extends Controller
         'contract_date' => 'Дата договора', 'issue_date' => 'Дата счёта', 'due_date' => 'Срок оплаты',
         'date' => 'Дата', 'closed_at' => 'Закрыта', 'completed_at' => 'Завершена',
         'confirmed_at' => 'Подтверждён', 'started_at' => 'Начат',
-        'salary' => 'Оклад', 'phone' => 'Телефон', 'email' => 'Email',
+        'salary' => 'Оклад', 'phone' => 'Телефон', 'email' => 'Email', 'password' => 'Пароль',
         'birth_date' => 'День рождения', 'hired_at' => 'Дата приёма', 'head_user_id' => 'Руководитель',
         'is_active' => 'Активен', 'is_completed' => 'Завершающий', 'is_won' => 'Успешный этап',
         'type' => 'Тип', 'kind' => 'Вид', 'priority' => 'Приоритет', 'days' => 'Дней',

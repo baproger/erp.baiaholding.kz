@@ -67,6 +67,12 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
+        // Админ не может удалить сам себя через профиль — владелец системы
+        // не должен пропадать даже по собственной ошибке.
+        if ($user->hasRole('admin')) {
+            return Redirect::back()->withErrors(['password' => 'Аккаунт администратора удалить нельзя.']);
+        }
+
         Auth::logout();
 
         $user->delete();

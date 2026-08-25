@@ -34,6 +34,99 @@ class PayrollController extends Controller
      * К выплате = Σ бонусов (всё время) − Σ выплат из бонуса (авансы «из
      * бонуса» + погашения долгов).
      */
+    /**
+     * Разбивка «переноса» на странице Бонусы: из каких выигранных сделок
+     * (до 1 января выбранного года) и каких выплат сложилась сумма.
+     * Доступ: руководство — по любому сотруднику, менеджер — только по себе.
+     */
+    public function bonusCarry(Request $request, PayrollService $payroll)
+    {
+        $viewer = $request->user();
+        abort_unless($viewer->can('payroll.view'), 403);
+        $leadership = $viewer->hasAnyRole(['admin', 'director', 'financist']);
+
+        $uid = (int) $request->integer('user');
+        if (! $leadership) {
+            $uid = $viewer->id;
+        }
+        $year = max(2020, min((int) ($request->integer('year') ?: now()->year), (int) now()->year + 1));
+        $before = $year.'-01-01';
+
+        $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
+        $deals = \App\Models\Deal::won()->forCurrentCompany()
+            ->where('responsible_user_id', $uid)
+            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'contract_date', 'created_at'])
+            ->filter(fn ($d) => ($d->contract_date?->toDateString() ?? $d->created_at->toDateString()) < $before)
+            ->values();
+
+        $ids = $deals->pluck('id');
+        $paidByDeal = \App\Models\Payment::query()
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->where('invoices.invoiceable_type', 'deal')
+            ->whereIn('invoices.invoiceable_id', $ids)
+            ->groupBy('invoices.invoiceable_id')
+            ->selectRaw('invoices.invoiceable_id as did, SUM(payments.amount) as v')->pluck('v', 'did');
+        $expenseByDeal = \App\Models\Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
+            ->whereIn('expenseable_id', $ids)
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
+
+        $earned = $deals->map(function ($d) use ($paidByDeal, $expenseByDeal, $taxRate) {
+            $budget = (float) $d->budget;
+            $expense = (float) ($expenseByDeal[$d->id] ?? 0);
+            $tax = round($budget * $taxRate, 2);
+            $remainder = round($budget - $tax - $expense - PayrollService::partnerSum($budget, $d->partner_pct), 2);
+            $paid = (float) ($paidByDeal[$d->id] ?? 0);
+            $ratio = $budget > 0 ? min(1, $paid / $budget) : 0;
+            $bonus = round(PayrollService::marginBonus($budget, $remainder, $tax,
+                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null) * $ratio, 2);
+
+            return [
+                'id' => $d->id,
+                'number' => $d->number,
+                'customer' => $d->company_name,
+                'date' => $d->contract_date?->toDateString() ?? $d->created_at->toDateString(),
+                'bonus' => $bonus,
+            ];
+        })->filter(fn ($r) => $r['bonus'] != 0)->sortByDesc('date')->values();
+
+        // Выплаты до года: авансы/выплаты «из бонуса» + погашения долгов.
+        $typeRu = ['advance' => 'Аванс из бонуса', 'payout' => 'Выплата бонуса'];
+        $payoutRows = PayrollAdjustment::whereIn('type', ['advance', 'payout'])->where('source', 'bonus')
+            ->where('user_id', $uid)->whereDate('date', '<', $before)
+            ->orderByDesc('date')->get(['type', 'amount', 'date', 'note'])
+            ->map(fn ($a) => [
+                'label' => $typeRu[$a->type] ?? $a->type,
+                'date' => $a->date->toDateString(),
+                'amount' => (float) $a->amount,
+                'note' => $a->note,
+            ]);
+        $debtRows = \App\Models\EmployeeDebtPayment::query()
+            ->join('employee_debts', 'employee_debts.id', '=', 'employee_debt_payments.employee_debt_id')
+            ->where('employee_debts.user_id', $uid)
+            ->where('employee_debt_payments.month', '<', substr($before, 0, 7))
+            ->orderByDesc('employee_debt_payments.month')
+            ->get(['employee_debt_payments.amount', 'employee_debt_payments.month'])
+            ->map(fn ($d) => [
+                'label' => 'Погашение долга из бонуса',
+                'date' => $d->month.'-01',
+                'amount' => (float) $d->amount,
+                'note' => null,
+            ]);
+        $paidRows = $payoutRows->concat($debtRows)->sortByDesc('date')->values();
+
+        $earnedSum = round($earned->sum('bonus'), 2);
+        $paidSum = round($paidRows->sum('amount'), 2);
+
+        return response()->json([
+            'year' => $year,
+            'earned' => $earned,
+            'paid' => $paidRows,
+            'earned_sum' => $earnedSum,
+            'paid_sum' => $paidSum,
+            'carry' => round($earnedSum - $paidSum, 2),
+        ]);
+    }
+
     public function bonuses(Request $request, PayrollService $payroll): Response
     {
         $user = $request->user();
