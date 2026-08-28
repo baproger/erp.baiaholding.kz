@@ -38,12 +38,13 @@ class DocumentController extends Controller
         $name = $request->input('name') ?: $file->getClientOriginalName();
         $type = $request->input('documentable_type');
         $id = (int) $request->input('documentable_id');
+        $kind = $request->input('kind') ?: null;
         $this->assertEntityAccess($this->resolve($type, $id));
 
         // Store with a random name outside the public root (storage/app/private).
         $path = $file->store('documents', 'local');
 
-        DB::transaction(function () use ($type, $id, $name, $path, $file) {
+        DB::transaction(function () use ($type, $id, $name, $path, $file, $kind) {
             // Versioning: deactivate previous versions of the same-named document.
             $prev = Document::where('documentable_type', $type)
                 ->where('documentable_id', $id)
@@ -57,6 +58,7 @@ class DocumentController extends Controller
                 'documentable_type' => $type,
                 'documentable_id' => $id,
                 'name' => $name,
+                'kind' => $kind,
                 'file_path' => $path,
                 'version' => ($version ?? 0) + 1,
                 'size' => $file->getSize(),
@@ -66,7 +68,7 @@ class DocumentController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Документ загружен.');
+        return back()->with('success', $kind === 'estimate' ? 'Смета загружена — бухгалтер увидит её при подтверждении материалов.' : 'Документ загружен.');
     }
 
     public function download(Document $document): StreamedResponse

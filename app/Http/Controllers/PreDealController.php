@@ -59,12 +59,20 @@ class PreDealController extends Controller
         if (in_array($act = $request->string('action')->toString(), PreDeal::ACTIONS, true)) {
             $q->where('action', $act);
         }
-        // Фильтр по месяцу ВНЕСЕНИЯ лота (YYYY-MM): какие лоты в какой день вводили.
-        if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m = $request->string('month')->toString())) {
-            $start = $m.'-01';
-            $q->whereDate('created_at', '>=', $start)
-                ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
-        }
+        // Период ВНЕСЕНИЯ лота: конкретный день (YYYY-MM-DD, приоритет) или
+        // месяц (YYYY-MM). Один и тот же период — у списка и у рейтингов ниже.
+        $dayF = preg_match('/^\d{4}-\d{2}-\d{2}$/', $d0 = $request->string('day')->toString()) ? $d0 : null;
+        $monthF = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m0 = $request->string('month')->toString()) ? $m0 : null;
+        $applyPeriod = function ($qq) use ($dayF, $monthF) {
+            if ($dayF) {
+                $qq->whereDate('created_at', $dayF);
+            } elseif ($monthF) {
+                $start = $monthF.'-01';
+                $qq->whereDate('created_at', '>=', $start)
+                    ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
+            }
+        };
+        $applyPeriod($q);
 
         // Рейтинг менеджеров (руководству): подтверждено лотов / на какую сумму
         // + разбивка по действиям (Участие/Звонок/КП → из них выиграно) —
@@ -73,11 +81,7 @@ class PreDealController extends Controller
         if ($lead) {
             $rows = PreDeal::query()
                 ->when($companyId, fn ($qq, $c) => $qq->where('company_id', $c))
-                ->when(preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $ms = $request->string('month')->toString()), function ($qq) use ($ms) {
-                    $start = $ms.'-01';
-                    $qq->whereDate('created_at', '>=', $start)
-                        ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
-                })
+                ->tap($applyPeriod)
                 ->selectRaw("user_id, count(*) total,
                     sum(case when status = 'confirmed' then 1 else 0 end) confirmed,
                     sum(case when status = 'confirmed' then contract_sum else 0 end) confirmed_sum,
@@ -91,6 +95,7 @@ class PreDealController extends Controller
             $names = User::whereIn('id', $rows->pluck('user_id'))->get(['id', 'name', 'avatar'])->keyBy('id');
             $stats = $rows->filter(fn ($r) => $names->has($r->user_id))
                 ->map(fn ($r) => [
+                    'id' => (int) $r->user_id, // клик по чипу рейтинга фильтрует лоты менеджера
                     'name' => $names[$r->user_id]->name,
                     'avatar' => $names[$r->user_id]->avatar,
                     'total' => (int) $r->total,
@@ -112,11 +117,7 @@ class PreDealController extends Controller
             $rows = PreDeal::query()
                 ->when($companyId, fn ($qq, $c) => $qq->where('company_id', $c))
                 ->when($mid ?? null, fn ($qq, $m) => $qq->where('user_id', $m))
-                ->when(preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $m2 = $request->string('month')->toString()), function ($qq) use ($m2) {
-                    $start = $m2.'-01';
-                    $qq->whereDate('created_at', '>=', $start)
-                        ->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($start)->endOfMonth()->toDateString());
-                })
+                ->tap($applyPeriod)
                 ->selectRaw("action, count(*) total,
                     sum(case when status = 'confirmed' then 1 else 0 end) won,
                     sum(case when status = 'confirmed' then contract_sum else 0 end) won_sum")
@@ -146,12 +147,27 @@ class PreDealController extends Controller
             'leadership' => $lead,
             'stats' => $stats,
             'managers' => $lead ? User::role('manager')->where('is_active', true)->ofCompany($companyId)->orderBy('name')->get(['id', 'name']) : [],
-            'filters' => $request->only('manager', 'status', 'month', 'action'),
+            'filters' => $request->only('manager', 'status', 'month', 'day', 'action'),
             'actionLabels' => PreDeal::ACTION_LABELS,
         ]);
     }
 
     /** @return array<string, mixed> */
+    /** История лота из аудита (JSON для модалки): кто и что менял. */
+    public function history(Request $request, PreDeal $preDeal): \Illuminate\Http\JsonResponse
+    {
+        $this->guardAccess($request);
+        $this->guardOwner($request, $preDeal);
+
+        $logs = \App\Models\AuditLog::where('table_name', 'pre_deals')->where('record_id', $preDeal->id)
+            ->with('user:id,name')->latest()->limit(100)->get();
+
+        return response()->json(\App\Support\AuditFormatter::humanize($logs, [
+            'user_id' => \App\Models\User::pluck('name', 'id'),
+            'deal_id' => \App\Models\Deal::pluck('number', 'id'),
+        ])->values());
+    }
+
     private function validated(Request $request, ?PreDeal $ignore = null): array
     {
         // Действие определяет форму: у звонка и КП только контакты, товар и
@@ -205,6 +221,15 @@ class PreDealController extends Controller
             'lot_number.unique' => 'Такой № лота уже существует — этот лот уже внесён.',
             'contract_number.unique' => 'Такой № договора уже существует.',
         ]);
+
+        // Пустые числовые поля формы приходят как null (ConvertEmptyStringsToNull),
+        // а колонки NOT NULL DEFAULT 0 → «Column 'partner_pct' cannot be null»
+        // (ошибка с прода 27.08.2026). Пусто = 0.
+        foreach (['purchase_price', 'partner_pct', 'delivery', 'assembly', 'commission'] as $num) {
+            if (array_key_exists($num, $data) && $data[$num] === null) {
+                $data[$num] = 0;
+            }
+        }
 
         // Пришедшие «лишние» поля короткой формы игнорируем: тип записи —
         // единственный источник правды о том, что у лота может быть заполнено.

@@ -13,21 +13,30 @@ const fieldRu = {
     description: 'Описание', note: 'Заметка', client_name: 'Товар', company_name: 'Заказчик', bin: '№ договора',
     address: 'Адрес', source: 'Источник', partner_pct: 'Доля партнёра', lot_number: 'Кол-во', unit: 'Ед.',
     closed_at: 'Закрытие', bonus_rate_override: 'Бонус, %', company_id: 'Фирма',
+    // Предсделка (лот)
+    product: 'Товар', customer: 'Заказчик', contract_sum: 'Сумма договора', purchase_price: 'Закуп',
+    delivery: 'Доставка', assembly: 'Сборка', commission: 'Комиссия', tax: 'Налог', remainder: 'Остаток',
+    margin: 'Маржа', action: 'Действие', tender_deadline: 'Срок тендера', contract_number: '№ договора',
+    client_phone: 'Телефон', comment: 'Комментарий', deal_id: 'Сделка', user_id: 'Менеджер', partner_sum: 'Партнёр, сумма',
 };
-const statusRu = { active: 'активна', closed: 'закрыта', cancelled: 'отменена' };
+const MONEY_FIELDS = ['budget', 'contract_sum', 'purchase_price', 'delivery', 'assembly', 'commission', 'tax', 'remainder', 'partner_sum'];
+const actionRu = { participation: 'Участие', call: 'Звонок', offer: 'КП (ватсап)' };
+const statusRu = { active: 'активна', closed: 'закрыта', cancelled: 'отменена', new: 'в работе', confirmed: 'выиграл ✓', lost: 'проиграл' };
 const money0 = (v) => (v === null || v === undefined || v === '' ? '∅' : money(v));
 const fmtVal = (field, v) => {
     if (v === null || v === undefined || v === '') return '∅';
-    if (field === 'budget') return money0(v);
-    if (field === 'partner_pct' || field === 'bonus_rate_override') return Number(v) + '%';
+    if (MONEY_FIELDS.includes(field)) return money0(v);
+    if (field === 'partner_pct' || field === 'bonus_rate_override' || field === 'margin') return Number(v) + '%';
     if (field === 'status') return statusRu[v] ?? v;
+    if (field === 'action') return actionRu[v] ?? v;
     const s = String(v);
     return s.length > 90 ? s.slice(0, 90) + '…' : s;
 };
 const fmt = (t) => new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 // «Создал(а)»: new_value — JSON всех полей. Показываем только осмысленные чипы.
-const SHOW_ON_CREATE = ['number', 'company_name', 'client_name', 'budget', 'source', 'partner_pct', 'deadline', 'status'];
+const SHOW_ON_CREATE = ['number', 'company_name', 'client_name', 'budget', 'source', 'partner_pct', 'deadline', 'status',
+    'lot_number', 'action', 'customer', 'product', 'contract_sum', 'margin'];
 const createdChips = (log) => {
     try {
         const data = typeof log.new_value === 'string' ? JSON.parse(log.new_value) : (log.new_value ?? {});

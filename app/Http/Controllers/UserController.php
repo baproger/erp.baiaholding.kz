@@ -376,12 +376,13 @@ class UserController extends Controller
      */
     private function guardRoleAssignment(Request $request, string $role, ?User $target = null): void
     {
-        $actorIsAdmin = $request->user()->hasRole('admin');
-        $targetWasAdmin = $target?->hasRole('admin') ?? false;
+        // Именно СУПЕР-админ: CEO проходит hasRole('admin'), но сюда — нет.
+        $actorIsAdmin = $request->user()->isSuperAdmin();
+        $targetWasAdmin = $target?->isSuperAdmin() ?? false;
 
-        // Выдать или снять роль admin может только admin.
+        // Выдать/снять роль admin и вообще править супер-админа может только супер-админ.
         if (($role === 'admin' || $targetWasAdmin) && ! $actorIsAdmin) {
-            abort(403, 'Роль «Администратор» назначает и снимает только администратор.');
+            abort(403, 'Супер-администратора и роль «Администратор» меняет только супер-администратор.');
         }
         // Нельзя разжаловать последнего активного админа.
         if ($targetWasAdmin && $role !== 'admin' && $this->activeAdminCount() <= 1) {

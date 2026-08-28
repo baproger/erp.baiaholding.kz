@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class Document extends Model
 {
     protected $fillable = [
-        'documentable_type', 'documentable_id', 'name', 'file_path',
+        'documentable_type', 'documentable_id', 'name', 'kind', 'file_path',
         'version', 'size', 'mime_type', 'user_id', 'is_active',
     ];
 

@@ -8,15 +8,18 @@ const props = defineProps({
     documents: { type: Array, default: () => [] },
     entityType: String,
     entityId: Number,
+    // Дизайнер (и руководство) прикрепляет смету — отдельная кнопка и бейдж.
+    canEstimate: { type: Boolean, default: false },
 });
 
 const fileInput = ref(null);
-const form = useForm({ documentable_type: props.entityType, documentable_id: props.entityId, name: '', file: null });
+const form = useForm({ documentable_type: props.entityType, documentable_id: props.entityId, name: '', kind: '', file: null });
 
-const pick = () => fileInput.value.click();
+const pick = (kind = '') => { form.kind = kind; fileInput.value.click(); };
 const onFile = (e) => {
     form.file = e.target.files[0];
-    if (form.file) form.post(route('documents.store'), { preserveScroll: true, forceFormData: true, onSuccess: () => form.reset('file') });
+    if (form.file) form.post(route('documents.store'), { preserveScroll: true, forceFormData: true, onSuccess: () => { form.reset('file'); form.kind = ''; } });
+    e.target.value = '';
 };
 const remove = async (d) => { if (await confirmDialog({ title: 'Удалить документ', message: 'Документ будет удалён.', confirmText: 'Удалить', danger: true })) router.delete(route('documents.destroy', d.id), { preserveScroll: true }); };
 const kb = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' МБ' : Math.max(1, Math.round(b / 1024)) + ' КБ';
@@ -25,7 +28,12 @@ const kb = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' МБ' : Math.max(1,
 <template>
     <div class="space-y-3">
         <input ref="fileInput" type="file" class="hidden" @change="onFile" />
-        <PrimaryButton :disabled="form.processing" @click="pick">{{ form.processing ? 'Загрузка…' : '+ Загрузить документ' }}</PrimaryButton>
+        <div class="flex flex-wrap items-center gap-2">
+            <PrimaryButton :disabled="form.processing" @click="pick('')">{{ form.processing ? 'Загрузка…' : '+ Загрузить документ' }}</PrimaryButton>
+            <button v-if="canEstimate" :disabled="form.processing" @click="pick('estimate')"
+                class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                title="Смета дизайнера: файл или фото. Бухгалтер сверяет с ней заявки на материалы со склада">📐 Загрузить смету</button>
+        </div>
 
         <div class="space-y-2">
             <div v-for="d in documents" :key="d.id" class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm">
@@ -35,6 +43,7 @@ const kb = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' МБ' : Math.max(1,
                     </span>
                     <div class="min-w-0">
                         <a :href="route('documents.download', d.id)" class="font-medium text-indigo-600 transition-colors duration-150 hover:text-indigo-800 hover:underline">{{ d.name }}</a>
+                        <span v-if="d.kind === 'estimate'" class="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700" title="Смета дизайнера">📐 смета</span>
                         <div class="text-xs text-slate-400">v{{ d.version }} · {{ kb(d.size) }} · {{ d.user?.name }}</div>
                     </div>
                 </div>

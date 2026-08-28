@@ -6,7 +6,7 @@ import PageLayout from '@/Layouts/PageLayout.vue';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 import { assemblyLabel } from '@/utils/companyTerms';
 
-const props = defineProps({ rows: Array, byManager: { type: Array, default: () => [] }, byStage: { type: Array, default: () => [] }, isLeadership: { type: Boolean, default: true }, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array });
+const props = defineProps({ rows: Array, byManager: { type: Array, default: () => [] }, byStage: { type: Array, default: () => [] }, isLeadership: { type: Boolean, default: true }, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array, sources: { type: Array, default: () => [] } });
 
 const money = (v) => new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v ?? 0));
 const money0 = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -17,20 +17,21 @@ const from = ref(props.filters?.from ?? '');
 const to = ref(props.filters?.to ?? '');
 const manager = ref(props.filters?.manager ?? '');
 const stageF = ref(props.filters?.stage ?? '');
+const sourceF = ref(props.filters?.source ?? '');
 const apply = () => router.get(route('reports.deals'), {
     search: search.value || undefined, from: from.value || undefined, to: to.value || undefined,
-    manager: manager.value || undefined, stage: stageF.value || undefined,
+    manager: manager.value || undefined, stage: stageF.value || undefined, source: sourceF.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(apply, 350); };
-const hasFilters = () => search.value || from.value || to.value || manager.value || stageF.value;
+const hasFilters = () => search.value || from.value || to.value || manager.value || stageF.value || sourceF.value;
 const reset = () => {
-    search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = '';
+    search.value = ''; from.value = ''; to.value = ''; manager.value = ''; stageF.value = ''; sourceF.value = '';
     clearStickyFilters('reports.deals');
     apply();
 };
 // Фильтр страницы запоминается: вернулся в отчёт — тот же период и менеджер.
-useStickyFilters('reports.deals', { search, from, to, manager, stageF }, apply);
+useStickyFilters('reports.deals', { search, from, to, manager, stageF, sourceF }, apply);
 
 // «Месяц» — обёртка над периодом: YYYY-MM ⇢ первое/последнее число месяца.
 // Показывается выбранным, только если период РОВНО совпадает с границами месяца.
@@ -156,6 +157,11 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             <select v-model="stageF" @change="apply" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm sm:w-auto">
                 <option value="">Все этапы</option>
                 <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </select>
+            <!-- Источник сделки (ОМ / ЗЦП / ИОИ / СК…) -->
+            <select v-model="sourceF" @change="apply" class="w-full rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm sm:w-auto" title="Источник сделки">
+                <option value="">Все источники</option>
+                <option v-for="s in sources" :key="s" :value="s">{{ s }}</option>
             </select>
             <button v-if="hasFilters()" @click="reset"
                 class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
@@ -368,7 +374,11 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
                             <td v-if="isLeadership" class="px-4 py-2.5 text-center">
                                 <span class="whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset" :class="marginBadge(r.margin)" :title="r.margin < 0 ? 'Проект в убыток' : null">{{ r.margin < 0 ? '▼ ' : '' }}{{ r.margin }}%</span>
                             </td>
-                            <td class="px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-emerald-600">{{ money(r.bonus) }}
+                                <!-- Ставка видна всегда: зелёная — авто от маржи, янтарная ✎ — ручная финансиста -->
+                                <span v-if="r.bonus_rate != null" class="ml-1 rounded px-1.5 py-px text-[10px] font-bold tabular-nums"
+                                    :class="r.bonus_manual ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'"
+                                    :title="r.bonus_manual ? 'Ручной % финансиста по этой сделке' : 'Авто-ставка от маржи сделки'">{{ r.bonus_rate }}%{{ r.bonus_manual ? ' ✎' : '' }}</span></td>
                             <td v-if="isLeadership" class="px-4 py-2.5 text-right font-semibold tabular-nums" :class="r.company < 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(r.company) }}</td>
                         </tr>
                         <tr v-if="!rows.length">

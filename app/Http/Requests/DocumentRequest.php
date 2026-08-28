@@ -15,6 +15,8 @@ class DocumentRequest extends FormRequest
             'documentable_type' => ['required', Rule::in(['deal', 'project'])],
             'documentable_id' => ['required', 'integer'],
             'name' => ['nullable', 'string', 'max:255'],
+            // 'estimate' — смета дизайнера (видна бухгалтеру при подтверждении материалов).
+            'kind' => ['nullable', Rule::in(['estimate'])],
             'file' => ['required', 'file', 'max:20480', // 20MB
                 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg,gif,zip,rar,txt,csv'],
         ];

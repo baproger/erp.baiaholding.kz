@@ -26,7 +26,8 @@ const monthLabel = computed(() => new Date(props.month + '-01T00:00:00')
 
 // Подтверждение: бухгалтер решает, откуда платить, и прикладывает чек.
 const confirmFor = ref(null);
-const cForm = useForm({ payment_method: 'cash', file: null });
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const cForm = useForm({ payment_method: 'cash', file: null, date: todayStr() });
 const openConfirm = (e) => { cForm.reset(); cForm.clearErrors(); confirmFor.value = e.id; };
 const submitConfirm = (e) => cForm.patch(route('expenses.confirm', e.id), {
     preserveScroll: true, forceFormData: true, onSuccess: () => (confirmFor.value = null),
@@ -118,6 +119,10 @@ const del = async (e) => {
                                         {{ m[1] }}
                                     </button>
                                 </div>
+                                <label class="flex items-center gap-2 text-xs font-medium text-slate-500" title="Каким днём расход ляжет в кассу / кассовую книгу">Дата оплаты
+                                    <input v-model="cForm.date" type="date" :max="todayStr()" class="rounded-lg border-slate-200 py-1 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                                </label>
+                                <div v-if="cForm.errors.date" class="text-xs text-red-600">{{ cForm.errors.date }}</div>
                                 <input type="file" @input="cForm.file = $event.target.files[0]"
                                     class="w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-600" />
                                 <div v-if="cForm.errors.file" class="text-xs text-red-600">{{ cForm.errors.file }}</div>
@@ -168,6 +173,9 @@ const del = async (e) => {
                                     class="inline-flex max-w-64 items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">
                                     {{ e.link.route === 'projects.show' ? '🏭' : '📄' }} {{ e.link.number }}<span v-if="e.link.name" class="truncate font-normal text-indigo-500"> · {{ e.link.name }}</span>
                                 </Link>
+                                <!-- Заявка на материал: смета дизайнера для сверки -->
+                                <a v-if="e.material && e.estimate" :href="route('documents.download', e.estimate.id)" target="_blank" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-200" :title="'Смета: ' + e.estimate.name">📐 смета</a>
+                                <span v-else-if="e.material" class="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600" title="Дизайнер ещё не прикрепил смету к сделке">⚠ нет сметы</span>
                             </div>
                         </div>
                         <!-- Путь денег одной строкой: кто подал → кто подтвердил -->

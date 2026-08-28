@@ -22,7 +22,36 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasRoles, \App\Models\Concerns\Auditable;
+    use HasFactory, Notifiable, SoftDeletes, \App\Models\Concerns\Auditable;
+    use HasRoles {
+        hasRole as protected spatieHasRole;
+    }
+
+    /**
+     * Роль CEO (правило от 25.08.2026): полный доступ как у admin — все
+     * проверки hasRole('admin') / hasAnyRole([...'admin'...]) / Gate::before
+     * пропускают CEO. Единственное отличие — CEO не трогает супер-админа:
+     * там код спрашивает isSuperAdmin(), а не hasRole('admin').
+     */
+    public function hasRole($roles, ?string $guard = null): bool
+    {
+        if ($this->spatieHasRole($roles, $guard)) {
+            return true;
+        }
+        if (! $this->spatieHasRole('ceo', $guard)) {
+            return false;
+        }
+        $names = collect(is_string($roles) ? explode('|', $roles) : (is_iterable($roles) ? $roles : [$roles]))
+            ->map(fn ($r) => $r instanceof \Spatie\Permission\Contracts\Role ? $r->name : (is_string($r) ? $r : null));
+
+        return $names->contains('admin');
+    }
+
+    /** Настоящий супер-админ (владелец системы), а не CEO. */
+    public function isSuperAdmin(): bool
+    {
+        return $this->spatieHasRole('admin');
+    }
 
     /**
      * Get the attributes that should be cast.

@@ -35,6 +35,8 @@ class ReportController extends Controller
         // Чужой ?manager= менеджеру не поможет: он всегда прибит к себе.
         $managerId = $isLeadership ? ($request->integer('manager') ?: null) : $user->id;
         $stageId = $request->integer('stage') ?: null;
+        // Источник сделки (ОМ / ЗЦП / ИОИ / СК…) — только из справочника.
+        $source = in_array($src = $request->string('source')->toString(), Deal::SOURCES, true) ? $src : null;
 
         $deals = Deal::forCurrentCompany()
             ->where('status', '!=', 'cancelled')
@@ -45,6 +47,7 @@ class ReportController extends Controller
                 ->orWhere('address', 'like', "%{$s}%")))
             ->when($managerId, fn ($q, $m) => $q->where('responsible_user_id', $m))
             ->when($stageId, fn ($q, $s) => $q->where('deal_stage_id', $s))
+            ->when($source, fn ($q, $s) => $q->where('source', $s))
             // Период — по дате ДОГОВОРА (без неё — по дате создания): та же
             // логика, что у фильтра «Месяц» на Финансах, цифры совпадают.
             ->when($from || $to, fn ($q) => $q->where(fn ($w) => $w
@@ -102,9 +105,11 @@ class ReportController extends Controller
             $partner = PayrollService::partnerSum($budget, $d->partner_pct);
             $remainder = round($budget - $tax - $expense - $partner, 2);
             // Та же формула бонуса, что на карточке сделки и в ЗП (с ручным % финансиста).
-            $bonus = PayrollService::marginBonus($budget, $remainder, $tax,
-                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
+            $override = $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null;
+            $bonus = PayrollService::marginBonus($budget, $remainder, $tax, $override);
             $company = round($remainder - $bonus, 2);
+            // Ставка бонуса (авто-ступень от коммерческой маржи или ручная финансиста) — для чипа у суммы.
+            $bonusRate = round(PayrollService::effectiveBonusRate(PayrollService::marginPct($budget, $remainder, $tax), $override) * 100, 1);
 
             return [
                 'id' => $d->id,
@@ -131,6 +136,8 @@ class ReportController extends Controller
                 // по-прежнему от коммерческой маржи (marginBonus выше).
                 'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
                 'bonus' => $bonus,
+                'bonus_rate' => $bonusRate,
+                'bonus_manual' => $override !== null,
                 'company' => $company,
                 'manager' => $d->responsible?->name,
                 'manager_id' => $d->responsible_user_id,
@@ -245,7 +252,8 @@ class ReportController extends Controller
             'isLeadership' => $isLeadership,
             'totals' => $totals,
             'taxRate' => $taxRate * 100,
-            'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId],
+            'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId, 'source' => $source],
+            'sources' => Deal::SOURCES,
             // Для фильтра: менеджеры отдельно, остальные — по отделам (сворачиваются).
             // МОПу выбирать не из кого — отчёт и так только по его сделкам.
             'managers' => \App\Models\User::where('is_active', true)->ofCompany($companyId)

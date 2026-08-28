@@ -43,6 +43,7 @@ class ModuleSmokeTest extends TestCase
         $user = $this->admin();
         $client = Client::create(['name' => 'Test Client', 'type' => 'legal']);
 
+        // Прямое создание закрыто для всех (25.08.2026) — даже админу: только из предсделки.
         $this->actingAs($user)->post(route('deals.store'), [
             'name' => 'Test Deal',
             'client_name' => 'Иван',
@@ -50,14 +51,8 @@ class ModuleSmokeTest extends TestCase
             'address' => 'Алматы, ул. Абая 1',
             'client_id' => $client->id,
             'budget' => 100000,
-        ])->assertRedirect();
-
-        $deal = Deal::first();
-        $this->assertNotNull($deal);
-        $this->assertMatchesRegularExpression('/^BAIA-\d{3,}$/', $deal->number);
-        // Название сделки = название компании (поле «Название сделки» убрано из UI,
-        // присланный 'name' игнорируется).
-        $this->assertEquals('ТОО Тест', $deal->name);
+        ])->assertForbidden();
+        $this->assertNull(Deal::first());
     }
 
     public function test_moving_deal_to_won_stage_closes_it(): void

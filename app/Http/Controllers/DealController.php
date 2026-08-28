@@ -130,6 +130,9 @@ class DealController extends Controller
 
     public function store(DealRequest $request, DealNumberService $numbers): RedirectResponse
     {
+        // Правило от 25.08.2026: сделка создаётся ТОЛЬКО из предсделки («Выиграл ✓»).
+        // Явный 403 даже для админа (Gate::before пропускает его через политику).
+        abort(403, 'Сделка создаётся только из предсделки — отметьте лот «Выиграл ✓».');
         $this->authorize('create', Deal::class);
 
         $data = $request->validated();
@@ -294,8 +297,13 @@ class DealController extends Controller
             ]),
             'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => DealStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
+            // Смета дизайнера (последняя активная): бухгалтер сверяет с ней материалы.
+            'estimate' => ($est = $deal->documents->firstWhere('kind', 'estimate'))
+                ? ['id' => $est->id, 'name' => $est->name, 'user' => $est->user?->name, 'at' => $est->created_at?->toDateString()] : null,
             'can' => [
                 'update' => request()->user()->can('update', $deal),
+                // Смету прикрепляет дизайнер (и руководство на всякий случай).
+                'estimate' => request()->user()->hasAnyRole(['designer', 'admin', 'financist']),
                 'advance' => request()->user()->can('advance', $deal),
                 'delete' => request()->user()->can('delete', $deal),
             ],
@@ -561,7 +569,7 @@ class DealController extends Controller
      */
     public function binLookup(Request $request): \Illuminate\Http\JsonResponse
     {
-        $this->authorize('create', Deal::class);
+        abort_unless($request->user()->hasAnyRole(['admin', 'financist', 'director']), 403);
         $bin = trim($request->string('bin')->toString());
         if ($bin === '') {
             return response()->json(['match' => null, 'history' => []]);

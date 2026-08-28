@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
@@ -12,6 +12,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 import TextInput from '@/Components/TextInput.vue';
+import HistoryPanel from '@/Components/HistoryPanel.vue';
 import { SOURCES } from '@/utils/dealOptions';
 import { formatDate } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
@@ -28,13 +29,14 @@ const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) +
 const managerF = ref(props.filters?.manager ?? '');
 const statusF = ref(props.filters?.status ?? '');
 const monthF = ref(props.filters?.month ?? '');
+const dayF = ref(props.filters?.day ?? '');      // конкретный день внесения (приоритет над месяцем)
 const actionF = ref(props.filters?.action ?? '');
 const applyFilters = () => router.get(route('preDeals.index'), {
     manager: managerF.value || undefined, status: statusF.value || undefined,
-    month: monthF.value || undefined, action: actionF.value || undefined,
+    month: monthF.value || undefined, day: dayF.value || undefined, action: actionF.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
-// Фильтр страницы запоминается: вернулся в предсделки — тот же месяц/действие.
-useStickyFilters('pre-deals', { managerF, statusF, monthF, actionF }, applyFilters);
+// Фильтр страницы запоминается: вернулся в предсделки — тот же месяц/день/действие.
+useStickyFilters('pre-deals', { managerF, statusF, monthF, dayF, actionF }, applyFilters);
 
 // Форма лота: живой расчёт как в Excel (партнёр/налог/остаток/маржа).
 // «Сегодня + прошлые» как блок «Расходы» на Финансах: сегодняшние лоты сверху,
@@ -42,8 +44,8 @@ useStickyFilters('pre-deals', { managerF, statusF, monthF, actionF }, applyFilte
 const isToday = (d) => d && new Date(d).toDateString() === new Date().toDateString();
 const showPast = ref(false);
 const lotGroups = computed(() => {
-    // Выбран месяц — секция на КАЖДУЮ дату внесения (свежие сверху), все раскрыты.
-    if (monthF.value) {
+    // Выбран месяц или день — секция на КАЖДУЮ дату внесения (свежие сверху), все раскрыты.
+    if (monthF.value || dayF.value) {
         const byDate = new Map();
         for (const p of props.preDeals) {
             const k = (p.created_at || '').slice(0, 10);
@@ -154,6 +156,18 @@ const del = async (p) => {
 const expanded = ref(null);
 // 👁 Полная информация о лоте в модалке (кнопка-глаз рядом с карандашом).
 const viewLot = ref(null);
+// История лота (аудит): подгружается при открытии глаза.
+const lotHistory = ref([]);
+const lotHistoryLoading = ref(false);
+watch(viewLot, async (p) => {
+    lotHistory.value = [];
+    if (!p) return;
+    lotHistoryLoading.value = true;
+    try {
+        const r = await fetch(route('preDeals.history', p.id), { headers: { Accept: 'application/json' } });
+        lotHistory.value = r.ok ? await r.json() : [];
+    } catch (e) { lotHistory.value = []; } finally { lotHistoryLoading.value = false; }
+});
 
 const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
     ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600';
@@ -166,10 +180,13 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
 
         <PageLayout title="Предварительные сделки" subtitle="лоты: маржа, действия, рейтинг" full>
             <template #actions>
-                <label class="flex items-center gap-1 text-xs text-slate-400" title="Показать лоты, внесённые в выбранном месяце — по датам">месяц
+                <label class="flex items-center gap-1 text-xs text-slate-400" title="Лоты, внесённые в конкретный день">день
+                    <input v-model="dayF" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                </label>
+                <label class="flex items-center gap-1 text-xs text-slate-400" title="Лоты, внесённые в выбранном месяце — по датам (если выбран день, он важнее)">месяц
                     <input v-model="monthF" @change="applyFilters" type="month" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                 </label>
-                <button v-if="monthF" @click="monthF = ''; applyFilters()" class="text-xs font-medium text-indigo-600 hover:underline">сбросить</button>
+                <button v-if="monthF || dayF" @click="monthF = ''; dayF = ''; applyFilters()" class="text-xs font-medium text-indigo-600 hover:underline">сбросить</button>
                 <select v-if="leadership" v-model="managerF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все менеджеры</option>
                     <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
@@ -187,60 +204,52 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 <PrimaryButton @click="openCreate">+ Предв. сделка</PrimaryButton>
             </template>
 
-            <!-- Рейтинг менеджеров (руководству) — секция §6 -->
-            <div v-if="leadership && stats?.length" class="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-                    <h3 class="text-sm font-semibold text-slate-900">Рейтинг менеджеров <span class="font-normal text-slate-400">— по подтверждённым лотам</span></h3>
+            <!-- Одна строка над таблицей, минимализм: слева — рейтинг менеджеров
+                 (чипы: место, имя, выиграл/всего, сумма), справа — итог по действиям.
+                 Клик по чипу менеджера / действия фильтрует лоты (повторный — снять). -->
+            <div v-if="leadership && (stats?.length || byAction?.length)" class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="mr-1 text-[11px] uppercase tracking-wide text-slate-400" title="По подтверждённым лотам за выбранный период">Рейтинг</span>
+                    <button v-for="(m, i) in stats" :key="m.name" type="button"
+                        @click="managerF = String(managerF) === String(m.id) ? '' : m.id; applyFilters()"
+                        class="flex items-center gap-1.5 rounded-full border bg-white py-0.5 pl-1 pr-2.5 text-[11px] shadow-sm transition-colors hover:bg-slate-50"
+                        :class="String(managerF) === String(m.id) ? 'border-indigo-400 ring-2 ring-indigo-500/20' : (i === 0 && m.confirmed > 0 ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200')"
+                        :title="m.name + ': выиграл ' + m.confirmed + ' из ' + m.total + ' лотов на ' + money(m.sum) + (m.actions ? ' · ' + m.actions.map((a) => a.label + ' ' + a.total + (a.won ? ' ✓' + a.won : '')).join(', ') : '')">
+                        <span class="w-4 text-center font-bold tabular-nums" :class="i === 0 && m.confirmed > 0 ? '' : 'text-slate-300'">{{ i === 0 && m.confirmed > 0 ? '👑' : i + 1 }}</span>
+                        <Avatar :name="m.name" :src="m.avatar" :size="18" />
+                        <span class="max-w-32 truncate font-medium text-slate-700">{{ m.name }}</span>
+                        <span class="font-bold tabular-nums text-emerald-600">✓ {{ m.confirmed }}</span>
+                        <span class="tabular-nums text-slate-400">/ {{ m.total }}</span>
+                        <span class="tabular-nums text-slate-500">· {{ money(m.sum) }}</span>
+                    </button>
                 </div>
-                <div class="flex gap-3 overflow-x-auto px-6 py-4">
-                    <div v-for="(m, i) in stats" :key="m.name" class="flex min-w-64 flex-shrink-0 items-center gap-3 rounded-xl border p-3"
-                        :class="i === 0 ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'">
-                        <span class="text-lg font-bold tabular-nums" :class="i === 0 ? '' : 'text-slate-300'">{{ i === 0 ? '👑' : i + 1 }}</span>
-                        <Avatar :name="m.name" :src="m.avatar" :size="36" />
-                        <div class="min-w-0">
-                            <div class="truncate text-sm font-semibold text-slate-900">{{ m.name }}</div>
-                            <div class="text-[11px] text-slate-400">выиграл <b class="text-emerald-600">{{ m.confirmed }}</b> из {{ m.total }} · <b class="tabular-nums text-slate-600">{{ money(m.sum) }}</b></div>
-                            <!-- Разбивка по действиям: сколько сделал → из них выиграно -->
-                            <div class="mt-1 flex flex-wrap items-center gap-1 text-[10px] tabular-nums">
-                                <span v-for="a in m.actions" :key="a.label" class="rounded-full px-1.5 py-0.5 font-medium"
-                                    :class="a.total > 0 ? 'bg-slate-100 text-slate-500' : 'bg-slate-50 text-slate-300'"
-                                    :title="a.label + ': всего ' + a.total + ', выиграно ' + a.won">
-                                    {{ a.label }} {{ a.total }}<b v-if="a.won > 0" class="text-emerald-600"> ✓{{ a.won }}</b>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+                <div v-if="byAction?.length" class="flex flex-wrap items-center gap-1.5">
+                    <button v-for="a in byAction" :key="a.action" type="button"
+                        @click="actionF = actionF === a.action ? '' : a.action; applyFilters()"
+                        class="flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[11px] shadow-sm transition-colors hover:bg-slate-50"
+                        :class="actionF === a.action ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-slate-200'"
+                        :title="a.label + ': ' + a.total + ' лотов, выиграно ' + a.won + ' (' + a.conversion + '%) на ' + money(a.won_sum)">
+                        <span class="rounded-full px-1.5 py-px font-medium" :class="actionClass(a.action)">{{ a.label }}</span>
+                        <span class="tabular-nums text-slate-500">{{ a.total }}</span>
+                        <span class="font-bold tabular-nums text-emerald-600">✓ {{ a.won }}</span>
+                        <span class="tabular-nums text-slate-400">· {{ a.conversion }}%</span>
+                    </button>
                 </div>
             </div>
-
-            <!-- Результат по действиям: из скольких лотов вышли сделки и на сколько.
-                 Уважает фильтр месяца и менеджера, но не фильтр действия — иначе
-                 сравнивать было бы не с чем. Плитки §5 -->
-            <div v-if="leadership && byAction?.length" class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <button v-for="a in byAction" :key="a.action" type="button"
-                    @click="actionF = actionF === a.action ? '' : a.action; applyFilters()"
-                    class="rounded-xl border bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
-                    :class="actionF === a.action ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-slate-200'">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="actionClass(a.action)">{{ a.label }}</span>
-                        <span class="text-[11px] uppercase tracking-wide text-slate-400">{{ a.total }} лотов</span>
-                    </div>
-                    <div class="mt-1 flex items-baseline gap-2">
-                        <span class="whitespace-nowrap text-xl font-bold tabular-nums text-emerald-600">{{ a.won }}</span>
-                        <span class="text-[11px] text-slate-400">выиграно · {{ a.conversion }}%</span>
-                    </div>
-                    <div class="mt-0.5 whitespace-nowrap text-sm font-semibold tabular-nums text-slate-800">{{ money(a.won_sum) }}</div>
-                    <div class="mt-0.5 text-[11px] text-slate-400">сумма выигранных договоров</div>
-                </button>
-            </div>
-
             <!-- Таблица лотов §7 -->
             <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="overflow-x-auto">
                     <table class="min-w-full whitespace-nowrap text-sm">
                         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                             <tr class="divide-x divide-slate-100">
-                                <th class="px-6 py-2.5">№ лота</th>
+                                <th class="px-6 py-2.5">
+                                    <div class="flex items-center gap-2">
+                                        <span>№ лота</span>
+                                        <!-- Кнопка создания прямо у колонки «№ лота» — чтобы жать не тянувшись в шапку -->
+                                        <button @click="openCreate" title="Новая предварительная сделка"
+                                            class="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-bold normal-case tracking-normal text-white shadow-sm transition-colors hover:bg-indigo-700">+ Новая</button>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-2.5">Заказчик · товар</th>
                                 <th class="px-4 py-2.5 text-right">Договор · закуп</th>
                                 <th class="px-4 py-2.5">
@@ -353,6 +362,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                     </table>
                 </div>
             </div>
+
         </PageLayout>
 
         <!-- 👁 Модалка просмотра лота: всё, что ввёл менеджер (зелёное «стекло» — расчёт справочный) -->
@@ -392,6 +402,13 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 </div>
                 <div v-else class="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm"><span class="text-slate-500">Сумма договора</span> <b class="ml-2 tabular-nums text-slate-900">{{ money(viewLot.contract_sum) }}</b></div>
                 <p v-if="viewLot.comment" class="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ viewLot.comment }}</p>
+                <!-- История: кто и что делал с лотом (из аудита) -->
+                <div class="mt-5">
+                    <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">История · кто что менял</div>
+                    <div v-if="lotHistoryLoading" class="py-3 text-center text-xs text-slate-400">Загрузка…</div>
+                    <HistoryPanel v-else-if="lotHistory.length" :history="lotHistory" />
+                    <div v-else class="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-400">Записей пока нет — журнал ведётся с 25.08.2026</div>
+                </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton v-if="viewLot.status !== 'confirmed'" @click="openEdit(viewLot); viewLot = null">Изменить</SecondaryButton>
                     <PrimaryButton @click="viewLot = null">Закрыть</PrimaryButton>

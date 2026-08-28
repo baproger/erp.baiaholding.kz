@@ -88,13 +88,14 @@ class StageGateRoleTest extends TestCase
         $this->actingAs($this->user('admin'))->patch(route('deals.stageTask', $deal->id))->assertSessionHas('success');
     }
 
-    public function test_financist_can_create_deal(): void
+    // Правило от 25.08.2026: напрямую сделку не создаёт никто — только из предсделки.
+    public function test_nobody_creates_deal_directly(): void
     {
         $fin = $this->user('financist');
         $this->actingAs($fin)->post(route('deals.store'), [
             'company_name' => 'ТОО Клиент', 'client_name' => 'Иван', 'address' => 'ул. Тест 1', 'budget' => 100000,
-        ])->assertSessionHasNoErrors()->assertRedirect();
-        $this->assertSame(1, Deal::count());
+        ])->assertForbidden();
+        $this->assertSame(0, Deal::count());
     }
 
     public function test_designer_can_view_deal_but_not_edit(): void

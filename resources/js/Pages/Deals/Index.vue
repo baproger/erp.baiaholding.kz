@@ -174,8 +174,8 @@ const applyBinMatch = () => {
                 <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('kanban')">Канбан</button>
                 <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('list')">Список</button>
             </div>
-            <!-- Создание сделки напрямую — только админ/финансист; менеджер выигрывает лот в Предсделках -->
-            <button v-if="can.create" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openCreate">+ Новая сделка</button>
+            <!-- Кнопки «+ Новая сделка» нет (25.08.2026): сделка появляется только
+                 из предсделки → «Выиграл ✓» -->
         </template>
 
         <!-- Единый фильтр-бар: поиск, менеджер (руководству), этап, срок с—по -->
@@ -217,11 +217,6 @@ const applyBinMatch = () => {
                     <div class="mt-0.5 pl-4 text-[11px] font-medium tabular-nums text-slate-400">{{ money(stageTotal(stage.id)) }}</div>
                 </div>
                 <div class="flex-1 space-y-2 px-2 pb-2 pt-2">
-                    <!-- Кнопка создания всегда СВЕРХУ колонки «Заключение договора» -->
-                    <button v-if="stage.id === firstStageId && can.create" @click="openCreate"
-                        class="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-indigo-300 py-2 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50">
-                        + Новая сделка
-                    </button>
                     <div v-for="deal in byStage(stage.id)" :key="deal.id" draggable="true" @dragstart="draggingId = deal.id"
                         class="cursor-move rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
                         <Link :href="route('deals.show', deal.id)" class="block">

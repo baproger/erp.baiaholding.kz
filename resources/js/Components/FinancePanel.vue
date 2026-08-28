@@ -21,6 +21,8 @@ const props = defineProps({
     // расходы) | 'invoices' (только аванс) | 'expenses' (только расходы).
     // На карточке сделки блоки стоят раздельно: Аванс → Сводка → Предсделка → Расходы.
     section: { type: String, default: 'all' },
+    // Смета дизайнера по сделке ({id,name,user,at} | null) — бухгалтер сверяет материалы.
+    estimate: { type: Object, default: null },
 });
 const showSummary = computed(() => ['all', 'summary'].includes(props.section));
 const showInvoices = computed(() => ['all', 'operations', 'invoices'].includes(props.section));
@@ -82,16 +84,21 @@ const canConfirm = computed(() => (usePage().props.auth.user?.roles ?? []).some(
 const canManageExpense = () => canConfirm.value;
 const confirmFor = ref(null); // id расхода, открытого на подтверждение
 const confirmInput = ref(null);
-const confirmForm = useForm({ payment_method: 'bank', file: null });
+const today = () => new Date().toISOString().slice(0, 10);
+const confirmForm = useForm({ payment_method: 'bank', file: null, date: today() });
 const openConfirm = async (e) => {
     // Материал: чек и способ оплаты не нужны — подтверждение сразу списывает склад.
     if (e.material) {
-        if (await confirmDialog({ title: 'Подтвердить списание', message: `${e.material.name} спишется со склада. Подтвердить?`, confirmText: '✓ Подтвердить' })) {
+        // Сверка со сметой дизайнера: есть — напоминаем открыть; нет — предупреждаем (не блокируем).
+        const est = props.estimate
+            ? `Смета дизайнера: «${props.estimate.name}» (${props.estimate.user ?? '—'}) — сверьте, что материал по смете.`
+            : '⚠ Сметы дизайнера у сделки нет — сверить не с чем. Подтверждайте только если уверены.';
+        if (await confirmDialog({ title: 'Подтвердить списание', message: `${est}\n\n${e.material.name} × ${qtyNum(e.qty)} ${e.material.unit} спишется со склада. Подтвердить?`, confirmText: '✓ Подтвердить' })) {
             router.patch(route('expenses.confirm', e.id), {}, { preserveScroll: true });
         }
         return;
     }
-    confirmFor.value = e.id; confirmForm.reset(); confirmForm.payment_method = 'bank';
+    confirmFor.value = e.id; confirmForm.reset(); confirmForm.payment_method = 'bank'; confirmForm.date = today();
 };
 const onConfirmReceipt = (ev) => { confirmForm.file = ev.target.files[0] ?? null; };
 const submitConfirm = (e) => confirmForm
@@ -324,6 +331,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             </div>
                             <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
                                 <span v-if="e.material" class="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700">склад: {{ e.material.name }} × {{ qtyNum(e.qty) }} {{ e.material.unit }}</span>
+                                <!-- Материал сверяется со сметой дизайнера -->
+                                <a v-if="e.material && estimate" :href="route('documents.download', estimate.id)" target="_blank" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-200" :title="'Смета: ' + estimate.name">📐 смета</a>
+                                <span v-else-if="e.material && e.status !== 'confirmed'" class="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600" title="Дизайнер ещё не прикрепил смету к сделке">⚠ нет сметы</span>
                                 <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
                                 <span v-if="e.responsible">{{ e.responsible.name }}</span>
                                 <span>· {{ fmtDateTime(e.created_at) }}</span>
@@ -368,7 +378,11 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             <button type="button" @click="confirmForm.payment_method = 'bank'"
                                 class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                                 :class="confirmForm.payment_method === 'bank' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
+                            <label class="ml-auto flex items-center gap-1.5 text-xs font-medium text-slate-500" title="Каким днём расход ляжет в кассу / кассовую книгу">Дата оплаты
+                                <input v-model="confirmForm.date" type="date" :max="today()" class="rounded-lg border-slate-200 py-1 text-xs shadow-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20" />
+                            </label>
                         </div>
+                        <div v-if="confirmForm.errors.date" class="mt-1 text-xs text-red-600">{{ confirmForm.errors.date }}</div>
                         <div class="mt-2">
                             <label class="mb-1 block text-xs font-medium text-slate-500">Чек оплаты бухгалтера (обязателен) — заявка менеджера остаётся рядом для сверки</label>
                             <input ref="confirmInput" type="file" accept="image/*,.pdf" @change="onConfirmReceipt"

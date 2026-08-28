@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // SetLocale runs after StartSession (session available) but before
         // controllers, so localized stage names use the correct locale.
         $middleware->web(append: [
+            // Первым: битый UTF-8 в ?query (обрезанная ссылка) ронял JSON страниц.
+            \App\Http\Middleware\SanitizeUtf8Input::class,
             \App\Http\Middleware\SecureHeaders::class,
             \App\Http\Middleware\SetLocale::class,
             \App\Http\Middleware\SetCurrentCompany::class,

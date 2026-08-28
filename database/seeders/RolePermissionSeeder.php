@@ -28,6 +28,10 @@ class RolePermissionSeeder extends Seeder
         $admin = Role::findOrCreate('admin', 'web');
         $admin->syncPermissions(Permission::all());
 
+        // CEO — полный доступ как у admin (User::hasRole пропускает CEO как admin),
+        // но супер-админа не трогает (UserController::guardRoleAssignment).
+        Role::findOrCreate('ceo', 'web')->syncPermissions(Permission::all());
+
         // Директор — НАБЛЮДАТЕЛЬ: видит всё, но не меняет пользователей/роли/
         // настройки (иначе мог бы выдать себе admin и захватить систему). Права
         // только на просмотр + отчёты/ЗП; создание групп в чате не через Spatie.
@@ -84,6 +88,10 @@ class RolePermissionSeeder extends Seeder
             // «Закуп ЛДСП,МДФ») — им нужен просмотр сделок.
             if (in_array($job, ['designer', 'supplier'], true)) {
                 $perms = array_merge($perms, ['deal.viewAny', 'deal.view']);
+            }
+            // Дизайнер прикрепляет смету к сделке (документ вида «смета»).
+            if ($job === 'designer') {
+                $perms = array_merge($perms, ['document.viewAny', 'document.view', 'document.create']);
             }
             Role::findOrCreate($job, 'web')->syncPermissions($perms);
         }

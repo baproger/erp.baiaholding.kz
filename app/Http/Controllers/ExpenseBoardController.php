@@ -92,6 +92,12 @@ class ExpenseBoardController extends Controller
             // остальное (PDF) — ссылкой.
             'is_image' => $e->file_path && preg_match('/\.(jpe?g|png|webp|gif)$/i', $e->file_path) === 1,
             'deal_id' => $e->expenseable_type === 'deal' ? $e->expenseable_id : null,
+            // Материал со склада: смета дизайнера по сделке (бухгалтер сверяет перед подтверждением).
+            'material' => (bool) $e->material_id,
+            'estimate' => $e->material_id && $e->expenseable_type === 'deal'
+                ? \App\Models\Document::where('documentable_type', 'deal')->where('documentable_id', $e->expenseable_id)
+                    ->where('kind', 'estimate')->where('is_active', true)->latest()->first(['id', 'name'])
+                : null,
             // Ссылка «по какой сделке / заказу цеха» — номер и заказчик.
             'link' => $e->expenseable ? [
                 'route' => $e->expenseable_type === 'project' ? 'projects.show' : 'deals.show',

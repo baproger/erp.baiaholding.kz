@@ -30,7 +30,9 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'avatar' => $user->avatar,
                     'language' => $user->language,
-                    'roles' => $user->getRoleNames(),
+                    // CEO видит всё как admin: для ролевых массивов фронта добавляем 'admin'
+                    // (первая роль остаётся 'ceo' — подпись в шапке «СЕО»).
+                    'roles' => ($rn = $user->getRoleNames())->contains('ceo') ? $rn->push('admin')->unique()->values() : $rn,
                     'permissions' => $user->getAllPermissions()->pluck('name'),
                 ] : null,
                 // Firms the user may work in + the one currently selected (header switcher).

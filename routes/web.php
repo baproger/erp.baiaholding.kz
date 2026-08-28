@@ -72,6 +72,8 @@ Route::middleware('auth')->group(function () {
     Route::post('pre-deals', [\App\Http\Controllers\PreDealController::class, 'store'])->name('preDeals.store');
     // Быстрая проверка № лота ДО заполнения формы (кнопка «Проверить» у поля).
     Route::get('pre-deals/check-lot', [\App\Http\Controllers\PreDealController::class, 'checkLot'])->middleware('throttle:60,1')->name('preDeals.checkLot');
+    // История изменений лота (кто что сделал) — для модалки-глаза.
+    Route::get('pre-deals/{preDeal}/history', [\App\Http\Controllers\PreDealController::class, 'history'])->name('preDeals.history');
     Route::put('pre-deals/{preDeal}', [\App\Http\Controllers\PreDealController::class, 'update'])->name('preDeals.update');
     Route::delete('pre-deals/{preDeal}', [\App\Http\Controllers\PreDealController::class, 'destroy'])->name('preDeals.destroy');
     Route::post('pre-deals/{preDeal}/confirm', [\App\Http\Controllers\PreDealController::class, 'confirm'])->name('preDeals.confirm');

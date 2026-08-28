@@ -145,6 +145,31 @@ class SecurityFixesTest extends TestCase
         $this->assertNull($admin->fresh()->deleted_at);
     }
 
+    // Роль CEO (25.08.2026): всё как admin, но супер-админа не трогает.
+    public function test_ceo_has_admin_access_but_cannot_touch_super_admin(): void
+    {
+        $admin = $this->user('admin');
+        $ceo = $this->user('ceo');
+        $mgr = $this->user('manager');
+
+        // Как admin: аудит и ошибки открываются.
+        $this->actingAs($ceo)->get(route('audit.index'))->assertOk();
+        $this->actingAs($ceo)->get(route('audit.errors'))->assertOk();
+
+        // Но: роль admin не выдать, супер-админа не изменить, не удалить.
+        $this->actingAs($ceo)->put(route('users.update', $mgr->id), [
+            'name' => $mgr->name, 'email' => $mgr->email, 'role' => 'admin',
+        ])->assertForbidden();
+        $this->actingAs($ceo)->put(route('users.update', $admin->id), [
+            'name' => 'Взлом', 'email' => $admin->email, 'role' => 'manager',
+        ])->assertForbidden();
+        $this->assertTrue($admin->fresh()->isSuperAdmin());
+        $this->actingAs($ceo)->delete(route('users.destroy', $admin->id))->assertForbidden();
+
+        // Сам CEO тоже защищён от удаления (как админ).
+        $this->actingAs($admin)->delete(route('users.destroy', $ceo->id))->assertForbidden();
+    }
+
     public function test_admin_cannot_self_delete_via_profile(): void
     {
         $admin = $this->user('admin');

@@ -40,10 +40,11 @@ class WorkflowTest extends TestCase
             ->assertForbidden();
         $this->assertEquals(0, Deal::count());
 
+        // 25.08.2026: и финансисту напрямую нельзя — только из предсделки «Выиграл ✓».
         $this->actingAs($this->user('financist'))
             ->post(route('deals.store'), ['name' => 'Тендер', 'client_name' => 'Иван', 'company_name' => 'ТОО Тендер', 'address' => 'Астана, пр. Мәңгілік Ел 1', 'budget' => 1000000])
-            ->assertRedirect();
-        $this->assertEquals(1, Deal::count());
+            ->assertForbidden();
+        $this->assertEquals(0, Deal::count());
     }
 
     public function test_advance_moves_to_next_stage(): void

@@ -288,7 +288,13 @@ class ExpenseController extends Controller
         $data = $request->validate([
             'payment_method' => ['required', \Illuminate\Validation\Rule::in(['cash', 'bank'])],
             'file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
-        ], ['payment_method.required' => 'Выберите способ оплаты: наличные или банк.']);
+            // День ОПЛАТЫ выбирает бухгалтер (правило от 25.08.2026): расход
+            // ложится в кассу/книгу этой датой, а не датой заявки менеджера.
+            'date' => ['nullable', 'date', 'before_or_equal:today'],
+        ], [
+            'payment_method.required' => 'Выберите способ оплаты: наличные или банк.',
+            'date.before_or_equal' => 'Дата оплаты не может быть в будущем.',
+        ]);
 
         // Чек ОПЛАТЫ бухгалтера — отдельное поле: заявка/чек менеджера
         // (file_path) остаётся нетронутой, оба чека видны рядом на карточке.
@@ -308,6 +314,7 @@ class ExpenseController extends Controller
             'confirm_file_path' => $expense->confirm_file_path,
             'status' => 'confirmed',
             'payment_method' => $data['payment_method'],
+            'date' => ! empty($data['date']) ? $data['date'] : now()->toDateString(),
             'confirmed_by' => $request->user()->id,
             'confirmed_at' => now(),
         ]);
