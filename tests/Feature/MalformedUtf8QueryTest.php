@@ -40,19 +40,18 @@ class MalformedUtf8QueryTest extends TestCase
         return ['X-Inertia' => 'true', 'X-Inertia-Version' => (string) $version];
     }
 
-    /** Доказательство, что тест ловит именно тот баг: без чистки — исключение. */
-    public function test_without_sanitizer_the_page_throws_malformed_utf8(): void
+    /**
+     * Два ремня: даже БЕЗ входной чистки (SanitizeUtf8Input) страница живёт —
+     * выходной санитайзер (SanitizedInertiaResponse) чистит готовые данные.
+     * До 31.08.2026 этот запрос ронял страницу InvalidArgumentException'ом.
+     */
+    public function test_page_survives_even_without_input_sanitizer(): void
     {
         $admin = $this->admin();
         $this->withoutMiddleware(SanitizeUtf8Input::class);
         $this->withoutExceptionHandling();
 
-        try {
-            $this->actingAs($admin)->withHeaders($this->headers())->get(self::URL);
-            $this->fail('Ожидалась ошибка Malformed UTF-8');
-        } catch (\InvalidArgumentException $e) {
-            $this->assertStringContainsString('Malformed UTF-8', $e->getMessage());
-        }
+        $this->actingAs($admin)->withHeaders($this->headers())->get(self::URL)->assertOk();
     }
 
     public function test_truncated_utf8_in_query_does_not_break_finance_page(): void
@@ -60,5 +59,21 @@ class MalformedUtf8QueryTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)->withHeaders($this->headers())->get(self::URL)->assertOk();
+    }
+
+    /** 31.08.2026: битые байты в ДАННЫХ (например, заметка поступления) тоже не роняют страницу. */
+    public function test_malformed_utf8_in_db_data_is_sanitized_not_fatal(): void
+    {
+        $admin = $this->admin();
+        \App\Models\CashReceipt::create([
+            'company_id' => Company::where('code', 'BAIA')->firstOrFail()->id,
+            'amount' => 1000, 'method' => 'cash', 'source' => "Битая строка \xC3", 'date' => now()->toDateString(),
+            'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)->withHeaders($this->headers())->get('/finance')->assertOk();
+
+        // Факт и место попали в журнал ошибок — данные можно чинить в корне.
+        $this->assertTrue(\App\Models\ErrorLog::where('message', 'like', '%Malformed UTF-8 в данных страницы%')->exists());
     }
 }

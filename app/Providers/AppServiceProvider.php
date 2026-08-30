@@ -14,7 +14,9 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Inertia отдаёт наш Response: чистка битого UTF-8 в готовых данных
+        // страницы + запись в журнал, какое поле было битым (31.08.2026).
+        $this->app->singleton(\Inertia\ResponseFactory::class, \App\Http\Inertia\SanitizingInertiaFactory::class);
     }
 
     public function boot(): void
