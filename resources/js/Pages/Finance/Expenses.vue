@@ -176,9 +176,11 @@ const del = async (e) => {
                                 <span>{{ e.category ?? 'Без категории' }}</span>
                                 <Link v-if="e.employee" :href="route('users.show', e.employee.id)" class="font-medium text-indigo-600 hover:underline">· {{ e.employee.name }}</Link>
                                 <!-- По какой сделке / заказу цеха — кликабельный номер -->
-                                <Link v-if="e.link" :href="route(e.link.route, e.link.id)" :title="e.link.name || ''"
-                                    class="inline-flex max-w-64 items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">
-                                    {{ e.link.route === 'projects.show' ? '🏭' : '📄' }} {{ e.link.number }}<span v-if="e.link.name" class="truncate font-normal text-indigo-500"> · {{ e.link.name }}</span>
+                                <Link v-if="e.link" :href="route(e.link.route, e.link.id)" :title="(e.link.number || '') + (e.link.name ? ' · ' + e.link.name : '')"
+                                    class="inline-flex max-w-64 items-center gap-1 whitespace-nowrap rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 ring-1 ring-inset ring-indigo-100 transition-colors duration-150 hover:bg-indigo-100">
+                                    <span class="opacity-70">{{ e.link.route === 'projects.show' ? '🏭' : '📄' }}</span>
+                                    <span class="tabular-nums font-semibold">{{ e.link.number }}</span>
+                                    <span v-if="e.link.name" class="truncate font-normal text-indigo-400">· {{ e.link.name }}</span>
                                 </Link>
                                 <!-- Заявка на материал: смета дизайнера для сверки -->
                                 <a v-if="e.material && e.estimate" :href="route('documents.download', e.estimate.id)" target="_blank" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-200" :title="'Смета: ' + e.estimate.name">📐 смета</a>
@@ -187,12 +189,12 @@ const del = async (e) => {
                         </div>
                         <!-- Путь денег одной строкой: кто подал → кто подтвердил -->
                         <div class="flex shrink-0 items-center gap-1">
-                            <Link v-if="e.author" :href="route('users.show', e.author.id)"
-                                class="max-w-28 truncate rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">{{ e.author.name }}</Link>
+                            <Link v-if="e.author" :href="route('users.show', e.author.id)" :title="'Подал: ' + e.author.name"
+                                class="max-w-36 truncate rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">{{ e.author.name }}</Link>
                             <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">—</span>
                             <svg class="h-3.5 w-3.5 shrink-0 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-                            <Link v-if="e.confirmer" :href="route('users.show', e.confirmer.id)"
-                                class="max-w-28 truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">✓ {{ e.confirmer.name }}</Link>
+                            <Link v-if="e.confirmer" :href="route('users.show', e.confirmer.id)" :title="'Оплатил(а): ' + e.confirmer.name"
+                                class="max-w-36 truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">✓ {{ e.confirmer.name }}</Link>
                             <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">⚙ система</span>
                         </div>
                         <!-- Чек и способ оплаты: одинаковые пилюли -->
