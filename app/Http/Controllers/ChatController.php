@@ -289,6 +289,7 @@ class ChatController extends Controller
     {
         $this->authorizeParticipant($request, $chat);
         $lastId = (int) $chat->messages()->max('id');
+        \App\Support\LiveStamp::bump($request->user()->id, 'chat');
         \Illuminate\Support\Facades\DB::table('chat_reads')->updateOrInsert(
             ['chat_id' => $chat->id, 'user_id' => $request->user()->id],
             ['last_read_message_id' => $lastId, 'updated_at' => now(), 'created_at' => now()]

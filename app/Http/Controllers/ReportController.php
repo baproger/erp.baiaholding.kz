@@ -21,11 +21,21 @@ class ReportController extends Controller
 {
     public function deals(Request $request): Response
     {
+        // Права — ДО кеша; сам расчёт — в buildDeals() и живёт 5 минут
+        // (сбрасывается любым изменением денег, см. ReportCache).
+        $user = $request->user();
+        abort_unless($user->hasAnyRole(['admin', 'director', 'financist']) || $user->hasRole('manager'), 403);
+
+        return Inertia::render('Reports/Deals', \App\Support\ReportCache::remember($request, 'deals', fn () => $this->buildDeals($request)));
+    }
+
+    /** @return array<string, mixed> */
+    private function buildDeals(Request $request): array
+    {
         $user = $request->user();
         // Руководство видит отчёт целиком (бонусы всех менеджеров), МОП —
         // ТОЛЬКО свои сделки: свой срез «сколько сделал за месяц и где стоит».
         $isLeadership = $user->hasAnyRole(['admin', 'director', 'financist']);
-        abort_unless($isLeadership || $user->hasRole('manager'), 403);
 
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
@@ -245,7 +255,7 @@ class ReportController extends Controller
             $totals = $hideProfit($totals);
         }
 
-        return Inertia::render('Reports/Deals', [
+        return [
             'rows' => $rows,
             'byManager' => $byManager,
             'byStage' => $byStage,
@@ -267,6 +277,6 @@ class ReportController extends Controller
                     'department' => $u->department?->name,
                 ])->values(),
             'stageOptions' => $stageOptions,
-        ]);
+        ];
     }
 }

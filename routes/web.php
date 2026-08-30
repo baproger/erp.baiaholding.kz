@@ -209,6 +209,8 @@ Route::middleware('auth')->group(function () {
     Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
     // Лёгкий поллинг бейджей/звука — до chat/{chat}-маршрутов.
     Route::get('chat/state', [ChatController::class, 'state'])->middleware('throttle:120,1')->name('chat.state');
+    // Единый «штамп изменений» для живых обновлений (чат/уведомления/задачи): 0 SQL.
+    Route::get('live/version', [\App\Http\Controllers\LiveController::class, 'version'])->middleware('throttle:600,1')->name('live.version');
     Route::post('chat', [ChatController::class, 'store'])->middleware('throttle:30,1')->name('chat.store');
     // Корзина чатов: вернуть / стереть навсегда (admin/director).
     Route::post('chat/{id}/restore', [ChatController::class, 'restore'])->name('chat.restore');

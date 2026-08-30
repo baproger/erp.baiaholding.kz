@@ -23,7 +23,11 @@ class PayrollController extends Controller
 
     public function index(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): Response
     {
-        return Inertia::render('Payroll/Index', $this->sheet($request, $payroll, $debts));
+        abort_unless($request->user()->can('payroll.view'), 403);
+
+        // Ведомость — под кешем ReportCache (5 минут, сброс при изменении денег/часов).
+        return Inertia::render('Payroll/Index', \App\Support\ReportCache::remember(
+            $request, 'payroll', fn () => $this->sheet($request, $payroll, $debts)));
     }
 
     /**
@@ -143,8 +147,16 @@ class PayrollController extends Controller
 
     public function bonuses(Request $request, PayrollService $payroll): Response
     {
+        abort_unless($request->user()->can('payroll.view'), 403);
+
+        return Inertia::render('Payroll/Bonuses', \App\Support\ReportCache::remember(
+            $request, 'bonuses', fn () => $this->buildBonuses($request, $payroll)));
+    }
+
+    /** @return array<string, mixed> */
+    private function buildBonuses(Request $request, PayrollService $payroll): array
+    {
         $user = $request->user();
-        abort_unless($user->can('payroll.view'), 403);
         $leadership = $user->hasAnyRole(['admin', 'director', 'financist']);
         $year = (int) ($request->integer('year') ?: now()->year);
         $year = max(2020, min($year, (int) now()->year + 1));
@@ -227,7 +239,7 @@ class PayrollController extends Controller
             ];
         })->sortByDesc('balance')->values();
 
-        return Inertia::render('Payroll/Bonuses', [
+        return [
             'rows' => $rows,
             'year' => $year,
             'leadership' => $leadership,
@@ -237,7 +249,7 @@ class PayrollController extends Controller
                 'year_paid' => (float) $rows->sum('year_paid'),
                 'balance' => (float) $rows->sum('balance'),
             ],
-        ]);
+        ];
     }
 
     /** Общий расчёт ведомости для страниц «Зарплата» и «Бонусы». @return array<string, mixed> */

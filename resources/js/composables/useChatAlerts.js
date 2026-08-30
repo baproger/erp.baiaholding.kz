@@ -1,5 +1,6 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { startLive, stopLive, onLive } from './useLive';
 
 // ---- Глобальные оповещения чата (AppLayout): каждый сотрудник получает «дзынь» + браузерное
 // уведомление о новом сообщении на ЛЮБОЙ странице ERP, а не только внутри чата.
@@ -8,8 +9,7 @@ import { usePage } from '@inertiajs/vue3';
 
 const unreadTotal = ref(0);
 let statePrev = null;
-let fgTimer = null;
-let bgTimer = null;
+let offLive = null;
 let mounts = 0;
 let audioCtx = null;
 
@@ -130,19 +130,19 @@ const poll = async () => {
 
 const start = () => {
     poll();
-    // Передний план — раз в 20с; фон — раз в 60с. При 15–20 сотрудниках
-    // каждый лишний опрос умножается на все открытые вкладки — бейдж чата
-    // не обязан быть секундным (открытый чат опрашивается чаще сам).
-    fgTimer = setInterval(() => { if (!document.hidden) poll(); }, 30000);
-    bgTimer = setInterval(() => { if (document.hidden) poll(); }, 120000);
+    // Своих таймеров больше нет: единый опрос /live/version (useLive) зовёт
+    // poll() только когда штамп «chat» реально сдвинулся (новое сообщение /
+    // прочтение) — в тишине чат вообще не опрашивается.
+    startLive();
+    offLive = onLive('chat', poll);
     window.addEventListener('pointerdown', askPermissionOnce);
     window.addEventListener('pointerdown', unlockAudio);
     window.addEventListener('keydown', unlockAudio);
 };
 
 const stop = () => {
-    clearInterval(fgTimer); clearInterval(bgTimer);
-    fgTimer = bgTimer = null;
+    offLive?.(); offLive = null;
+    stopLive();
     window.removeEventListener('pointerdown', askPermissionOnce);
     window.removeEventListener('pointerdown', unlockAudio);
     window.removeEventListener('keydown', unlockAudio);

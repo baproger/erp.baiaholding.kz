@@ -34,6 +34,14 @@ class AnalyticsController extends Controller
         // financist — как на бывшем Дашборде: видит деньги, но без report.viewAny.
         abort_unless($request->user()->can('report.viewAny') || $request->user()->hasAnyRole(['admin', 'financist']), 403);
 
+        // Тяжёлый расчёт — под кешем ReportCache (5 минут, сброс при изменении денег).
+        return Inertia::render('Analytics/Index', \App\Support\ReportCache::remember($request, 'analytics', fn () => $this->build($request)));
+    }
+
+    /** @return array<string, mixed> */
+    private function build(Request $request): array
+    {
+
         // ---- Фильтры: период (для «за период» и топа менеджеров), менеджер,
         // этап, поиск (№ / контрагент / договор). Применяются к воронке,
         // блоку «за период» и топу менеджеров. ----
@@ -401,7 +409,7 @@ class AnalyticsController extends Controller
             'esf' => $gateDeals->filter(fn ($d) => $stageById[$d->deal_stage_id]?->stage_type === 'esf')->count(),
         ];
 
-        return Inertia::render('Analytics/Index', [
+        return [
             'byEmployee' => $byEmployee,
             'byAccountant' => $byAccountant,
             'accountantTotals' => $accountantTotals,
@@ -437,6 +445,6 @@ class AnalyticsController extends Controller
             'filters' => ['from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId, 'search' => $search],
             'managers' => User::where('is_active', true)->ofCompany($companyId)->orderBy('name')->get(['id', 'name']),
             'stageOptions' => $stages->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : '')])->values(),
-        ]);
+        ];
     }
 }

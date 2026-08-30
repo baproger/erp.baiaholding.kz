@@ -12,6 +12,7 @@ class NotificationController extends Controller
         $request->user()->notifications()->where('id', $id)->update(['read_at' => now()]);
         // Шапка кэширует уведомления на 15с — после прочтения сбрасываем сразу.
         \Illuminate\Support\Facades\Cache::forget('notif_head.'.$request->user()->id);
+        \App\Support\LiveStamp::bump($request->user()->id, 'notifications');
 
         return back();
     }
@@ -20,6 +21,7 @@ class NotificationController extends Controller
     {
         $request->user()->unreadNotifications->markAsRead();
         \Illuminate\Support\Facades\Cache::forget('notif_head.'.$request->user()->id);
+        \App\Support\LiveStamp::bump($request->user()->id, 'notifications');
 
         return back()->with('success', 'Все уведомления прочитаны.');
     }

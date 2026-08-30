@@ -47,7 +47,7 @@ class HandleInertiaRequests extends Middleware
             // сотрудника. Кэш на 15 секунд снимает эту нагрузку почти целиком;
             // при новом уведомлении/прочтении кэш сбрасывается (NotificationCache).
             'notifications' => fn () => $user
-                ? \Illuminate\Support\Facades\Cache::remember('notif_head.'.$user->id, 15, fn () => [
+                ? \Illuminate\Support\Facades\Cache::remember('notif_head.'.$user->id, 300, fn () => [
                     'unread' => $user->unreadNotifications()->count(),
                     'items' => $user->notifications()->latest()->limit(10)->get()
                         ->map(fn ($n) => [
