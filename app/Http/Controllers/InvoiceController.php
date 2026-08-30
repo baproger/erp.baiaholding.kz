@@ -61,14 +61,16 @@ class InvoiceController extends Controller
             $target = $i->invoiceable;
             $link = null;
             if ($target instanceof \App\Models\Deal) {
-                $link = ['type' => 'deal', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->company_name ?? ''), ' ·')];
+                // НЕ trim с маской ' ·': PHP режет её ПОБАЙТОВО и отрезает половину
+                // русской буквы «з» (D0 B7 ↔ «·» C2 B7) — битый UTF-8 ронял /finance.
+                $link = ['type' => 'deal', 'id' => $target->id, 'label' => implode(' · ', array_filter([$target->number, $target->company_name]))];
             } elseif ($target instanceof \App\Models\Project) {
-                $link = ['type' => 'project', 'id' => $target->id, 'label' => trim($target->number.' · '.($target->name ?? ''), ' ·')];
+                $link = ['type' => 'project', 'id' => $target->id, 'label' => implode(' · ', array_filter([$target->number, $target->name]))];
             } elseif ($i->invoiceable_type === 'deal' && $i->invoiceable_id) {
                 $trashed = \App\Models\Deal::withTrashed()->find($i->invoiceable_id);
                 if ($trashed) {
                     $number = preg_replace('/#del\d+$/', '', (string) $trashed->number);
-                    $link = ['type' => 'deal', 'id' => null, 'label' => trim($number.' · '.($trashed->company_name ?? ''), ' ·').' (сделка удалена)'];
+                    $link = ['type' => 'deal', 'id' => null, 'label' => implode(' · ', array_filter([$number, $trashed->company_name])).' (сделка удалена)'];
                 }
             }
 

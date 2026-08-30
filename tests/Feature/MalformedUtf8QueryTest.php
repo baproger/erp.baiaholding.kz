@@ -76,4 +76,32 @@ class MalformedUtf8QueryTest extends TestCase
         // Факт и место попали в журнал ошибок — данные можно чинить в корне.
         $this->assertTrue(\App\Models\ErrorLog::where('message', 'like', '%Malformed UTF-8 в данных страницы%')->exists());
     }
+
+    /**
+     * Корень бага 31.08.2026: trim($s, ' ·') режет маску ПОБАЙТОВО и отрезает
+     * половину буквы «з» (D0 B7 ↔ «·» C2 B7) в подписи ссылки счёта.
+     * Заказчик, оканчивающийся на «з», не должен ломать подпись.
+     */
+    public function test_invoice_link_label_keeps_trailing_cyrillic_ze(): void
+    {
+        $admin = $this->admin();
+        $deal = \App\Models\Deal::create([
+            'company_id' => Company::where('code', 'BAIA')->firstOrFail()->id,
+            'number' => 'BAIA-001', 'name' => 'Сделка', 'company_name' => 'ТОО КазМунайГаз',
+            'budget' => 100000, 'status' => 'active',
+            'deal_stage_id' => \App\Models\DealStage::orderBy('order')->first()->id,
+            'responsible_user_id' => $admin->id,
+        ]);
+        \App\Models\Invoice::create([
+            'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id,
+            'number' => 'INV-1', 'amount' => 50000, 'status' => 'sent',
+            'issue_date' => now()->subMonths(2)->toDateString(),
+            'created_at' => now()->subMonths(2),
+        ]);
+
+        $res = $this->actingAs($admin)->withHeaders($this->headers())->get('/finance')->assertOk();
+        $labels = collect(data_get($res->json('props'), 'invoicesPast.*.link.label'))->filter()->values();
+        $this->assertTrue($labels->contains(fn ($l) => str_ends_with($l, 'КазМунайГаз')), 'буква «з» на конце должна уцелеть: '.$labels->implode(' | '));
+        $this->assertFalse(\App\Models\ErrorLog::where('message', 'like', '%Malformed UTF-8 в данных страницы%')->exists(), 'журнал должен остаться пустым');
+    }
 }
