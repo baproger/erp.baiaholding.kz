@@ -4,6 +4,7 @@ import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import Avatar from '@/Components/Avatar.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 import { money, formatDate } from '@/utils/format';
@@ -73,27 +74,33 @@ const del = async (e) => {
             <div v-if="pending.length" class="mt-6">
                 <h3 class="mb-2 text-sm font-semibold text-slate-900">Требуют проверки</h3>
                 <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    <div v-for="e in pending" :key="e.id" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div class="flex flex-wrap items-start justify-between gap-2">
-                            <div class="min-w-0">
-                                <div class="text-xl font-bold tabular-nums text-slate-900">{{ money(e.amount) }}</div>
-                                <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                                    <span>{{ formatDate(e.date) }}</span>
-                                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-500">{{ e.category ?? 'Без категории' }}</span>
-                                    <span v-if="e.payout" class="rounded-full px-2.5 py-0.5 font-medium"
-                                        :class="e.payout === 'Долг' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-700'">{{ e.payout }}</span>
-                                    <Link v-if="e.link" :href="route(e.link.route, e.link.id)" :title="e.link.name || ''"
-                                        class="inline-flex max-w-56 items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">
-                                        {{ e.link.route === 'projects.show' ? '🏭' : '📄' }} {{ e.link.number }}<span v-if="e.link.name" class="truncate font-normal text-indigo-500"> · {{ e.link.name }}</span>
-                                    </Link>
-                                </div>
-                            </div>
-                            <div v-if="e.author" class="text-right text-[11px] text-slate-400">подал
-                                <Link :href="route('users.show', e.author.id)" class="font-medium text-indigo-600 hover:underline">{{ e.author.name }}</Link>
-                            </div>
+                    <!-- Стекло (glassmorphism, янтарный оттенок «ожидает»): шапка сумма + кто
+                         подал, ниже ровный ряд чипов — номер сделки в одну строку, название обрезается -->
+                    <div v-for="e in pending" :key="e.id"
+                        class="rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 via-white/80 to-indigo-50/60 p-4 shadow-sm backdrop-blur transition-shadow hover:shadow-md">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="text-2xl font-bold leading-tight tabular-nums text-slate-900">{{ money(e.amount) }}</div>
+                            <Link v-if="e.author" :href="route('users.show', e.author.id)"
+                                class="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-white/70 py-0.5 pl-0.5 pr-2.5 text-[11px] text-slate-500 ring-1 ring-slate-200/70 transition-colors hover:bg-white"
+                                :title="'Подал заявку: ' + e.author.name">
+                                <Avatar :name="e.author.name" :size="20" />
+                                <span class="font-medium text-slate-700">{{ e.author.name }}</span>
+                            </Link>
+                        </div>
+                        <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                            <span class="rounded-full bg-white/70 px-2.5 py-0.5 tabular-nums text-slate-500 ring-1 ring-slate-200/70">{{ formatDate(e.date) }}</span>
+                            <span class="rounded-full bg-white/70 px-2.5 py-0.5 font-medium text-slate-500 ring-1 ring-slate-200/70">{{ e.category ?? 'Без категории' }}</span>
+                            <span v-if="e.payout" class="rounded-full px-2.5 py-0.5 font-medium ring-1"
+                                :class="e.payout === 'Долг' ? 'bg-rose-50 text-rose-600 ring-rose-200' : 'bg-indigo-50 text-indigo-700 ring-indigo-200'">{{ e.payout }}</span>
+                            <Link v-if="e.link" :href="route(e.link.route, e.link.id)" :title="(e.link.number || '') + (e.link.name ? ' · ' + e.link.name : '')"
+                                class="inline-flex max-w-64 items-center gap-1.5 whitespace-nowrap rounded-full bg-indigo-600/90 py-0.5 pl-2 pr-2.5 font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-indigo-600">
+                                <span class="opacity-80">{{ e.link.route === 'projects.show' ? '🏭' : '📄' }}</span>
+                                <span class="tabular-nums">{{ e.link.number }}</span>
+                                <span v-if="e.link.name" class="truncate font-normal text-indigo-100">· {{ e.link.name }}</span>
+                            </Link>
                         </div>
 
-                        <p class="mt-2 text-sm text-slate-600">{{ e.description || 'Без описания' }}</p>
+                        <p class="mt-3 rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug text-slate-700 ring-1 ring-slate-200/60">{{ e.description || 'Без описания' }}</p>
 
                         <!-- Чек открыт сразу -->
                         <a v-if="e.is_image" :href="route('expenses.receipt', e.id)" target="_blank" class="block">
@@ -109,7 +116,7 @@ const del = async (e) => {
                         </div>
 
                         <!-- Подтверждение: откуда платим + чек бухгалтера -->
-                        <div v-if="canManage" class="mt-3 border-t border-slate-100 pt-3">
+                        <div v-if="canManage" class="mt-3 border-t border-slate-200/60 pt-3">
                             <div v-if="confirmFor === e.id" class="space-y-2">
                                 <div class="flex gap-2">
                                     <button v-for="m in [['cash','💵 Наличные'],['bank','🏦 Банк']]" :key="m[0]" type="button"
@@ -132,10 +139,10 @@ const del = async (e) => {
                                 </div>
                             </div>
                             <div v-else class="flex items-center justify-between gap-2">
-                                <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openConfirm(e)">
+                                <button class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[.98]" @click="openConfirm(e)">
                                     ✓ Проверил, оплатить
                                 </button>
-                                <button class="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors duration-150 hover:bg-rose-100" @click="del(e)">Удалить</button>
+                                <button class="rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600" @click="del(e)">Удалить</button>
                             </div>
                         </div>
                     </div>
