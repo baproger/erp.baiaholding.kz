@@ -242,6 +242,8 @@ Route::middleware('auth')->group(function () {
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
     // Журнал ошибок сайта: только админ, удаления не существует.
     Route::get('audit/errors', [AuditController::class, 'errors'])->name('audit.errors');
+    // Диагностика сервера (OPcache и т.п.) — только админ.
+    Route::get('audit/system', [AuditController::class, 'system'])->name('audit.system');
 
     // Comments
     Route::post('comments', [CommentController::class, 'store'])->name('comments.store');

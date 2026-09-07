@@ -39,6 +39,34 @@ class AuditController extends Controller
         ]);
     }
 
+    /**
+     * Аудит → /audit/system: диагностика сервера (только админ). Показывает,
+     * включён ли OPcache и какие драйверы реально работают на проде —
+     * тормоза «при 2–3 людях» чаще всего значат opcache.enable=0.
+     */
+    public function system(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        abort_unless($request->user()->hasRole('admin'), 403);
+
+        $op = function_exists('opcache_get_status') ? (opcache_get_status(false) ?: null) : null;
+
+        return response()->json([
+            'php' => PHP_VERSION,
+            'opcache_включен' => (bool) ($op['opcache_enabled'] ?? false),
+            'opcache_попаданий_%' => isset($op['opcache_statistics']['opcache_hit_rate'])
+                ? round($op['opcache_statistics']['opcache_hit_rate'], 1) : null,
+            'opcache_памяти_мб' => isset($op['memory_usage']['used_memory'])
+                ? round(($op['memory_usage']['used_memory'] + $op['memory_usage']['free_memory']) / 1048576) : null,
+            'memory_limit' => ini_get('memory_limit'),
+            'realpath_cache' => ini_get('realpath_cache_size'),
+            'cache_driver' => config('cache.default'),
+            'session_driver' => config('session.driver'),
+            'config_кеширован' => app()->configurationIsCached(),
+            'routes_кешированы' => app()->routesAreCached(),
+            'debug' => config('app.debug'),
+        ], 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
+
     /** Русские названия таблиц журнала. */
     private const TABLE_LABELS = [
         'deals' => 'Сделки', 'projects' => 'Заказы цеха', 'tasks' => 'Задачи',
