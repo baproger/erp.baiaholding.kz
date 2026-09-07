@@ -52,12 +52,20 @@ class AuditController extends Controller
 
         return response()->json([
             'php' => PHP_VERSION,
+            'sapi' => php_sapi_name(),
+            'php_ini' => php_ini_loaded_file() ?: null,
+            // Различаем случаи: модуль не загружен ↔ загружен, но enable=0.
+            'opcache_модуль_загружен' => extension_loaded('Zend OPcache'),
+            'opcache.enable_(ini)' => ini_get('opcache.enable'),
             'opcache_включен' => (bool) ($op['opcache_enabled'] ?? false),
             'opcache_попаданий_%' => isset($op['opcache_statistics']['opcache_hit_rate'])
                 ? round($op['opcache_statistics']['opcache_hit_rate'], 1) : null,
             'opcache_памяти_мб' => isset($op['memory_usage']['used_memory'])
                 ? round(($op['memory_usage']['used_memory'] + $op['memory_usage']['free_memory']) / 1048576) : null,
             'memory_limit' => ini_get('memory_limit'),
+            // Лимиты загрузки файлов: чеки до 10МБ, сметы до 20МБ — должно быть ≥25M.
+            'upload_max_filesize' => ini_get('upload_max_filesize'),
+            'post_max_size' => ini_get('post_max_size'),
             'realpath_cache' => ini_get('realpath_cache_size'),
             'cache_driver' => config('cache.default'),
             'session_driver' => config('session.driver'),
