@@ -22,15 +22,24 @@ final class ReportCache
     /** @param \Closure(): array<string, mixed> $build @return array<string, mixed> */
     public static function remember(Request $request, string $report, \Closure $build): array
     {
+        // 'report2': смена префикса 31.08.2026 — старые записи с «живыми»
+        // коллекциями внутри игнорируются (см. нормализацию ниже).
         $key = implode(':', [
-            'report', $report, self::version(),
+            'report2', $report, self::version(),
             (string) $request->user()?->id,
             (string) (CurrentCompany::id() ?? 0),
             app()->getLocale(),
             md5(json_encode($request->query())),
         ]);
 
-        return Cache::remember($key, self::TTL, $build);
+        // В кеш — ТОЛЬКО чистые массивы. Eloquent/Support-коллекции после
+        // serialize/unserialize из файлового кеша возвращались как
+        // __PHP_Incomplete_Class → json_encode делал из массива объект {} и
+        // Сводный отчёт падал белым экраном (прод, 31.08.2026). Прогон через
+        // json нормализует всё ровно так, как это ушло бы в браузер.
+        $value = Cache::remember($key, self::TTL, fn () => json_decode(json_encode($build()), true));
+
+        return is_array($value) ? $value : json_decode(json_encode($build()), true);
     }
 
     /** Сдвинуть версию: вызывается событиями моделей, влияющих на цифры. */

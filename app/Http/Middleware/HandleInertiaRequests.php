@@ -47,14 +47,17 @@ class HandleInertiaRequests extends Middleware
             // сотрудника. Кэш на 15 секунд снимает эту нагрузку почти целиком;
             // при новом уведомлении/прочтении кэш сбрасывается (NotificationCache).
             'notifications' => fn () => $user
+                // В кеш — только скаляры/массивы: Carbon-объекты после файлового
+                // кеша возвращаются битыми (__PHP_Incomplete_Class) и роняют
+                // страницу (тот же класс бага, что валил Сводный отчёт 31.08.2026).
                 ? \Illuminate\Support\Facades\Cache::remember('notif_head.'.$user->id, 300, fn () => [
                     'unread' => $user->unreadNotifications()->count(),
                     'items' => $user->notifications()->latest()->limit(10)->get()
                         ->map(fn ($n) => [
                             'id' => $n->id,
                             'data' => $n->data,
-                            'read_at' => $n->read_at,
-                            'created_at' => $n->created_at,
+                            'read_at' => $n->read_at?->toISOString(),
+                            'created_at' => $n->created_at?->toISOString(),
                         ])->values()->all(),
                 ])
                 : ['unread' => 0, 'items' => []],
