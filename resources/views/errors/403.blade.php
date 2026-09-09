@@ -48,7 +48,7 @@
             <div class="msg">{{ $exception->getMessage() }}</div>
         @endif
         <div class="actions">
-            <a class="btn secondary" href="javascript:history.back()">← Назад</a>
+            <a class="btn secondary" href="/">← Назад</a>
             <a class="btn primary" href="{{ url('/') }}">На главную</a>
         </div>
     </div>

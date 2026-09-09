@@ -45,7 +45,7 @@
         <h1>Что-то пошло не так</h1>
         <p>Ошибка уже записана в журнал — мы её увидим и исправим.<br>Попробуйте обновить страницу или вернитесь на главную.</p>
         <div class="actions">
-            <a class="btn secondary" href="javascript:location.reload()">↻ Обновить</a>
+            <a class="btn secondary" href="">↻ Обновить</a>
             <a class="btn primary" href="{{ url('/') }}">На главную</a>
         </div>
     </div>

@@ -45,9 +45,9 @@
         <h1>Идут технические работы</h1>
         <p>Мы обновляем систему — это займёт пару минут.<br>Страница вернётся сама, ничего делать не нужно.</p>
         <div class="actions">
-            <a class="btn primary" href="javascript:location.reload()">↻ Обновить</a>
+            <a class="btn primary" href="">↻ Обновить</a>
         </div>
-        <script>setTimeout(function(){location.reload()}, 60000);</script>
+        <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">setTimeout(function(){location.reload()}, 60000);</script>
     </div>
 </body>
 </html>
