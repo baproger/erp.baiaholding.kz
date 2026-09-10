@@ -40,12 +40,16 @@ class PayrollService
     }
 
     /**
-     * Маржа сделки для выбора ступени — ДО налога, как на карточке сделки:
-     * (сумма − расходы) / сумма = (остаток + налог) / сумма.
+     * Маржа сделки для выбора ступени бонуса — ЧИСТАЯ (правило владельца от
+     * 10.09.2026): остаток / сумма, где остаток = сумма − налог − расходы −
+     * партнёр. Налог обратно НЕ прибавляется (старая формула прибавляла, и
+     * сделка с чистой маржой 8% получала 5% вместо 0). Ступень берём по
+     * остатку ДО вычета самого бонуса — иначе замкнутый круг.
+     * $tax оставлен в сигнатуре для совместимости вызовов, не используется.
      */
     public static function marginPct(float $budget, float $remainder, float $tax = 0): float
     {
-        return $budget > 0 ? round(($remainder + $tax) / $budget * 100, 1) : 0.0;
+        return $budget > 0 ? round($remainder / $budget * 100, 1) : 0.0;
     }
 
     /**
@@ -58,9 +62,9 @@ class PayrollService
     }
 
     /**
-     * Bonus for one deal: remainder = budget − tax − expenses. The tier is picked
-     * by the PRE-TAX margin (the one shown on the deal card) and applied to the
-     * remainder. $override — ручной % финансиста по этой сделке (null = авто).
+     * Bonus for one deal: remainder = budget − tax − expenses − partner. Ступень
+     * выбирается по ЧИСТОЙ марже (остаток/сумма, см. marginPct) и применяется
+     * к остатку. $override — ручной % финансиста по этой сделке (null = авто).
      */
     public static function marginBonus(float $budget, float $remainder, float $tax = 0, ?float $override = null): float
     {

@@ -71,4 +71,22 @@ class BonusCarryTest extends TestCase
         $res->assertOk();
         $this->assertSame([], $res->json('earned'));
     }
+
+    /**
+     * Правило от 10.09.2026: ступень бонуса — по ЧИСТОЙ марже (остаток/сумма,
+     * налог обратно не прибавляется). Кейс ASU-194: чистая маржа ~8% → бонус 0.
+     */
+    public function test_bonus_tier_uses_net_margin_tax_not_added_back(): void
+    {
+        // Сумма 1 000 000, расходы 885 000, налог 3% = 30 000 → остаток 85 000
+        // Чистая маржа 8.5% → «до 10%» → бонус 0 (старая формула дала бы 11.5% → 5%).
+        $this->assertSame(8.5, \App\Services\PayrollService::marginPct(1000000, 85000, 30000));
+        $this->assertSame(0.0, \App\Services\PayrollService::marginBonus(1000000, 85000, 30000));
+
+        // Остаток 120 000 → чистая маржа 12% → ступень 5% от остатка = 6 000.
+        $this->assertSame(6000.0, \App\Services\PayrollService::marginBonus(1000000, 120000, 30000));
+
+        // Остаток 450 000 → 45% → 15% от остатка = 67 500.
+        $this->assertSame(67500.0, \App\Services\PayrollService::marginBonus(1000000, 450000, 30000));
+    }
 }

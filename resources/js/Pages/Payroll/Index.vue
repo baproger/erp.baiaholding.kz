@@ -411,7 +411,7 @@ const delAdj = async (a) => {
                         <span class="font-semibold tabular-nums" :class="t.muted ? '' : 'text-emerald-700'">{{ t.b }}</span>
                     </div>
                 </div>
-                <p class="mt-3 text-[11px] text-slate-400">Маржа = (сумма договора − расходы) / сумма договора. Остаток = сумма − налог − расходы.</p>
+                <p class="mt-3 text-[11px] text-slate-400">Остаток = сумма − налог − расходы − партнёр. Маржа (чистая) = остаток / сумма договора — по ней ступень, бонус = % от остатка.</p>
             </div>
         </div>
 

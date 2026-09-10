@@ -73,13 +73,13 @@ class PayrollTest extends TestCase
         $this->assertSame(0.0, \App\Services\PayrollService::marginBonus(1000000, 70000));
     }
 
-    public function test_tier_uses_pre_tax_margin(): void
+    public function test_tier_uses_net_margin(): void
     {
-        // Кейс ASU-001: бюджет 1М, расходы 780k, налог 3% (30k) → остаток 190k.
-        // Маржа для ступени — ДО налога: (1М − 780k)/1М = 22% → ставка 10%,
-        // бонус = 10% × 190 000 = 19 000 (а не 7% × 190 000 = 13 300).
-        $this->assertSame(22.0, \App\Services\PayrollService::marginPct(1000000, 190000, 30000));
-        $this->assertSame(19000.0, \App\Services\PayrollService::marginBonus(1000000, 190000, 30000));
+        // Правило от 10.09.2026 (заменило «до налога» от 20.08): ступень — по
+        // ЧИСТОЙ марже (остаток/сумма). Бюджет 1М, расходы 780k, налог 30k →
+        // остаток 190k → маржа 19% → ставка 7%, бонус = 7% × 190 000 = 13 300.
+        $this->assertSame(19.0, \App\Services\PayrollService::marginPct(1000000, 190000, 30000));
+        $this->assertSame(13300.0, \App\Services\PayrollService::marginBonus(1000000, 190000, 30000));
     }
 
     public function test_manager_sees_only_own(): void
