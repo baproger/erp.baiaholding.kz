@@ -278,10 +278,10 @@ class DealController extends Controller
                 'company' => round($dealRemainder - $dealBonus, 2),
                 // Тот же % маржи, что в Сводном отчёте: (остаток + налог) / сумма.
                 'marginPct' => $dealMarginPct,
-                // Чистая маржа для бейджа на карточке: чистая прибыль / сумма
-                // (уже за вычетом налога, расходов, партнёра и ЗП сотрудника).
-                // Ступень бонуса по-прежнему считается от marginPct — не менять!
-                'netMarginPct' => $dealBudget > 0 ? round(($dealRemainder - $dealBonus) / $dealBudget * 100, 1) : 0.0,
+                // Маржа на бейдже = та же, по которой выбрана ступень бонуса
+                // (остаток/сумма, до вычета самого бонуса) — иначе у границ
+                // ступеней цифра и ставка выглядят несогласованно (10.09.2026).
+                'netMarginPct' => $dealMarginPct,
             ],
             'chatId' => $dealChat->id,
             'workshops' => \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null),
@@ -290,10 +290,10 @@ class DealController extends Controller
                 ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
                 ->orderBy('order')->get()
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),
-            // margin заменяем на ЧИСТУЮ маржу по договору — чтобы «Маржа» в
-            // сводке совпадала с бейджем прибыли и Сводным отчётом (54.4% везде).
+            // margin = маржа ступени бонуса (остаток/сумма) — одна цифра с
+            // бейджем и Сводным отчётом, всегда сходится со шкалой.
             'finance' => array_merge($finance->summaryFor($deal), [
-                'margin' => $dealBudget > 0 ? round(($dealRemainder - $dealBonus) / $dealBudget * 100, 1) : 0.0,
+                'margin' => $dealMarginPct,
             ]),
             'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => DealStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),

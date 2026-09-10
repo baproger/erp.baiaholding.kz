@@ -140,11 +140,10 @@ class ReportController extends Controller
                 'partner_pct' => $d->partner_pct !== null ? (float) $d->partner_pct : null,
                 'tax' => $tax,
                 'remainder' => $remainder,
-                // ЧИСТАЯ маржа = доход фирмы / сумма договора — одна и та же
-                // цифра, что на бейдже карточки сделки (правило от 25.08.2026:
-                // маржа по сделке везде одинаковая). Ступень бонуса внутри
-                // по-прежнему от коммерческой маржи (marginBonus выше).
-                'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
+                // Маржа = остаток/сумма — РОВНО та, по которой выбрана ступень
+                // бонуса (правило от 10.09.2026: раньше показывали маржу «после
+                // бонуса», и 21.6% → ставка 10% выглядели как 19.4% → 10%).
+                'margin' => PayrollService::marginPct($budget, $remainder),
                 'bonus' => $bonus,
                 'bonus_rate' => $bonusRate,
                 'bonus_manual' => $override !== null,
@@ -184,7 +183,7 @@ class ReportController extends Controller
             'remainder' => $rows->sum('remainder'),
             'bonus' => $rows->sum('bonus'),
             'company' => $companySum,
-            'margin' => $budgetSum > 0 ? round($companySum / $budgetSum * 100, 1) : 0,
+            'margin' => $budgetSum > 0 ? round($rows->sum('remainder') / $budgetSum * 100, 1) : 0,
             'count' => $rows->count(),
         ];
 
@@ -209,7 +208,7 @@ class ReportController extends Controller
                     'bonus' => (float) $list->sum('bonus'),
                     'company' => $company,
                     // Маржа менеджера — доход фирмы к его обороту, а не среднее по сделкам.
-                    'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
+                    'margin' => $budget > 0 ? round((float) $list->sum('remainder') / $budget * 100, 1) : 0.0,
                 ];
             })
             ->sortByDesc('budget')->values();
