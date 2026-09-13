@@ -19,15 +19,25 @@ use Inertia\Response;
  */
 class WarehouseController extends Controller
 {
-    /** Управление складом (приход, правка, удаление) — только бухгалтер и админ. */
+    /** Управление складом (правка, удаление, оплата сразу) — только бухгалтер и админ. */
     private function canManage(Request $request): bool
     {
         return $request->user()->hasAnyRole(['admin', 'financist']);
     }
 
+    /**
+     * Приход товара оформляют бухгалтер/админ И СНАБЖЕНЕЦ (правило от
+     * 13.09.2026): снабженец подаёт приход из своего кабинета, а оплату
+     * подтверждает бухгалтер со страницы «Расходы» (выбирает кассу).
+     */
+    private function canReceipt(Request $request): bool
+    {
+        return $request->user()->hasAnyRole(['admin', 'financist', 'supplier']);
+    }
+
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->hasAnyRole(['admin', 'director', 'financist', 'manager']), 403);
+        abort_unless($request->user()->hasAnyRole(['admin', 'director', 'financist', 'manager', 'supplier']), 403);
 
         $allMode = CurrentCompany::id() === 0;
         $materials = Material::forCurrentCompany()
@@ -91,6 +101,7 @@ class WarehouseController extends Controller
             'receipts' => $receipts,
             'units' => Deal::UNITS,
             'canManage' => $this->canManage($request),
+            'canReceipt' => $this->canReceipt($request),
             'allMode' => $allMode,
             'companyName' => $allMode ? 'Все компании' : (CurrentCompany::get()?->name ?? ''),
             'filters' => ['from' => $from, 'to' => $to],
@@ -100,7 +111,7 @@ class WarehouseController extends Controller
     /** Приход товара: существующий материал или новая позиция. */
     public function receipt(Request $request): RedirectResponse
     {
-        abort_unless($this->canManage($request), 403, 'Приход оформляет бухгалтер или админ.');
+        abort_unless($this->canReceipt($request), 403, 'Приход оформляет бухгалтер, админ или снабженец.');
 
         $data = $request->validate([
             'material_id' => ['nullable', 'exists:materials,id'],
@@ -110,9 +121,11 @@ class WarehouseController extends Controller
             'price' => ['nullable', 'numeric', 'min:0'],
             'date' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:255'],
-            // Оплата закупа: нал/банк → создаётся расход компании и деньги
-            // уходят из кассы; пусто — только остаток (закуп проведён иначе).
+            // Оплата закупа (только бухгалтер/админ): нал/банк → расход сразу
+            // подтверждён и деньги уходят из кассы. Снабженец кассу не выбирает.
             'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
+            // Чек/накладная поставщика — необязательно (у бухгалтера свой чек оплаты).
+            'file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
         ]);
 
         $companyId = CurrentCompany::id() ?: null;
@@ -145,30 +158,42 @@ class WarehouseController extends Controller
                 $material->update(['price' => $data['price']]);
             }
 
-            // Деньги за закуп: расход компании (confirmed, нал/банк) — касса/банк
-            // уменьшаются В МОМЕНТ ЗАКУПА. Списание со склада в сделку кассу уже
-            // не трогает (внутреннее движение запаса) — иначе те же деньги
-            // уходили бы дважды.
-            if (! empty($data['payment_method']) && (float) ($data['price'] ?? 0) > 0) {
+            // Деньги за закуп. Бухгалтер/админ с выбранной кассой — расход сразу
+            // подтверждён (касса уменьшается в момент закупа). СНАБЖЕНЕЦ (или
+            // бухгалтер без кассы при цене > 0) — заявка «ожидает»: товар на
+            // складе уже есть, а оплату и кассу решает бухгалтер на странице
+            // «Расходы» (правило от 13.09.2026). Списание со склада в сделку
+            // кассу не трогает — иначе деньги уходили бы дважды.
+            $isAccountant = $this->canManage($request);
+            $amount = round((float) $data['quantity'] * (float) ($data['price'] ?? 0), 2);
+            if ($amount > 0 && ($isAccountant ? ! empty($data['payment_method']) : true)) {
+                $qtyHuman = rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.');
+                $confirmed = $isAccountant && ! empty($data['payment_method']);
                 \App\Models\Expense::create([
                     'company_id' => $material->company_id,
                     'category_id' => \App\Models\ExpenseCategory::firstOrCreate(
                         ['name' => 'Закуп материалов'], ['is_active' => true])->id,
-                    'amount' => round((float) $data['quantity'] * (float) $data['price'], 2),
+                    'amount' => $amount,
                     'date' => $data['date'] ?? now()->toDateString(),
-                    'description' => 'Приход склада: '.$material->name.' × '
-                        .rtrim(rtrim(number_format((float) $data['quantity'], 2, '.', ''), '0'), '.').' '.$material->unit,
+                    'description' => 'Закуп товара: '.$material->name.' × '.$qtyHuman.' '.$material->unit
+                        .(! empty($data['note']) ? ' — '.$data['note'] : ''),
                     'responsible_user_id' => $request->user()->id,
-                    'status' => 'confirmed',
-                    'confirmed_by' => $request->user()->id,
-                    'confirmed_at' => now(),
-                    'payment_method' => $data['payment_method'],
+                    'status' => $confirmed ? 'confirmed' : 'pending',
+                    'confirmed_by' => $confirmed ? $request->user()->id : null,
+                    'confirmed_at' => $confirmed ? now() : null,
+                    'payment_method' => $confirmed ? $data['payment_method'] : null,
                     'type' => 'direct',
+                    // Накладная/чек поставщика (необязательно) — бухгалтер видит
+                    // её рядом со своим чеком оплаты при подтверждении.
+                    'file_path' => $request->hasFile('file')
+                        ? $request->file('file')->store('receipts', 'local') : null,
                 ]);
             }
         });
 
-        return back()->with('success', 'Приход оформлен — остаток обновлён.');
+        return back()->with('success', $this->canManage($request)
+            ? 'Приход оформлен — остаток обновлён.'
+            : 'Приход оформлен — остаток обновлён, заявка на оплату ушла бухгалтеру.');
     }
 
     /**

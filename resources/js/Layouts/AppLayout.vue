@@ -49,7 +49,7 @@ const allNav = [
     { key: 'nav.predeals', name: 'Предв. сделки', route: 'preDeals.index', icon: '◧', roles: ['admin', 'director', 'financist', 'manager'] },
     { key: 'nav.deals', name: 'Сделки', route: 'deals.index', icon: '◈', perm: 'deal.viewAny' },
     { key: 'nav.workshop', name: 'Цех', route: 'projects.index', icon: '◇', perm: 'project.viewAny' },
-    { key: 'nav.warehouse', name: 'Склад', route: 'warehouse.index', icon: '▤', roles: ['admin', 'director', 'financist', 'manager'] },
+    { key: 'nav.warehouse', name: 'Склад', route: 'warehouse.index', icon: '▤', roles: ['admin', 'director', 'financist', 'manager', 'supplier'] },
     // МОП тоже заходит — но видит ТОЛЬКО свои сделки (срез «мой месяц и этапы»).
     { key: 'nav.reports', name: 'Сводный отчет', route: 'reports.deals', icon: '▦', roles: ['admin', 'director', 'manager'] },
     // «Финансы» — группа с подменю: обзор, касса, расходы, ЗП. Сотрудник видит

@@ -58,6 +58,12 @@ const receiptInput = ref(null);
 // Тип расхода: прочий (чек) / доставка / закуп / по материалам (со склада).
 // Виды идут в Сводный отчёт и Аналитику отдельными колонками.
 const expenseMode = ref('other'); // other | delivery | purchase | assembly | material
+// Приучаем к складу (правило от 13.09.2026): менеджеру форма открывается в
+// режиме «Материал со склада» с подсказкой; ручной ввод — вторым шагом.
+const openExpenseForm = () => {
+    if (!showExpense.value && !canConfirm.value && props.materials.length) expenseMode.value = 'material';
+    showExpense.value = !showExpense.value;
+};
 const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly' };
 const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 ' + assemblyLabel() };
 const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
@@ -241,11 +247,16 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
         <div v-if="showExpenses" class="rounded-2xl border border-rose-300/70 bg-gradient-to-br from-rose-100/90 via-rose-50/80 to-rose-200/60 p-4 shadow-sm backdrop-blur">
             <div class="mb-2 flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-slate-900">Расходы</h4>
-                <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="showExpense = !showExpense">+ Расход</button>
+                <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openExpenseForm">+ Расход</button>
             </div>
             <div v-if="showExpense" class="mb-3 rounded-xl border border-dashed border-slate-300 p-4">
                 <!-- Тип расхода: прочий / доставка / закуп / материалы -->
                 <div class="mb-3 flex flex-wrap gap-2">
+                    <!-- Напоминание менеджеру: сначала склад, ручной расход — для того, чего на складе нет -->
+                    <div v-if="!canConfirm" class="mb-2 w-full rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs leading-snug text-amber-700">
+                        💡 <b>Сначала спишите материалы со склада</b> («Материал со склада») — так остатки и расходы сходятся.
+                        Ручной расход — только для того, чего на складе нет (доставка, услуги и т.п.).
+                    </div>
                     <button v-for="m in [
                             { k: 'other', l: 'Прочий расход (чек)' },
                             { k: 'delivery', l: '🚚 Доставка' },

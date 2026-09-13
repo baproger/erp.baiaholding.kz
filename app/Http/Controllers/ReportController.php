@@ -19,6 +19,85 @@ use Inertia\Response;
  */
 class ReportController extends Controller
 {
+    /**
+     * «План / Факт» по предсделкам (правило от 13.09.2026): что менеджер
+     * предпосчитал в лоте (расходы, остаток, маржа) против факта по сделке —
+     * и разница. ТОЛЬКО админ и директор: это оценка честности расчётов.
+     */
+    public function planFact(Request $request): Response
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'director']), 403);
+
+        return Inertia::render('Reports/PlanFact', \App\Support\ReportCache::remember(
+            $request, 'planfact', fn () => $this->buildPlanFact($request)));
+    }
+
+    /** @return array<string, mixed> */
+    private function buildPlanFact(Request $request): array
+    {
+        $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
+        $companyId = \App\Support\CurrentCompany::id() ?: null;
+
+        $lots = \App\Models\PreDeal::query()
+            ->whereNotNull('deal_id')
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->with(['deal' => fn ($q) => $q->withTrashed()->with(['stage:id,name,color,is_won', 'responsible:id,name']),
+                'user:id,name'])
+            ->latest('id')->limit(300)->get();
+
+        $dealIds = $lots->pluck('deal_id')->filter();
+        $factExp = \App\Models\Expense::where('status', 'confirmed')
+            ->where('expenseable_type', 'deal')->whereIn('expenseable_id', $dealIds)
+            ->groupBy('expenseable_id')->selectRaw('expenseable_id as did, SUM(amount) as v')->pluck('v', 'did');
+
+        $rows = $lots->filter(fn ($l) => $l->deal && ! $l->deal->deleted_at)->map(function ($l) use ($factExp, $taxRate) {
+            $d = $l->deal;
+            $budget = (float) $d->budget;
+
+            // ПЛАН — цифры менеджера из лота (справочные).
+            $planExpense = round((float) $l->purchase_price + (float) $l->delivery + (float) $l->assembly + (float) $l->commission, 2);
+            $planRemainder = (float) $l->remainder;
+            $planMargin = (float) $l->margin;
+
+            // ФАКТ — по сделке на текущий момент (подтверждённые расходы).
+            $factExpense = (float) ($factExp[$d->id] ?? 0);
+            $tax = round($budget * $taxRate, 2);
+            $partner = PayrollService::partnerSum($budget, $d->partner_pct);
+            $factRemainder = round($budget - $tax - $factExpense - $partner, 2);
+            $factMargin = PayrollService::marginPct($budget, $factRemainder);
+
+            return [
+                'deal_id' => $d->id,
+                'number' => $d->number,
+                'customer' => $d->company_name,
+                'manager' => $l->user?->name ?? $d->responsible?->name,
+                'stage' => $d->stage?->name,
+                'stage_color' => $d->stage?->color,
+                'is_won' => (bool) $d->stage?->is_won,
+                'budget' => $budget,
+                'plan' => ['expense' => $planExpense, 'remainder' => $planRemainder, 'margin' => $planMargin],
+                'fact' => ['expense' => $factExpense, 'remainder' => $factRemainder, 'margin' => $factMargin],
+                // Разница = факт − план: расходы «+» — потратили больше плана;
+                // маржа «−» — заработали меньше обещанного.
+                'diff' => [
+                    'expense' => round($factExpense - $planExpense, 2),
+                    'remainder' => round($factRemainder - $planRemainder, 2),
+                    'margin' => round($factMargin - $planMargin, 1),
+                ],
+            ];
+        })->values();
+
+        return [
+            'rows' => $rows,
+            'totals' => [
+                'plan_expense' => (float) $rows->sum(fn ($r) => $r['plan']['expense']),
+                'fact_expense' => (float) $rows->sum(fn ($r) => $r['fact']['expense']),
+                'plan_remainder' => (float) $rows->sum(fn ($r) => $r['plan']['remainder']),
+                'fact_remainder' => (float) $rows->sum(fn ($r) => $r['fact']['remainder']),
+            ],
+        ];
+    }
+
     public function deals(Request $request): Response
     {
         // Права — ДО кеша; сам расчёт — в buildDeals() и живёт 5 минут
@@ -263,6 +342,7 @@ class ReportController extends Controller
             'taxRate' => $taxRate * 100,
             'filters' => ['search' => $search, 'from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId, 'source' => $source],
             'sources' => Deal::SOURCES,
+            'canPlanFact' => $user->hasAnyRole(['admin', 'director']),
             // Для фильтра: менеджеры отдельно, остальные — по отделам (сворачиваются).
             // МОПу выбирать не из кого — отчёт и так только по его сделкам.
             'managers' => \App\Models\User::where('is_active', true)->ofCompany($companyId)

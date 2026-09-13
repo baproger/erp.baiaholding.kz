@@ -15,7 +15,7 @@ import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFil
 
 const props = defineProps({
     materials: Array, writeoffs: Object, receipts: Array, units: Array,
-    canManage: Boolean, allMode: Boolean, companyName: String, filters: Object,
+    canManage: Boolean, canReceipt: Boolean, allMode: Boolean, companyName: String, filters: Object,
 });
 
 // Детали списания: клик по колонке «Списание» — на какие сделки/заказы ушло.
@@ -29,7 +29,7 @@ const money = (v) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }
 // Приход: существующий материал или новая позиция.
 const showModal = ref(false);
 const mode = ref('existing'); // existing | new
-const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', price: '', date: '', note: '', payment_method: '' });
+const form = useForm({ material_id: '', name: '', unit: 'штук', quantity: '', price: '', date: '', note: '', payment_method: '', file: null });
 const openReceipt = () => {
     form.reset(); form.unit = 'штук';
     mode.value = props.materials.length ? 'existing' : 'new';
@@ -40,7 +40,7 @@ const submit = () => {
         ? { material_id: form.material_id, name: '', unit: '' }
         : { material_id: '', name: form.name, unit: form.unit };
     form.transform((d) => ({ ...d, ...payload }))
-        .post(route('warehouse.receipt'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
+        .post(route('warehouse.receipt'), { preserveScroll: true, forceFormData: true, onSuccess: () => (showModal.value = false) });
 };
 const removeMaterial = async (m) => {
     if (await confirmDialog({ title: 'Удалить позицию', message: `«${m.name}» и вся история прихода будут удалены.`, confirmText: 'Удалить', danger: true })) {
@@ -110,7 +110,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
 
         <PageLayout :title="$t('page.warehouse', 'Склад')" subtitle="материалы: приход, списание, остатки">
             <template #actions>
-                <button v-if="canManage" type="button" @click="openReceipt"
+                <button v-if="canReceipt" type="button" @click="openReceipt"
                     class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">+ Приход товара</button>
             </template>
 
@@ -197,7 +197,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                             <tr v-if="!filtered.length">
                                 <td :colspan="canManage ? (allMode ? 10 : 9) : (allMode ? 9 : 8)" class="px-6 py-10 text-center text-sm text-slate-400">
                                     <p>Склад пуст — оформите первый приход товара</p>
-                                    <button v-if="canManage" type="button" class="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openReceipt">+ Приход товара</button>
+                                    <button v-if="canReceipt" type="button" class="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-indigo-700" @click="openReceipt">+ Приход товара</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -316,6 +316,13 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                         <TextInput v-model="form.note" class="mt-1 w-full" placeholder="Поставщик, накладная…" />
                     </div>
                     <div class="sm:col-span-2">
+                        <InputLabel value="Чек / накладная поставщика (необязательно)" />
+                        <input type="file" accept="image/*,.pdf" @input="form.file = $event.target.files[0]"
+                            class="mt-1 w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-600" />
+                        <div v-if="form.errors.file" class="mt-1 text-xs text-red-600">{{ form.errors.file }}</div>
+                    </div>
+                    <!-- Кассу выбирает ТОЛЬКО бухгалтер/админ; снабженец подаёт заявку -->
+                    <div v-if="canManage" class="sm:col-span-2">
                         <InputLabel value="Оплата закупа" />
                         <!-- Нал/банк создаёт подтверждённый расход компании (кол-во × цена)
                              и уменьшает кассу/банк; «не списывать» — только остаток склада. -->
@@ -326,6 +333,10 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                                 :class="form.payment_method === opt[0] ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">{{ opt[1] }}</button>
                         </div>
                         <p v-if="form.payment_method" class="mt-1 text-xs text-slate-400">Будет создан расход «Закуп материалов» на сумму закупа — деньги уйдут из {{ form.payment_method === 'cash' ? 'кассы' : 'банка' }}.</p>
+                    </div>
+                    <div v-else class="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-snug text-amber-700">
+                        💡 Остаток на складе обновится сразу, а <b>заявка на оплату уйдёт бухгалтеру</b> — он решит,
+                        с какой кассы платить, и подтвердит своим чеком. Деньги до этого не списываются.
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">

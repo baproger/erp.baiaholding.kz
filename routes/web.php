@@ -237,6 +237,8 @@ Route::middleware('auth')->group(function () {
 
     // Реестр сделок (Excel-подобный отчёт, только admin/director)
     Route::get('reports/deals', [\App\Http\Controllers\ReportController::class, 'deals'])->name('reports.deals');
+    // «План/Факт» по предсделкам — только админ и директор.
+    Route::get('reports/plan-fact', [\App\Http\Controllers\ReportController::class, 'planFact'])->name('reports.planFact');
 
     // Audit log
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
