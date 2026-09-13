@@ -38,12 +38,27 @@ class ReportController extends Controller
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
         $companyId = \App\Support\CurrentCompany::id() ?: null;
 
+        // Фильтры: менеджер (кто вёл лот), период внесения лота, статус сделки.
+        $managerId = $request->integer('manager') ?: null;
+        $from = $request->string('from')->toString();
+        $to = $request->string('to')->toString();
+        $status = in_array($s = $request->string('status')->toString(), ['won', 'active'], true) ? $s : null;
+
         $lots = \App\Models\PreDeal::query()
             ->whereNotNull('deal_id')
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
+            ->when($managerId, fn ($q, $m) => $q->where('user_id', $m))
+            ->when($from, fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
+            ->when($to, fn ($q, $d) => $q->whereDate('created_at', '<=', $d))
             ->with(['deal' => fn ($q) => $q->withTrashed()->with(['stage:id,name,color,is_won', 'responsible:id,name']),
                 'user:id,name'])
             ->latest('id')->limit(300)->get();
+
+        // Статус сделки: «выигранные» / «в работе» — по флагу этапа.
+        if ($status) {
+            $lots = $lots->filter(fn ($l) => $l->deal
+                && (bool) $l->deal->stage?->is_won === ($status === 'won'))->values();
+        }
 
         $dealIds = $lots->pluck('deal_id')->filter();
         $factExp = \App\Models\Expense::where('status', 'confirmed')
@@ -95,6 +110,11 @@ class ReportController extends Controller
                 'plan_remainder' => (float) $rows->sum(fn ($r) => $r['plan']['remainder']),
                 'fact_remainder' => (float) $rows->sum(fn ($r) => $r['fact']['remainder']),
             ],
+            'filters' => ['manager' => $managerId, 'from' => $from, 'to' => $to, 'status' => $status],
+            // Менеджеры для фильтра — только те, у чьих лотов есть сделки.
+            'managers' => \App\Models\User::whereIn('id', \App\Models\PreDeal::whereNotNull('deal_id')
+                    ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->select('user_id'))
+                ->orderBy('name')->get(['id', 'name'])->toArray(),
         ];
     }
 

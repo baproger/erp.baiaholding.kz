@@ -2,15 +2,32 @@
 // «План / Факт» по предсделкам (только админ и директор): что менеджер
 // предпосчитал в лоте против факта по сделке — и разница по расходам и марже.
 import { computed, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import { money } from '@/utils/format';
+import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 
-const props = defineProps({ rows: { type: Array, default: () => [] }, totals: Object });
+const props = defineProps({ rows: { type: Array, default: () => [] }, totals: Object, filters: Object, managers: { type: Array, default: () => [] } });
 
+// Серверные фильтры: менеджер, период внесения лота, статус сделки.
+const managerF = ref(props.filters?.manager ?? '');
+const fromF = ref(props.filters?.from ?? '');
+const toF = ref(props.filters?.to ?? '');
+const statusF = ref(props.filters?.status ?? '');
+const apply = () => router.get(route('reports.planFact'), {
+    manager: managerF.value || undefined, from: fromF.value || undefined,
+    to: toF.value || undefined, status: statusF.value || undefined,
+}, { preserveState: true, preserveScroll: true, replace: true });
+const hasFilters = () => managerF.value || fromF.value || toF.value || statusF.value || onlyDiff.value;
+const reset = () => { managerF.value = ''; fromF.value = ''; toF.value = ''; statusF.value = ''; onlyDiff.value = false; clearStickyFilters('reports.planfact'); apply(); };
+useStickyFilters('reports.planfact', { managerF, fromF, toF, statusF }, apply);
+
+// Клиентские: поиск + «только отклонения» (перерасход или маржа ниже плана).
 const search = ref('');
+const onlyDiff = ref(false);
 const list = computed(() => props.rows.filter((r) => {
+    if (onlyDiff.value && !(r.diff.expense > 0 || r.diff.margin < 0)) return false;
     const t = search.value.trim().toLowerCase();
     if (!t) return true;
     return [r.number, r.customer, r.manager].some((v) => (v ?? '').toLowerCase().includes(t));
@@ -31,11 +48,38 @@ const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
 
         <PageLayout title="План / Факт" subtitle="расчёт менеджера в лоте против факта по сделке" full>
             <template #actions>
-                <input v-model="search" type="search" placeholder="Поиск: №, заказчик, менеджер"
-                    class="w-56 rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                 <Link :href="route('reports.deals')"
                     class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">← Сводный отчёт</Link>
             </template>
+
+            <!-- Фильтры: менеджер, период внесения лота, статус сделки, отклонения, поиск -->
+            <div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <input v-model="search" type="search" placeholder="Поиск: №, заказчик, менеджер"
+                    class="w-52 rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                <select v-model="managerF" @change="apply" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                    <option value="">Все менеджеры</option>
+                    <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>
+                </select>
+                <select v-model="statusF" @change="apply" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Статус сделки">
+                    <option value="">Все сделки</option>
+                    <option value="won">Выигранные (закрытые)</option>
+                    <option value="active">В работе</option>
+                </select>
+                <label class="flex items-center gap-1 text-xs text-slate-400" title="Период внесения лота">с
+                    <input v-model="fromF" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                </label>
+                <label class="flex items-center gap-1 text-xs text-slate-400">по
+                    <input v-model="toF" @change="apply" type="date" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                </label>
+                <!-- Быстрый тумблер: показать только тех, кто вышел за план -->
+                <button type="button" @click="onlyDiff = !onlyDiff"
+                    class="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150"
+                    :class="onlyDiff ? 'border-rose-400 bg-rose-50 text-rose-600 ring-2 ring-rose-500/20' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
+                    title="Перерасход против плана или маржа ниже обещанной">⚠ Только отклонения</button>
+                <button v-if="hasFilters()" @click="reset"
+                    class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+                <span class="ml-auto text-xs tabular-nums text-slate-400">показано: {{ list.length }} из {{ rows.length }}</span>
+            </div>
 
             <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="overflow-x-auto">
