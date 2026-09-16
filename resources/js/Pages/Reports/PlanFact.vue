@@ -89,20 +89,22 @@ const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
                                 <th class="px-4 py-2.5" rowspan="2">Сделка</th>
                                 <th class="px-4 py-2.5" rowspan="2">Менеджер · этап</th>
                                 <th class="px-4 py-2.5 text-right" rowspan="2">Сумма договора</th>
-                                <th class="border-b border-slate-200 bg-indigo-50/50 px-4 py-1.5 text-center text-indigo-500" colspan="3">План менеджера (лот)</th>
-                                <th class="border-b border-slate-200 bg-emerald-50/50 px-4 py-1.5 text-center text-emerald-600" colspan="3">Факт по сделке</th>
+                                <th class="border-b border-slate-200 bg-indigo-50/50 px-4 py-1.5 text-center text-indigo-500" colspan="4">План менеджера (лот)</th>
+                                <th class="border-b border-slate-200 bg-emerald-50/50 px-4 py-1.5 text-center text-emerald-600" colspan="4">Факт по сделке</th>
                                 <th class="border-b border-slate-200 bg-amber-50/50 px-4 py-1.5 text-center text-amber-600" colspan="3">Разница (факт − план)</th>
                             </tr>
                             <tr class="divide-x divide-slate-200">
                                 <th class="bg-indigo-50/40 px-3 py-1.5 text-right">Расходы</th>
-                                <th class="bg-indigo-50/40 px-3 py-1.5 text-right">Остаток</th>
                                 <th class="bg-indigo-50/40 px-3 py-1.5 text-center">Маржа</th>
+                                <th class="bg-indigo-50/40 px-3 py-1.5 text-right">Бонус</th>
+                                <th class="bg-indigo-50/40 px-3 py-1.5 text-right" title="Остаток − бонус: сколько планировалось фирме чистыми">Фирме</th>
                                 <th class="bg-emerald-50/40 px-3 py-1.5 text-right">Расходы</th>
-                                <th class="bg-emerald-50/40 px-3 py-1.5 text-right">Остаток</th>
                                 <th class="bg-emerald-50/40 px-3 py-1.5 text-center">Маржа</th>
+                                <th class="bg-emerald-50/40 px-3 py-1.5 text-right">Бонус</th>
+                                <th class="bg-emerald-50/40 px-3 py-1.5 text-right" title="Остаток − бонус: сколько фирме остаётся чистыми по факту">Фирме</th>
                                 <th class="bg-amber-50/40 px-3 py-1.5 text-right">Расходы</th>
-                                <th class="bg-amber-50/40 px-3 py-1.5 text-right">Остаток</th>
                                 <th class="bg-amber-50/40 px-3 py-1.5 text-center">Маржа</th>
+                                <th class="bg-amber-50/40 px-3 py-1.5 text-right" title="Факт «Фирме» минус план">Фирме</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -118,39 +120,43 @@ const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
                                 <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(r.budget) }}</td>
                                 <!-- План -->
                                 <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-slate-600">{{ money(r.plan.expense) }}</td>
-                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-slate-600">{{ money(r.plan.remainder) }}</td>
                                 <td class="bg-indigo-50/20 px-3 py-2.5 text-center tabular-nums text-slate-600">{{ r.plan.margin }}%</td>
+                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(r.plan.bonus) }}</td>
+                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700">{{ money(r.plan.net) }}</td>
                                 <!-- Факт -->
                                 <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-slate-800">{{ money(r.fact.expense) }}</td>
-                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-slate-800">{{ money(r.fact.remainder) }}</td>
                                 <td class="bg-emerald-50/20 px-3 py-2.5 text-center font-semibold tabular-nums" :class="r.fact.margin < 0 ? 'text-rose-600' : 'text-slate-800'">{{ r.fact.margin }}%</td>
+                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(r.fact.bonus) }}</td>
+                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right font-bold tabular-nums" :class="r.fact.net < 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(r.fact.net) }}</td>
                                 <!-- Разница -->
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-right font-semibold tabular-nums" :class="diffMoney(r.diff.expense, true)" :title="r.diff.expense > 0 ? 'Потратили больше плана' : 'Уложились в план'">{{ sign(r.diff.expense) }}</td>
-                                <td class="bg-amber-50/20 px-3 py-2.5 text-right font-semibold tabular-nums" :class="diffMoney(r.diff.remainder)">{{ sign(r.diff.remainder) }}</td>
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-center font-semibold tabular-nums" :class="diffMoney(r.diff.margin)" :title="r.diff.margin < 0 ? 'Маржа ниже обещанной в лоте' : 'Маржа не хуже плана'">{{ signPct(r.diff.margin) }}</td>
+                                <td class="bg-amber-50/20 px-3 py-2.5 text-right font-bold tabular-nums" :class="diffMoney(r.diff.net)" :title="r.diff.net < 0 ? 'Фирме остаётся меньше, чем планировал менеджер' : 'Фирме не хуже плана'">{{ sign(r.diff.net) }}</td>
                             </tr>
                             <tr v-if="!list.length">
-                                <td colspan="12" class="px-6 py-12 text-center text-sm text-slate-400">Сделок из предсделок пока нет</td>
+                                <td colspan="14" class="px-6 py-12 text-center text-sm text-slate-400">Сделок из предсделок пока нет</td>
                             </tr>
                         </tbody>
                         <tfoot v-if="list.length" class="border-t-2 border-slate-200 bg-slate-50 text-sm font-semibold">
                             <tr class="divide-x divide-slate-200">
                                 <td class="px-4 py-2.5 text-slate-500" colspan="3">Итого · {{ list.length }} сделок</td>
                                 <td class="px-3 py-2.5 text-right tabular-nums text-slate-600">{{ money(totals.plan_expense) }}</td>
-                                <td class="px-3 py-2.5 text-right tabular-nums text-slate-600">{{ money(totals.plan_remainder) }}</td>
                                 <td></td>
+                                <td class="px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(totals.plan_bonus) }}</td>
+                                <td class="px-3 py-2.5 text-right tabular-nums text-slate-700">{{ money(totals.plan_net) }}</td>
                                 <td class="px-3 py-2.5 text-right tabular-nums text-slate-800">{{ money(totals.fact_expense) }}</td>
-                                <td class="px-3 py-2.5 text-right tabular-nums text-slate-800">{{ money(totals.fact_remainder) }}</td>
                                 <td></td>
+                                <td class="px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(totals.fact_bonus) }}</td>
+                                <td class="px-3 py-2.5 text-right font-bold tabular-nums text-slate-900">{{ money(totals.fact_net) }}</td>
                                 <td class="px-3 py-2.5 text-right tabular-nums" :class="diffMoney(totals.fact_expense - totals.plan_expense, true)">{{ sign(Math.round((totals.fact_expense - totals.plan_expense) * 100) / 100) }}</td>
-                                <td class="px-3 py-2.5 text-right tabular-nums" :class="diffMoney(totals.fact_remainder - totals.plan_remainder)">{{ sign(Math.round((totals.fact_remainder - totals.plan_remainder) * 100) / 100) }}</td>
                                 <td></td>
+                                <td class="px-3 py-2.5 text-right font-bold tabular-nums" :class="diffMoney(totals.fact_net - totals.plan_net)">{{ sign(Math.round((totals.fact_net - totals.plan_net) * 100) / 100) }}</td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
             </div>
-            <p class="mt-3 text-xs text-slate-400">💡 План — справочные цифры менеджера из предсделки. Факт — подтверждённые расходы по сделке на текущий момент (по незавершённым сделкам расходы ещё могут добавляться — смотрите на этап). Красные расходы «+» — потратили больше плана; красная маржа «−» — заработали меньше обещанного.</p>
+            <p class="mt-3 text-xs text-slate-400">💡 План — справочные цифры менеджера из предсделки. Факт — подтверждённые расходы по сделке на текущий момент (по незавершённым сделкам расходы ещё могут добавляться — смотрите на этап). «Бонус» — по шкале от маржи (в факте — с ручным % финансиста, если задан); «Фирме» = остаток − бонус, чистая сумма компании. Красные расходы «+» — потратили больше плана; красное «Фирме −» — компании остаётся меньше, чем обещал расчёт лота.</p>
         </PageLayout>
     </AppLayout>
 </template>

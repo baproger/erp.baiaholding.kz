@@ -76,6 +76,13 @@ class PlanFactReportTest extends TestCase
             ->where('rows.0.fact.expense', 500000)
             ->where('rows.0.diff.expense', 100000)   // потратили на 100k больше плана
             ->where('rows.0.fact.remainder', 470000) // 1М − 30k налог − 500k расходы
-            ->where('rows.0.fact.margin', 47));
+            ->where('rows.0.fact.margin', 47)
+            // Маржа 47% → ставка 15%: бонус 70 500, фирме чистыми 399 500.
+            ->where('rows.0.fact.bonus', 70500)
+            ->where('rows.0.fact.net', 399500)
+            // План: маржа 57% → 15% от 570 000 = 85 500, фирме 484 500.
+            ->where('rows.0.plan.bonus', 85500)
+            ->where('rows.0.plan.net', 484500)
+            ->where('rows.0.diff.net', -85000));
     }
 }

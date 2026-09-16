@@ -69,10 +69,13 @@ class ReportController extends Controller
             $d = $l->deal;
             $budget = (float) $d->budget;
 
-            // ПЛАН — цифры менеджера из лота (справочные).
+            // ПЛАН — цифры менеджера из лота (справочные). Бонус — авто-ставка
+            // по шкале от плановой маржи, «фирме» = остаток − бонус.
             $planExpense = round((float) $l->purchase_price + (float) $l->delivery + (float) $l->assembly + (float) $l->commission, 2);
             $planRemainder = (float) $l->remainder;
             $planMargin = (float) $l->margin;
+            $planBonus = round($planRemainder > 0 ? PayrollService::effectiveBonusRate($planMargin) * $planRemainder : 0, 2);
+            $planNet = round($planRemainder - $planBonus, 2);
 
             // ФАКТ — по сделке на текущий момент (подтверждённые расходы).
             $factExpense = (float) ($factExp[$d->id] ?? 0);
@@ -80,6 +83,10 @@ class ReportController extends Controller
             $partner = PayrollService::partnerSum($budget, $d->partner_pct);
             $factRemainder = round($budget - $tax - $factExpense - $partner, 2);
             $factMargin = PayrollService::marginPct($budget, $factRemainder);
+            // Факт-бонус: полный (как при полной оплате), с ручным % финансиста.
+            $factBonus = PayrollService::marginBonus($budget, $factRemainder, $tax,
+                $d->bonus_rate_override !== null ? (float) $d->bonus_rate_override : null);
+            $factNet = round($factRemainder - $factBonus, 2);
 
             return [
                 'deal_id' => $d->id,
@@ -90,14 +97,17 @@ class ReportController extends Controller
                 'stage_color' => $d->stage?->color,
                 'is_won' => (bool) $d->stage?->is_won,
                 'budget' => $budget,
-                'plan' => ['expense' => $planExpense, 'remainder' => $planRemainder, 'margin' => $planMargin],
-                'fact' => ['expense' => $factExpense, 'remainder' => $factRemainder, 'margin' => $factMargin],
+                'plan' => ['expense' => $planExpense, 'remainder' => $planRemainder, 'margin' => $planMargin,
+                    'bonus' => $planBonus, 'net' => $planNet],
+                'fact' => ['expense' => $factExpense, 'remainder' => $factRemainder, 'margin' => $factMargin,
+                    'bonus' => $factBonus, 'net' => $factNet],
                 // Разница = факт − план: расходы «+» — потратили больше плана;
-                // маржа «−» — заработали меньше обещанного.
+                // маржа/чистая «−» — фирме остаётся меньше обещанного.
                 'diff' => [
                     'expense' => round($factExpense - $planExpense, 2),
                     'remainder' => round($factRemainder - $planRemainder, 2),
                     'margin' => round($factMargin - $planMargin, 1),
+                    'net' => round($factNet - $planNet, 2),
                 ],
             ];
         })->values();
@@ -109,6 +119,10 @@ class ReportController extends Controller
                 'fact_expense' => (float) $rows->sum(fn ($r) => $r['fact']['expense']),
                 'plan_remainder' => (float) $rows->sum(fn ($r) => $r['plan']['remainder']),
                 'fact_remainder' => (float) $rows->sum(fn ($r) => $r['fact']['remainder']),
+                'plan_bonus' => (float) $rows->sum(fn ($r) => $r['plan']['bonus']),
+                'fact_bonus' => (float) $rows->sum(fn ($r) => $r['fact']['bonus']),
+                'plan_net' => (float) $rows->sum(fn ($r) => $r['plan']['net']),
+                'fact_net' => (float) $rows->sum(fn ($r) => $r['fact']['net']),
             ],
             'filters' => ['manager' => $managerId, 'from' => $from, 'to' => $to, 'status' => $status],
             // Менеджеры для фильтра — только те, у чьих лотов есть сделки.
