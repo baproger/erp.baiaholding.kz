@@ -105,6 +105,14 @@ class AuditController extends Controller
         'date' => 'Дата', 'closed_at' => 'Закрыта', 'completed_at' => 'Завершена',
         'confirmed_at' => 'Подтверждён', 'started_at' => 'Начат',
         'salary' => 'Оклад', 'phone' => 'Телефон', 'email' => 'Email', 'password' => 'Пароль',
+        // Предсделка (лот)
+        'action' => 'Действие', 'product' => 'Товар', 'customer' => 'Заказчик',
+        'contract_sum' => 'Сумма договора', 'tender_deadline' => 'Срок тендера',
+        'purchase_price' => 'Закуп', 'delivery' => 'Доставка', 'assembly' => 'Сборка',
+        'commission' => 'Комиссия', 'partner_sum' => 'Партнёр, сумма', 'partner_pct' => 'Доля партнёра',
+        'tax' => 'Налог', 'remainder' => 'Остаток', 'margin' => 'Маржа',
+        'contract_number' => '№ договора', 'comment' => 'Комментарий',
+        'user_id' => 'Сотрудник', 'deal_id' => 'Сделка', 'client_phone' => 'Телефон клиента',
         'birth_date' => 'День рождения', 'hired_at' => 'Дата приёма', 'head_user_id' => 'Руководитель',
         'is_active' => 'Активен', 'is_completed' => 'Завершающий', 'is_won' => 'Успешный этап',
         'type' => 'Тип', 'kind' => 'Вид', 'priority' => 'Приоритет', 'days' => 'Дней',
@@ -126,6 +134,7 @@ class AuditController extends Controller
             'pending' => 'Ожидает', 'confirmed' => 'Подтверждён', 'completed' => 'Завершён',
         ],
         'payment_method' => ['cash' => 'Наличные', 'bank' => 'Банк'],
+        'action' => ['participation' => 'Участие', 'call' => 'Звонок', 'offer' => 'КП (ватсап)'],
         'type' => [
             'absence' => 'Отгул', 'sick' => 'Больничный', 'fine' => 'Штраф',
             'advance' => 'Аванс', 'bonus' => 'Премия', 'direct' => 'Прямой',
@@ -141,7 +150,11 @@ class AuditController extends Controller
     ];
 
     /** Денежные поля — форматируем с разрядами. */
-    private const MONEY_FIELDS = ['amount', 'budget', 'salary', 'balance', 'receivable', 'price'];
+    private const MONEY_FIELDS = ['amount', 'budget', 'salary', 'balance', 'receivable', 'price',
+        'contract_sum', 'purchase_price', 'delivery', 'assembly', 'commission', 'partner_sum', 'tax', 'remainder'];
+
+    /** Процентные поля — «20.18» → «20,18 %». */
+    private const PERCENT_FIELDS = ['margin', 'partner_pct', 'bonus_rate_override'];
 
     public function index(Request $request): Response
     {
@@ -167,6 +180,7 @@ class AuditController extends Controller
             'deal_stage_id' => \App\Models\DealStage::pluck('name', 'id'),
             'project_stage_id' => \App\Models\ProjectStage::pluck('name', 'id'),
             'responsible_user_id' => \App\Models\User::pluck('name', 'id'),
+            'user_id' => \App\Models\User::pluck('name', 'id'),
             'assignee_id' => \App\Models\User::pluck('name', 'id'),
             'head_user_id' => \App\Models\User::pluck('name', 'id'),
             'department_id' => \App\Models\Department::pluck('name', 'id'),
@@ -268,13 +282,20 @@ class AuditController extends Controller
             return null;
         }
 
+        // Один ключ — разный смысл по таблицам: у сделки lot_number — количество,
+        // у предсделки — номер лота.
+        $labels = self::FIELD_LABELS;
+        if ($log->table_name === 'pre_deals') {
+            $labels['lot_number'] = '№ лота';
+        }
+
         return collect($raw)
             ->reject(fn ($v, $field) => in_array($field, self::SNAPSHOT_HIDE, true))
-            ->map(function ($value, $field) use ($maps) {
+            ->map(function ($value, $field) use ($maps, $labels) {
                 $raw = (string) (is_scalar($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE));
 
                 return [
-                    'label' => self::FIELD_LABELS[$field] ?? $field,
+                    'label' => $labels[$field] ?? $field,
                     // Сначала словарь id→имя (фирма, этап, сотрудник), потом
                     // общее форматирование (деньги, даты, статусы).
                     'value' => (string) ($maps[$field][$raw] ?? $this->formatValue($field, $raw)),
@@ -303,6 +324,9 @@ class AuditController extends Controller
         }
         if ($field && in_array($field, self::MONEY_FIELDS, true) && is_numeric($v)) {
             return number_format((float) $v, 0, ',', ' ').' ₸';
+        }
+        if ($field && in_array($field, self::PERCENT_FIELDS, true) && is_numeric($v)) {
+            return rtrim(rtrim(number_format((float) $v, 2, ',', ' '), '0'), ',').' %';
         }
 
         return $v;
