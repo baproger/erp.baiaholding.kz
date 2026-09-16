@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({ logs: Object, filters: Object, tables: Array, users: Array });
 const actionLabel = { created: 'Создание', updated: 'Изменение', deleted: 'Удаление' };
@@ -53,8 +54,7 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
                 <input v-model="fFrom" @change="apply" type="date" class="rounded-full border-slate-200 bg-white py-1 px-3 text-xs font-medium tabular-nums text-slate-500 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период с" />
                 <span class="text-xs text-slate-400">—</span>
                 <input v-model="fTo" @change="apply" type="date" class="rounded-full border-slate-200 bg-white py-1 px-3 text-xs font-medium tabular-nums text-slate-500 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период по" />
-                <button v-if="hasFilters()" @click="resetFilters"
-                    class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                <ResetFiltersButton v-if="hasFilters()" @click="resetFilters" />
                 <span class="text-xs tabular-nums text-slate-400">записей: {{ logs.total ?? logs.data.length }}</span>
             </template>
 

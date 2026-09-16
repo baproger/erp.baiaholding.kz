@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
 import { assemblyLabel } from '@/utils/companyTerms';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({ rows: Array, byManager: { type: Array, default: () => [] }, byStage: { type: Array, default: () => [] }, isLeadership: { type: Boolean, default: true }, totals: Object, taxRate: Number, filters: Object, managers: Array, stageOptions: Array, sources: { type: Array, default: () => [] }, canPlanFact: Boolean });
 
@@ -166,8 +167,7 @@ const share = (v) => props.totals.budget > 0 ? (v / props.totals.budget * 100).t
             <Link v-if="canPlanFact" :href="route('reports.planFact')"
                 class="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 transition-colors duration-150 hover:bg-violet-100"
                 title="План менеджера из предсделки против факта по сделке">◧ План / Факт</Link>
-            <button v-if="hasFilters()" @click="reset"
-                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+            <ResetFiltersButton v-if="hasFilters()" @click="reset" />
         </template>
 
         <!-- Итоги: плитки-итоги (§5) -->

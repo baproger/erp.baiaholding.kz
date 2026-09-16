@@ -193,7 +193,7 @@ class AuditController extends Controller
             'expenses' => \App\Models\Expense::withTrashed()->whereIn('id', $ids('expenses'))->where('expenseable_type', 'deal')->pluck('expenseable_id', 'id'),
             'invoices' => \App\Models\Invoice::withTrashed()->whereIn('id', $ids('invoices'))->where('invoiceable_type', 'deal')->pluck('invoiceable_id', 'id'),
             'payments' => \App\Models\Payment::whereIn('payments.id', $ids('payments'))
-                ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')->where('invoices.invoiceable_type', 'deal')
+                ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')->whereNull('invoices.deleted_at')->where('invoices.invoiceable_type', 'deal')
                 ->pluck('invoices.invoiceable_id', 'payments.id'),
             'projects' => \App\Models\Project::whereIn('id', $ids('projects'))->whereNotNull('deal_id')->pluck('deal_id', 'id'),
             'pre_deals' => \App\Models\PreDeal::whereIn('id', $ids('pre_deals'))->whereNotNull('deal_id')->pluck('deal_id', 'id'),

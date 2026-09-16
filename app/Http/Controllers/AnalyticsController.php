@@ -112,7 +112,7 @@ class AnalyticsController extends Controller
         // (25.07.2026): A — накопительно до 30%, B — следующие 20% (до 50%),
         // C — остальное (~10% и хвост).
         $dealIncome = Payment::query()
-            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')->whereNull('invoices.deleted_at')
             ->where('invoices.invoiceable_type', 'deal')
             ->whereIn('invoices.invoiceable_id', $wonIds)
             ->whereNotNull('invoices.invoiceable_id')

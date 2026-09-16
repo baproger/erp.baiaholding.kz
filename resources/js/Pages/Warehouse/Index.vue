@@ -12,6 +12,7 @@ import InputError from '@/Components/InputError.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { formatDate, formatDateTime } from '@/utils/format';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({
     materials: Array, writeoffs: Object, receipts: Array, units: Array,
@@ -136,8 +137,7 @@ const lowStock = (m) => Number(m.quantity) <= 0;
                 <label class="flex items-center gap-1 text-[11px] text-slate-400">по
                     <input v-model="fTo" @change="applyPeriod" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                 </label>
-                <button v-if="hasFilters" type="button" @click="resetFilters"
-                    class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+                <ResetFiltersButton v-if="hasFilters" @click="resetFilters" />
                 <span class="ml-auto hidden text-[11px] tabular-nums text-slate-300 lg:block">найдено: {{ filtered.length }}</span>
             </div>
 

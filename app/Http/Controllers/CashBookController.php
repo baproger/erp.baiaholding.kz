@@ -114,6 +114,10 @@ class CashBookController extends Controller
             ? $q->where('payment_method', 'cash')
             : $q->where(fn ($w) => $w->where('payment_method', '!=', 'cash')->orWhereNull('payment_method'));
 
+        // Платёж без живого счёта (счёт удалён) в книге не считается — иначе
+        // касса «не возвращалась» после удаления оплаченного аванса (18.09.2026).
+        $q->whereHas('invoice');
+
         // Скоуп фирмы — тот же, что у плитки «Банк» (FinanceService): счета
         // сделок И заказов цеха этой фирмы, иначе книга не сойдётся с плиткой.
         return $q->when($companyId, fn ($qq, $c) => $qq->whereHas('invoice', fn ($i) => $i

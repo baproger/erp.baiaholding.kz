@@ -63,7 +63,7 @@ class PayrollController extends Controller
 
         $ids = $deals->pluck('id');
         $paidByDeal = \App\Models\Payment::query()
-            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')->whereNull('invoices.deleted_at')
             ->where('invoices.invoiceable_type', 'deal')
             ->whereIn('invoices.invoiceable_id', $ids)
             ->groupBy('invoices.invoiceable_id')

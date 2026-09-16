@@ -364,6 +364,14 @@ class InvoiceController extends Controller
         $this->assertOwnership($request->user(), $this->resolve($request->input('invoiceable_type', 'deal'), (int) $request->input('invoiceable_id')));
 
         $data = $request->validated();
+
+        // Правило от 19.09.2026: счета сделки (кроме отменённых) в сумме не
+        // могут превысить сумму договора; и при полной оплате новый счёт
+        // не выставляется.
+        if (($data['invoiceable_type'] ?? 'deal') === 'deal') {
+            self::assertDealInvoiceCap((int) $data['invoiceable_id'], (float) ($data['amount'] ?? 0));
+        }
+
         $data['number'] = $numbers->generate();
         $data['status'] ??= 'draft';
         $data['issue_date'] ??= now()->toDateString();
@@ -387,16 +395,59 @@ class InvoiceController extends Controller
         if (isset($data['status']) && ! in_array($data['status'], ['draft', 'sent', 'cancelled'], true)) {
             unset($data['status']);
         }
+        // Сумму счёта нельзя поднять так, чтобы счета сделки превысили договор.
+        if ($invoice->invoiceable_type === 'deal' && isset($data['amount'])) {
+            self::assertDealInvoiceCap((int) $invoice->invoiceable_id, (float) $data['amount'], $invoice->id);
+        }
         $invoice->update($data);
 
         return back()->with('success', 'Счёт обновлён.');
+    }
+
+    /**
+     * Счета сделки (кроме отменённых) в сумме не превышают сумму договора;
+     * при полной оплате новый счёт не выставляется (правило от 19.09.2026).
+     * $ignoreId — id редактируемого счёта (его старая сумма не считается).
+     */
+    private static function assertDealInvoiceCap(int $dealId, float $newAmount, ?int $ignoreId = null): void
+    {
+        $deal = \App\Models\Deal::find($dealId);
+        if (! $deal || (float) $deal->budget <= 0) {
+            return; // без суммы договора ограничивать нечего
+        }
+        $budget = (float) $deal->budget;
+
+        $paid = (float) \App\Models\Payment::whereIn('invoice_id', $deal->invoices()->select('id'))->sum('amount');
+        if ($ignoreId === null && $paid >= $budget - 0.005) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'amount' => 'Сделка уже оплачена полностью ('.number_format($paid, 0, '.', ' ')
+                    .' ₸ из '.number_format($budget, 0, '.', ' ').' ₸) — новый счёт выставить нельзя.',
+            ]);
+        }
+
+        $invoiced = (float) $deal->invoices()->where('status', '!=', 'cancelled')
+            ->when($ignoreId, fn ($q, $id) => $q->where('id', '!=', $id))->sum('amount');
+        $free = round($budget - $invoiced, 2);
+        if ($newAmount > $free + 0.005) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'amount' => 'Счета не могут превысить сумму договора '.number_format($budget, 0, '.', ' ')
+                    .' ₸: уже выставлено '.number_format($invoiced, 0, '.', ' ')
+                    .' ₸, доступно '.number_format(max(0, $free), 0, '.', ' ').' ₸.',
+            ]);
+        }
     }
 
     public function destroy(Invoice $invoice): RedirectResponse
     {
         $this->authorize('delete', $invoice);
         $this->assertOwnership(request()->user(), $invoice->invoiceable);
-        $invoice->delete();
+        // Счёт удаляется мягко — FK-каскад не срабатывает, и платежи «висели»
+        // в кассовой книге/отчётах (касса не возвращалась, а при повторной
+        // оплате задваивалась — жалоба от 18.09.2026). Платежи удаляем явно.
+        \Illuminate\Support\Facades\DB::transaction(function () use ($invoice) {
+            $invoice->payments()->delete();
+            $invoice->delete();
+        });
         \App\Support\FinanceAudit::notifyDeleted(
             'Счёт '.$invoice->number.' на '.number_format((float) $invoice->amount, 0, '.', ' ').' ₸',
             \App\Support\FinanceAudit::linkTo($invoice->invoiceable)

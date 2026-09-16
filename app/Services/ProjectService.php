@@ -29,6 +29,13 @@ class ProjectService
             return [false, 'Не найден этап «Логистика».'];
         }
 
+        // Без расходов Металл/Лист/Фурнитура сделка на «Логистику» не идёт
+        // (правило от 16.09.2026) — то же правило, что при ручном переводе.
+        if (($missing = \App\Services\StageTransitionService::missingLogisticsExpenseTypes($deal)) !== []) {
+            return [false, 'Заказ нельзя завершить: по сделке '.$deal->number.' не внесены расходы — '
+                .implode(', ', $missing).'. Внесите их в блоке «Расходы» сделки и нажмите «Готово» снова.'];
+        }
+
         $deal->update(['deal_stage_id' => $returnStage->id, 'status' => 'active', 'closed_at' => null]);
         $project->update(['status' => 'completed', 'completed_at' => now()]);
 

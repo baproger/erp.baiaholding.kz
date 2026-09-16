@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({
     byEmployee: Array, monthsFilter: Number, funnel: Array, byStatus: Object, monthly: Array,
@@ -195,8 +196,7 @@ const donut = computed(() => {
                     <option value="">Все этапы</option>
                     <option v-for="s in stageOptions" :key="s.id" :value="s.id">{{ s.name }}</option>
                 </select>
-                <button v-if="hasFilters || from !== filters.from || to !== filters.to" @click="resetFilters"
-                    class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+                <ResetFiltersButton v-if="hasFilters || from !== filters.from || to !== filters.to" @click="resetFilters" />
                 <span class="ml-auto hidden text-[11px] text-slate-300 sm:block">фильтры действуют на воронку, «за период» и топ менеджеров</span>
             </div>
 

@@ -64,8 +64,8 @@ const openExpenseForm = () => {
     if (!showExpense.value && !canConfirm.value && props.materials.length) expenseMode.value = 'material';
     showExpense.value = !showExpense.value;
 };
-const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly' };
-const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 ' + assemblyLabel() };
+const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly', metal: 'metal', sheet: 'sheet', fittings: 'fittings' };
+const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 ' + assemblyLabel(), metal: '🔩 Металл', sheet: '▤ Лист', fittings: '🪛 Фурнитура' };
 const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
@@ -262,6 +262,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             { k: 'delivery', l: '🚚 Доставка' },
                             { k: 'purchase', l: '📦 Закуп' },
                             { k: 'assembly', l: '🔧 ' + assemblyLabel() },
+                            { k: 'metal', l: '🔩 Металл' },
+                            { k: 'sheet', l: '▤ Лист' },
+                            { k: 'fittings', l: '🪛 Фурнитура' },
                         ]" :key="m.k" type="button" @click="expenseMode = m.k"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">

@@ -18,6 +18,23 @@ class StageTransitionService
      *
      * @throws ValidationException when a gate is unmet.
      */
+    /** Типы расходов, обязательные ДО «Логистики» (правило от 16.09.2026). */
+    public const LOGISTICS_REQUIRED_TYPES = ['metal' => 'Металл', 'sheet' => 'Лист', 'fittings' => 'Фурнитура'];
+
+    /**
+     * Каких обязательных расходов не хватает сделке для «Логистики».
+     * Достаточно заявки (pending) — подтверждение бухгалтера не ждём.
+     *
+     * @return array<int, string> русские названия недостающих типов
+     */
+    public static function missingLogisticsExpenseTypes(Deal $deal): array
+    {
+        $have = $deal->expenses()->whereIn('type', array_keys(self::LOGISTICS_REQUIRED_TYPES))
+            ->distinct()->pluck('type')->all();
+
+        return array_values(array_diff_key(self::LOGISTICS_REQUIRED_TYPES, array_flip($have)));
+    }
+
     public function moveToStage(Deal $deal, DealStage $target): Deal
     {
         return DB::transaction(function () use ($deal, $target) {
@@ -59,6 +76,16 @@ class StageTransitionService
                         ]);
                     }
                 }
+            }
+
+            // На «Логистику» — только когда внесены расходы Металл, Лист и
+            // Фурнитура (все три; хватает заявки). Правило от 16.09.2026.
+            if ($isForward && $target->stage_type === 'logistics'
+                && ($missing = self::missingLogisticsExpenseTypes($deal)) !== []) {
+                throw ValidationException::withMessages([
+                    'stage' => 'На «Логистику» нельзя без расходов Металл, Лист и Фурнитура. Не хватает: '
+                        .implode(', ', $missing).' — внесите в блоке «Расходы» сделки.',
+                ]);
             }
 
             // Этапы «Акт утверждение», «ЭСФ», «Оплата успешно» двигает ТОЛЬКО

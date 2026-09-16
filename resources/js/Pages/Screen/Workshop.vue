@@ -6,6 +6,20 @@ import { formatDate, formatDuration } from '@/utils/format';
 
 const props = defineProps({ screen: Object, stages: Array, projects: Array });
 
+// Ошибка «Готово» (например, не внесены расходы Металл/Лист/Фурнитура) должна
+// быть видна работнику цеха: красный тост поверх канбана, гаснет через 8 с.
+import { usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
+const page = usePage();
+const toast = ref('');
+let toastTimer = null;
+watch(() => page.props.flash?.error, (e) => {
+    if (!e) return;
+    toast.value = e;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast.value = ''), 8000);
+}, { immediate: true });
+
 // Заказ с этапом НЕ из набора этого цеха (этапы пересоздали / заказ перенесли
 // между цехами) не должен исчезать с табло — показываем его в ПЕРВОЙ колонке.
 const stageIds = computed(() => new Set(props.stages.map((s) => s.id)));
@@ -85,6 +99,10 @@ const complete = (p) => {
 <template>
     <Head :title="title" />
     <div class="min-h-screen bg-slate-50 p-4 lg:p-6">
+        <!-- Тост ошибки (крупно — читается с ТВ) -->
+        <div v-if="toast" class="fixed inset-x-0 top-4 z-50 mx-auto w-fit max-w-3xl rounded-2xl border border-rose-300 bg-rose-600 px-6 py-3 text-center text-lg font-bold text-white shadow-xl">
+            ⚠ {{ toast }}
+        </div>
         <!-- Шапка: цех, живые часы, счётчик заказов — единый светлый стиль -->
         <div class="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
             <div class="flex items-center gap-3">

@@ -11,6 +11,7 @@ import { formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 import DdsPanel from '@/Components/DdsPanel.vue';
 import { useStickyFilters } from '@/composables/useStickyFilters';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({ invoicesToday: { type: Array, default: () => [] }, invoicesPast: { type: Array, default: () => [] }, invoicesPastStats: Object, invoiceTotals: Object, expensesToday: Array, expensesPast: Array, expensesPastStats: Object, expenseTotals: Object, filters: Object, summary: Object, categories: Array, receiptsToday: Array, receiptsPast: Array, receiptsPastStats: Object, debts: Object, canManage: Boolean, isAdmin: Boolean, dds: { type: Object, default: () => ({ accounts: [], debts: [], date: '' }) } });
 const money = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(v ?? 0)) + ' ₸';
@@ -362,8 +363,7 @@ const delExpense = async (e) => {
                             <span class="text-xs text-slate-400">—</span>
                             <input v-model="rcTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период по" />
                             <button @click="applyRcFilters" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">Найти</button>
-                            <button v-if="filters?.rc_search || filters?.rc_from || filters?.rc_to" @click="resetRcFilters"
-                                class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                            <ResetFiltersButton v-if="filters?.rc_search || filters?.rc_from || filters?.rc_to" @click="resetRcFilters" />
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full whitespace-nowrap text-sm">
@@ -586,8 +586,7 @@ const delExpense = async (e) => {
                             <span class="text-xs text-slate-400">—</span>
                             <input v-model="xpTo" type="date" class="rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Период по" />
                             <button @click="applyXpFilters" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">Найти</button>
-                            <button v-if="filters?.xp_search || filters?.xp_from || filters?.xp_to" @click="resetXpFilters"
-                                class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                            <ResetFiltersButton v-if="filters?.xp_search || filters?.xp_from || filters?.xp_to" @click="resetXpFilters" />
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-sm">
@@ -687,8 +686,7 @@ const delExpense = async (e) => {
                                 <input v-model="invSearch" @keyup.enter="applyInvFilters" type="text" placeholder="Поиск по номеру счёта"
                                     class="w-56 rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                                 <button @click="applyInvFilters" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-indigo-700">Найти</button>
-                                <button v-if="filters?.search" @click="resetInvFilters"
-                                    class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">Сбросить</button>
+                                <ResetFiltersButton v-if="filters?.search" @click="resetInvFilters" />
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="min-w-full text-sm">

@@ -171,7 +171,7 @@ class ReportController extends Controller
                 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status', 'created_at', 'contract_date']);
 
         // Оплачено по сделке — платежи по её счетам (одним запросом на всех).
-        $paidByDeal = Payment::join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+        $paidByDeal = Payment::join('invoices', 'payments.invoice_id', '=', 'invoices.id')->whereNull('invoices.deleted_at')
             ->where('invoices.invoiceable_type', 'deal')
             ->whereIn('invoices.invoiceable_id', $deals->pluck('id'))
             ->groupBy('invoices.invoiceable_id')
@@ -186,9 +186,9 @@ class ReportController extends Controller
             ->selectRaw("expenseable_id as deal_id,
                 sum(case when material_id is not null then amount else 0 end) as material,
                 sum(case when material_id is null and type = 'delivery' then amount else 0 end) as delivery,
-                sum(case when material_id is null and type = 'purchase' then amount else 0 end) as purchase,
+                sum(case when material_id is null and type in ('purchase','metal','sheet','fittings') then amount else 0 end) as purchase,
                 sum(case when material_id is null and type = 'assembly' then amount else 0 end) as assembly,
-                sum(case when material_id is null and (type is null or type not in ('delivery','purchase','assembly')) then amount else 0 end) as other")
+                sum(case when material_id is null and (type is null or type not in ('delivery','purchase','assembly','metal','sheet','fittings')) then amount else 0 end) as other")
             ->get()->keyBy('deal_id');
 
         // Активный заказ цеха по сделке: этап цеха показывается прямо в общей

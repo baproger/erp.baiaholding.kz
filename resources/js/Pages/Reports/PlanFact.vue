@@ -7,6 +7,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import { money } from '@/utils/format';
 import { useStickyFilters, clearStickyFilters } from '@/composables/useStickyFilters';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({ rows: { type: Array, default: () => [] }, totals: Object, filters: Object, managers: { type: Array, default: () => [] } });
 
@@ -76,8 +77,7 @@ const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
                     class="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150"
                     :class="onlyDiff ? 'border-rose-400 bg-rose-50 text-rose-600 ring-2 ring-rose-500/20' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
                     title="Перерасход против плана или маржа ниже обещанной">⚠ Только отклонения</button>
-                <button v-if="hasFilters()" @click="reset"
-                    class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+                <ResetFiltersButton v-if="hasFilters()" @click="reset" />
                 <span class="ml-auto text-xs tabular-nums text-slate-400">показано: {{ list.length }} из {{ rows.length }}</span>
             </div>
 

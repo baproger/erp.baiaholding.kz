@@ -18,6 +18,7 @@ import { deadlineClass } from '@/utils/deadline';
 import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({ deals: [Array, Object], stages: Array, view: String, filters: Object, users: Array, can: Object, isLeadership: Boolean, companies: { type: Array, default: () => [] }, currentCompanyId: Number, workshopsByCompany: { type: Object, default: () => ({}) } });
 
@@ -200,8 +201,7 @@ const applyBinMatch = () => {
             <label class="flex items-center gap-1 text-xs text-slate-400">по
                 <input v-model="fContractTo" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
             </label>
-            <button v-if="hasFilters" type="button" @click="resetFilters"
-                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">Сбросить ✕</button>
+            <ResetFiltersButton v-if="hasFilters" @click="resetFilters" />
             <span class="ml-auto hidden text-[11px] tabular-nums text-slate-300 lg:block">найдено: {{ Array.isArray(deals) ? list.length : deals.total ?? list.length }}</span>
         </div>
 

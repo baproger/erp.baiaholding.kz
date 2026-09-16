@@ -35,6 +35,8 @@ class DealController extends Controller
         }
         if ($user->hasRole('supplier')) {
             $gateTypes[] = 'shop_gate';
+            // Завсклад подтверждает и «Логистику» (гейт-задача) — сделки видны.
+            $gateTypes[] = 'logistics';
         }
         if ($gateTypes) {
             $query->whereHas('stage', fn ($s) => $s->whereIn('stage_type', $gateTypes));

@@ -16,6 +16,7 @@ import HistoryPanel from '@/Components/HistoryPanel.vue';
 import { SOURCES } from '@/utils/dealOptions';
 import { formatDate } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
+import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({
     preDeals: Array, minMargin: Number, taxPercent: Number,
@@ -186,7 +187,7 @@ const marginClass = (m) => Number(m) >= (props.minMargin ?? 15)
                 <label class="flex items-center gap-1 text-xs text-slate-400" title="Лоты, внесённые в выбранном месяце — по датам (если выбран день, он важнее)">месяц
                     <input v-model="monthF" @change="applyFilters" type="month" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
                 </label>
-                <button v-if="monthF || dayF" @click="monthF = ''; dayF = ''; applyFilters()" class="text-xs font-medium text-indigo-600 hover:underline">сбросить</button>
+                <ResetFiltersButton v-if="monthF || dayF" @click="monthF = ''; dayF = ''; applyFilters()" />
                 <select v-if="leadership" v-model="managerF" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-sm text-slate-600 shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все менеджеры</option>
                     <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.name }}</option>

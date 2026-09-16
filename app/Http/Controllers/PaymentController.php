@@ -46,6 +46,27 @@ class PaymentController extends Controller
                         : 'Платёж больше остатка по счёту: осталось '.number_format($remaining, 0, '.', ' ').' ₸.',
                 ]);
             }
+            // Правило от 19.09.2026: суммарный аванс по СДЕЛКЕ не может
+            // превысить сумму договора — даже если счёт выписан на большее.
+            if ($invoice->invoiceable_type === 'deal') {
+                // lockForUpdate: два одновременных платежа по разным счетам
+                // одной сделки проверяются по очереди — сверх договора не уйдёт.
+                $deal = \App\Models\Deal::whereKey($invoice->invoiceable_id)->lockForUpdate()->first();
+                if ($deal && (float) $deal->budget > 0) {
+                    $paidDeal = (float) Payment::whereIn('invoice_id', $deal->invoices()->select('id'))->sum('amount');
+                    $free = round((float) $deal->budget - $paidDeal, 2);
+                    if ((float) $request->validated()['amount'] > $free + 0.005) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'amount' => $free <= 0
+                                ? 'Аванс по сделке уже равен сумме договора — платёж не принят.'
+                                : 'Аванс не может превысить сумму договора: оплачено '
+                                    .number_format($paidDeal, 0, '.', ' ').' ₸ из '.number_format((float) $deal->budget, 0, '.', ' ')
+                                    .' ₸, доступно '.number_format($free, 0, '.', ' ').' ₸.',
+                        ]);
+                    }
+                }
+            }
+
             $payment = Payment::create($request->validated());
             $finance->recalcInvoiceStatus($payment->invoice);
         });
