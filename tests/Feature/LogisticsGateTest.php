@@ -51,9 +51,10 @@ class LogisticsGateTest extends TestCase
         return $u;
     }
 
-    private function deal(User $owner): Deal
+    private function deal(User $owner, ?string $companyCode = 'BAIA'): Deal
     {
-        return Deal::create(['number' => 'T-1', 'name' => 'X', 'company_name' => 'ТОО', 'budget' => 100000,
+        return Deal::create(['number' => 'T-'.uniqid(), 'name' => 'X', 'company_name' => 'ТОО', 'budget' => 100000,
+            'company_id' => $companyCode ? Company::where('code', $companyCode)->firstOrFail()->id : null,
             'status' => 'active', 'deal_stage_id' => $this->assembly->id, 'responsible_user_id' => $owner->id]);
     }
 
@@ -136,5 +137,18 @@ class LogisticsGateTest extends TestCase
         // После галочки сделка идёт дальше.
         $this->actingAs($mgr)->patch(route('deals.advance', $deal->id))->assertSessionHas('success');
         $this->assertNotSame($this->logistics->id, $deal->fresh()->deal_stage_id);
+    }
+
+    /** Уточнение от 17.09.2026: правило только для BAIA — ASU идёт свободно. */
+    public function test_asu_deal_goes_to_logistics_freely(): void
+    {
+        $mgr = $this->user('manager');
+        $mgr->companies()->attach(Company::where('code', 'ASU')->firstOrFail()->id);
+        $deal = $this->deal($mgr, 'ASU');
+
+        // Без единого расхода Металл/Лист/Фурнитура — переход проходит.
+        $this->actingAs($mgr)->patch(route('deals.stage', $deal->id), ['deal_stage_id' => $this->logistics->id])
+            ->assertSessionHas('success');
+        $this->assertSame($this->logistics->id, $deal->fresh()->deal_stage_id);
     }
 }

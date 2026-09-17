@@ -29,6 +29,14 @@ class StageTransitionService
      */
     public static function missingLogisticsExpenseTypes(Deal $deal): array
     {
+        // Правило действует ТОЛЬКО для BAIA (уточнение владельца 17.09.2026):
+        // сделки ASU и сделки без фирмы на Логистику идут свободно.
+        $code = $deal->company_id
+            ? \App\Models\Company::whereKey($deal->company_id)->value('code') : null;
+        if ($code !== 'BAIA') {
+            return [];
+        }
+
         $have = $deal->expenses()->whereIn('type', array_keys(self::LOGISTICS_REQUIRED_TYPES))
             ->distinct()->pluck('type')->all();
 
