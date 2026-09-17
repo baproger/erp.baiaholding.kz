@@ -31,6 +31,43 @@ router.on('success', (event) => {
     i18n.map = event.detail.page.props.translations || {};
 });
 
+// ---- Ошибки браузера → журнал Аудит → Ошибки (правило от 17.09.2026) ----
+// Серверный обработчик видит только PHP-исключения; падения Vue/JS случаются
+// уже в браузере (белый экран План/Факт) и до сих пор нигде не фиксировались.
+// Шлём кратко и без повторов: один и тот же текст — один раз за вкладку,
+// не больше 5 сообщений, чтобы не завалить журнал в цикле перерисовки.
+const reportedErrors = new Set();
+const reportClientError = (name, message, source, stack) => {
+    if (!message || reportedErrors.size >= 5) return;
+    const key = `${name}|${message}`.slice(0, 300);
+    if (reportedErrors.has(key)) return;
+    reportedErrors.add(key);
+    try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.content;
+        // route() приходит из Ziggy; если он ещё не готов — прямой адрес.
+        let url = '/client-errors';
+        try { url = route('clientErrors.store'); } catch (e) { /* используем адрес по умолчанию */ }
+        fetch(url, {
+            method: 'POST',
+            keepalive: true,
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { 'X-CSRF-TOKEN': token } : {}) },
+            body: JSON.stringify({
+                name: String(name ?? 'Error').slice(0, 100),
+                message: String(message).slice(0, 2000),
+                source: String(source ?? '').slice(0, 500),
+                url: window.location.href.slice(0, 500),
+                stack: String(stack ?? '').slice(0, 5000),
+            }),
+        }).catch(() => {});
+    } catch (e) { /* отчёт об ошибке не должен порождать ошибку */ }
+};
+
+window.addEventListener('error', (e) => reportClientError(
+    e.error?.name, e.message, `${e.filename ?? ''}:${e.lineno ?? ''}`, e.error?.stack));
+window.addEventListener('unhandledrejection', (e) => reportClientError(
+    'UnhandledRejection', e.reason?.message ?? String(e.reason ?? ''), '', e.reason?.stack));
+
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     resolve: (name) =>
@@ -43,6 +80,11 @@ createInertiaApp({
         const app = createApp({ render: () => h(App, props) });
         // Global t() available in every template as $t('key', 'fallback') — no imports needed.
         app.config.globalProperties.$t = (key, fallback = null) => i18n.map[key] ?? fallback ?? key;
+        // Падение компонента Vue (как белый экран План/Факт) — в тот же журнал.
+        app.config.errorHandler = (err, instance, info) => {
+            reportClientError(err?.name ?? 'VueError', `${err?.message ?? err} (${info})`, '', err?.stack);
+            console.error(err);
+        };
         return app
             .use(plugin)
             .use(ZiggyVue)

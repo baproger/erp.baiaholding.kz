@@ -126,7 +126,8 @@ const chainParts = (g) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="r in list" :key="r.deal_id" class="divide-x divide-slate-100 transition-colors hover:bg-slate-50/60">
+                            <template v-for="r in list" :key="r.deal_id">
+                            <tr class="divide-x divide-slate-100 transition-colors hover:bg-slate-50/60">
                                 <td class="px-4 py-2.5">
                                     <Link :href="route('deals.show', r.deal_id)" class="font-semibold text-indigo-600 hover:underline">{{ r.number }}</Link>
                                     <div class="max-w-52 truncate text-xs text-slate-400" :title="r.customer">{{ r.customer }}</div>
@@ -159,7 +160,7 @@ const chainParts = (g) => {
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-center font-semibold tabular-nums" :class="diffMoney(r.diff.margin)" :title="r.diff.margin < 0 ? 'Маржа ниже обещанной в лоте' : 'Маржа не хуже плана'">{{ signPct(r.diff.margin) }}</td>
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-right font-bold tabular-nums" :class="diffMoney(r.diff.net)" :title="r.diff.net < 0 ? 'Фирме остаётся меньше, чем планировал менеджер' : 'Фирме не хуже плана'">{{ sign(r.diff.net) }}</td>
                             </tr>
-                            <tr v-if="openRow === r.deal_id" :key="r.deal_id + '-detail'" class="bg-slate-50/70">
+                            <tr v-if="openRow === r.deal_id" class="bg-slate-50/70">
                                 <td colspan="14" class="px-6 py-4">
                                     <div class="grid gap-4 sm:grid-cols-2">
                                         <div v-for="(g, side) in { План: r.plan, Факт: r.fact }" :key="side">
@@ -178,6 +179,7 @@ const chainParts = (g) => {
                                     </div>
                                 </td>
                             </tr>
+                            </template>
                             <tr v-if="!list.length">
                                 <td colspan="14" class="px-6 py-12 text-center text-sm text-slate-400">Сделок из предсделок пока нет</td>
                             </tr>
