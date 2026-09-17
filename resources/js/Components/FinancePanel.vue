@@ -23,6 +23,8 @@ const props = defineProps({
     section: { type: String, default: 'all' },
     // Смета дизайнера по сделке ({id,name,user,at} | null) — бухгалтер сверяет материалы.
     estimate: { type: Object, default: null },
+    // Код фирмы сделки: Металл/Лист/Фурнитура — только BAIA (17.09.2026).
+    companyCode: { type: String, default: null },
 });
 const showSummary = computed(() => ['all', 'summary'].includes(props.section));
 const showInvoices = computed(() => ['all', 'operations', 'invoices'].includes(props.section));
@@ -262,9 +264,12 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             { k: 'delivery', l: '🚚 Доставка' },
                             { k: 'purchase', l: '📦 Закуп' },
                             { k: 'assembly', l: '🔧 ' + assemblyLabel() },
-                            { k: 'metal', l: '🔩 Металл' },
-                            { k: 'sheet', l: '▤ Лист' },
-                            { k: 'fittings', l: '🪛 Фурнитура' },
+                            // Металл/Лист/Фурнитура — только сделки BAIA (правило Логистики)
+                            ...(companyCode === 'BAIA' ? [
+                                { k: 'metal', l: '🔩 Металл' },
+                                { k: 'sheet', l: '▤ Лист' },
+                                { k: 'fittings', l: '🪛 Фурнитура' },
+                            ] : []),
                         ]" :key="m.k" type="button" @click="expenseMode = m.k"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">

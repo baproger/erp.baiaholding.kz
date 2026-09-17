@@ -22,7 +22,7 @@ import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, formatDateTime, formatDuration, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null }, estimate: { type: Object, default: null } });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null }, estimate: { type: Object, default: null }, companyCode: { type: String, default: null } });
 
 const tab = ref('tasks');
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
@@ -328,7 +328,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
 
                 <!-- Расходы — сразу под блоком предсделки: план лота и факт рядом -->
-                <FinancePanel section="expenses" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" :estimate="estimate" />
+                <FinancePanel section="expenses" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" :estimate="estimate" :company-code="companyCode" />
 
                 <!-- Документы / Доп. поля / История -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
