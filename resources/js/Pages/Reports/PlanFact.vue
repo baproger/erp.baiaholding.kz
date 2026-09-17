@@ -41,11 +41,23 @@ const diffMoney = (v, badWhenPositive = false) => v === 0 ? 'text-slate-300'
 const sign = (v) => (v > 0 ? '+' : '') + money(v);
 const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
 
-// Полная цепочка расчёта для подсказки: видно, куда ушли налог и партнёр —
-// иначе «Сумма − Расходы ≠ Остаток» выглядит ошибкой (вопрос владельца 17.09).
-const chain = (g) => `${money(g.sum)} (сумма) − ${money(g.tax)} (налог) − ${money(g.expense)} (расходы)`
-    + (g.partner ? ` − ${money(g.partner)} (партнёр)` : '')
-    + ` = ${money(g.remainder)} (остаток) · маржа ${g.margin}% · − ${money(g.bonus)} (бонус) = ${money(g.net)} (фирме)`;
+// Раскладка расчёта по клику (не hover-title — тот незаметен и не работает
+// на телефоне): видно, куда ушли налог и партнёр, откуда взялись «Остаток»
+// и «Фирме» (вопрос владельца 17.09 — «столбики не складываются в уме»).
+const openRow = ref(null);
+const toggleRow = (id) => (openRow.value = openRow.value === id ? null : id);
+const chainParts = (g) => {
+    const parts = [
+        { label: 'Сумма договора', value: g.sum, op: '' },
+        { label: 'Налог', value: g.tax, op: '−' },
+        { label: 'Расходы', value: g.expense, op: '−' },
+    ];
+    if (g.partner) parts.push({ label: 'Партнёр', value: g.partner, op: '−' });
+    parts.push({ label: 'Остаток', value: g.remainder, op: '=', strong: true });
+    parts.push({ label: 'Бонус (' + g.margin + '% маржи)', value: g.bonus, op: '−' });
+    parts.push({ label: 'Фирме чистыми', value: g.net, op: '=', strong: true, accent: true });
+    return parts;
+};
 </script>
 
 <template>
@@ -126,18 +138,45 @@ const chain = (g) => `${money(g.sum)} (сумма) − ${money(g.tax)} (нало
                                 <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(r.budget) }}</td>
                                 <!-- План -->
                                 <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-slate-600">{{ money(r.plan.expense) }}</td>
-                                <td class="bg-indigo-50/20 px-3 py-2.5 text-center tabular-nums text-slate-600 cursor-help underline decoration-dotted underline-offset-4" :title="chain(r.plan)">{{ r.plan.margin }}%</td>
+                                <td class="bg-indigo-50/20 px-3 py-2.5 text-center">
+                                    <button type="button" @click="toggleRow(r.deal_id)" class="tabular-nums text-slate-600 underline decoration-dotted underline-offset-4 hover:text-indigo-600">{{ r.plan.margin }}%</button>
+                                </td>
                                 <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(r.plan.bonus) }}</td>
-                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700 cursor-help" :title="chain(r.plan)">{{ money(r.plan.net) }}</td>
+                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right">
+                                    <button type="button" @click="toggleRow(r.deal_id)" class="font-semibold tabular-nums text-slate-700 underline decoration-dotted underline-offset-4 hover:text-indigo-600">{{ money(r.plan.net) }}</button>
+                                </td>
                                 <!-- Факт -->
                                 <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-slate-800">{{ money(r.fact.expense) }}</td>
-                                <td class="bg-emerald-50/20 px-3 py-2.5 text-center font-semibold tabular-nums cursor-help underline decoration-dotted underline-offset-4" :class="r.fact.margin < 0 ? 'text-rose-600' : 'text-slate-800'" :title="chain(r.fact)">{{ r.fact.margin }}%</td>
+                                <td class="bg-emerald-50/20 px-3 py-2.5 text-center">
+                                    <button type="button" @click="toggleRow(r.deal_id)" class="font-semibold tabular-nums underline decoration-dotted underline-offset-4" :class="r.fact.margin < 0 ? 'text-rose-600' : 'text-slate-800 hover:text-indigo-600'">{{ r.fact.margin }}%</button>
+                                </td>
                                 <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(r.fact.bonus) }}</td>
-                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right font-bold tabular-nums cursor-help" :class="r.fact.net < 0 ? 'text-rose-600' : 'text-slate-900'" :title="chain(r.fact)">{{ money(r.fact.net) }}</td>
+                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right">
+                                    <button type="button" @click="toggleRow(r.deal_id)" class="font-bold tabular-nums underline decoration-dotted underline-offset-4" :class="r.fact.net < 0 ? 'text-rose-600' : 'text-slate-900 hover:text-indigo-600'">{{ money(r.fact.net) }}</button>
+                                </td>
                                 <!-- Разница -->
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-right font-semibold tabular-nums" :class="diffMoney(r.diff.expense, true)" :title="r.diff.expense > 0 ? 'Потратили больше плана' : 'Уложились в план'">{{ sign(r.diff.expense) }}</td>
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-center font-semibold tabular-nums" :class="diffMoney(r.diff.margin)" :title="r.diff.margin < 0 ? 'Маржа ниже обещанной в лоте' : 'Маржа не хуже плана'">{{ signPct(r.diff.margin) }}</td>
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-right font-bold tabular-nums" :class="diffMoney(r.diff.net)" :title="r.diff.net < 0 ? 'Фирме остаётся меньше, чем планировал менеджер' : 'Фирме не хуже плана'">{{ sign(r.diff.net) }}</td>
+                            </tr>
+                            <tr v-if="openRow === r.deal_id" :key="r.deal_id + '-detail'" class="bg-slate-50/70">
+                                <td colspan="14" class="px-6 py-4">
+                                    <div class="grid gap-4 sm:grid-cols-2">
+                                        <div v-for="(g, side) in { План: r.plan, Факт: r.fact }" :key="side">
+                                            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{{ side }} — как посчитано</div>
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <template v-for="(p, i) in chainParts(g)" :key="i">
+                                                    <span v-if="p.op" class="text-sm font-bold text-slate-400">{{ p.op }}</span>
+                                                    <span class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm"
+                                                        :class="p.accent ? 'bg-indigo-600 text-white font-bold' : p.strong ? 'bg-white ring-1 ring-slate-300 font-semibold text-slate-800' : 'bg-white ring-1 ring-slate-200 text-slate-600'">
+                                                        <span class="text-xs opacity-70">{{ p.label }}</span>
+                                                        <b class="tabular-nums">{{ money(p.value) }}</b>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
                             </tr>
                             <tr v-if="!list.length">
                                 <td colspan="14" class="px-6 py-12 text-center text-sm text-slate-400">Сделок из предсделок пока нет</td>
@@ -162,7 +201,7 @@ const chain = (g) => `${money(g.sum)} (сумма) − ${money(g.tax)} (нало
                     </table>
                 </div>
             </div>
-            <p class="mt-3 text-xs text-slate-400">💡 План — справочные цифры менеджера из предсделки. Факт — подтверждённые расходы по сделке на текущий момент (по незавершённым сделкам расходы ещё могут добавляться — смотрите на этап). Формула: <b>Остаток = сумма − налог 3% − расходы − партнёр</b> (налог и партнёр вычитаются, хоть и не показаны колонками — наведите на «Маржа» или «Фирме», подсказка покажет всю цепочку с цифрами). Маржа = остаток ÷ сумма; «Бонус» — по шкале от маржи (в факте — с ручным % финансиста, если задан); <b>«Фирме» = остаток − бонус</b> — чистая сумма компании. Красные расходы «+» — потратили больше плана; красное «Фирме −» — компании остаётся меньше, чем обещал расчёт лота.</p>
+            <p class="mt-3 text-xs text-slate-400">💡 План — справочные цифры менеджера из предсделки. Факт — подтверждённые расходы по сделке на текущий момент (по незавершённым сделкам расходы ещё могут добавляться — смотрите на этап). Формула: <b>Остаток = сумма − налог 3% − расходы − партнёр</b> (налог и партнёр вычитаются, хоть и не показаны отдельной колонкой — нажмите на «Маржа» или «Фирме» в любой строке, откроется полная раскладка с цифрами). Маржа = остаток ÷ сумма; «Бонус» — по шкале от маржи (в факте — с ручным % финансиста, если задан); <b>«Фирме» = остаток − бонус</b> — чистая сумма компании. Красные расходы «+» — потратили больше плана; красное «Фирме −» — компании остаётся меньше, чем обещал расчёт лота.</p>
         </PageLayout>
     </AppLayout>
 </template>
