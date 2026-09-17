@@ -83,6 +83,8 @@ class PlanFactReportTest extends TestCase
             // План: маржа 57% → 15% от 570 000 = 85 500, фирме 484 500.
             ->where('rows.0.plan.bonus', 85500)
             ->where('rows.0.plan.net', 484500)
-            ->where('rows.0.diff.net', -85000));
+            ->where('rows.0.diff.net', -85000)
+            ->where('rows.0.fact.tax', 30000)
+            ->where('rows.0.fact.sum', 1000000));
     }
 }

@@ -98,9 +98,12 @@ class ReportController extends Controller
                 'is_won' => (bool) $d->stage?->is_won,
                 'budget' => $budget,
                 'plan' => ['expense' => $planExpense, 'remainder' => $planRemainder, 'margin' => $planMargin,
-                    'bonus' => $planBonus, 'net' => $planNet],
+                    'bonus' => $planBonus, 'net' => $planNet,
+                    'tax' => (float) $l->tax, 'partner' => (float) $l->partner_sum,
+                    'sum' => (float) $l->contract_sum],
                 'fact' => ['expense' => $factExpense, 'remainder' => $factRemainder, 'margin' => $factMargin,
-                    'bonus' => $factBonus, 'net' => $factNet],
+                    'bonus' => $factBonus, 'net' => $factNet,
+                    'tax' => $tax, 'partner' => $partner, 'sum' => $budget],
                 // Разница = факт − план: расходы «+» — потратили больше плана;
                 // маржа/чистая «−» — фирме остаётся меньше обещанного.
                 'diff' => [

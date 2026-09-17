@@ -40,6 +40,12 @@ const diffMoney = (v, badWhenPositive = false) => v === 0 ? 'text-slate-300'
     : ((v > 0) === badWhenPositive ? 'text-rose-600' : 'text-emerald-600');
 const sign = (v) => (v > 0 ? '+' : '') + money(v);
 const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
+
+// Полная цепочка расчёта для подсказки: видно, куда ушли налог и партнёр —
+// иначе «Сумма − Расходы ≠ Остаток» выглядит ошибкой (вопрос владельца 17.09).
+const chain = (g) => `${money(g.sum)} (сумма) − ${money(g.tax)} (налог) − ${money(g.expense)} (расходы)`
+    + (g.partner ? ` − ${money(g.partner)} (партнёр)` : '')
+    + ` = ${money(g.remainder)} (остаток) · маржа ${g.margin}% · − ${money(g.bonus)} (бонус) = ${money(g.net)} (фирме)`;
 </script>
 
 <template>
@@ -120,14 +126,14 @@ const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
                                 <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(r.budget) }}</td>
                                 <!-- План -->
                                 <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-slate-600">{{ money(r.plan.expense) }}</td>
-                                <td class="bg-indigo-50/20 px-3 py-2.5 text-center tabular-nums text-slate-600">{{ r.plan.margin }}%</td>
+                                <td class="bg-indigo-50/20 px-3 py-2.5 text-center tabular-nums text-slate-600 cursor-help underline decoration-dotted underline-offset-4" :title="chain(r.plan)">{{ r.plan.margin }}%</td>
                                 <td class="bg-indigo-50/20 px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(r.plan.bonus) }}</td>
-                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700">{{ money(r.plan.net) }}</td>
+                                <td class="bg-indigo-50/20 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700 cursor-help" :title="chain(r.plan)">{{ money(r.plan.net) }}</td>
                                 <!-- Факт -->
                                 <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-slate-800">{{ money(r.fact.expense) }}</td>
-                                <td class="bg-emerald-50/20 px-3 py-2.5 text-center font-semibold tabular-nums" :class="r.fact.margin < 0 ? 'text-rose-600' : 'text-slate-800'">{{ r.fact.margin }}%</td>
+                                <td class="bg-emerald-50/20 px-3 py-2.5 text-center font-semibold tabular-nums cursor-help underline decoration-dotted underline-offset-4" :class="r.fact.margin < 0 ? 'text-rose-600' : 'text-slate-800'" :title="chain(r.fact)">{{ r.fact.margin }}%</td>
                                 <td class="bg-emerald-50/20 px-3 py-2.5 text-right tabular-nums text-emerald-700">{{ money(r.fact.bonus) }}</td>
-                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right font-bold tabular-nums" :class="r.fact.net < 0 ? 'text-rose-600' : 'text-slate-900'">{{ money(r.fact.net) }}</td>
+                                <td class="bg-emerald-50/20 px-3 py-2.5 text-right font-bold tabular-nums cursor-help" :class="r.fact.net < 0 ? 'text-rose-600' : 'text-slate-900'" :title="chain(r.fact)">{{ money(r.fact.net) }}</td>
                                 <!-- Разница -->
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-right font-semibold tabular-nums" :class="diffMoney(r.diff.expense, true)" :title="r.diff.expense > 0 ? 'Потратили больше плана' : 'Уложились в план'">{{ sign(r.diff.expense) }}</td>
                                 <td class="bg-amber-50/20 px-3 py-2.5 text-center font-semibold tabular-nums" :class="diffMoney(r.diff.margin)" :title="r.diff.margin < 0 ? 'Маржа ниже обещанной в лоте' : 'Маржа не хуже плана'">{{ signPct(r.diff.margin) }}</td>
@@ -156,7 +162,7 @@ const signPct = (v) => (v > 0 ? '+' : '') + v + '%';
                     </table>
                 </div>
             </div>
-            <p class="mt-3 text-xs text-slate-400">💡 План — справочные цифры менеджера из предсделки. Факт — подтверждённые расходы по сделке на текущий момент (по незавершённым сделкам расходы ещё могут добавляться — смотрите на этап). «Бонус» — по шкале от маржи (в факте — с ручным % финансиста, если задан); «Фирме» = остаток − бонус, чистая сумма компании. Красные расходы «+» — потратили больше плана; красное «Фирме −» — компании остаётся меньше, чем обещал расчёт лота.</p>
+            <p class="mt-3 text-xs text-slate-400">💡 План — справочные цифры менеджера из предсделки. Факт — подтверждённые расходы по сделке на текущий момент (по незавершённым сделкам расходы ещё могут добавляться — смотрите на этап). Формула: <b>Остаток = сумма − налог 3% − расходы − партнёр</b> (налог и партнёр вычитаются, хоть и не показаны колонками — наведите на «Маржа» или «Фирме», подсказка покажет всю цепочку с цифрами). Маржа = остаток ÷ сумма; «Бонус» — по шкале от маржи (в факте — с ручным % финансиста, если задан); <b>«Фирме» = остаток − бонус</b> — чистая сумма компании. Красные расходы «+» — потратили больше плана; красное «Фирме −» — компании остаётся меньше, чем обещал расчёт лота.</p>
         </PageLayout>
     </AppLayout>
 </template>
