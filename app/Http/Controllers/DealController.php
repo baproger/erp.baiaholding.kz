@@ -511,6 +511,35 @@ class DealController extends Controller
      * Overdue deals: deadline is in the past and deal is still open.
      * Sorted so the most-overdue deal (earliest deadline) is on top.
      */
+    /**
+     * Просрочка по СДЕЛКАМ: руководство и завсклад (supplier) видят всю
+     * просрочку фирмы — им нужно понимать, что горит и что готовить со
+     * склада (правило от 22.09.2026). Остальные — по общему правилу.
+     */
+    private function scopeOverdueDeals($query, User $user): void
+    {
+        if ($user->hasAnyRole(['admin', 'director', 'financist', 'supplier'])) {
+            return;
+        }
+        $this->scopeForViewer($query, $user);
+    }
+
+    /**
+     * Просрочка по ЗАКАЗАМ ЦЕХА: гейт-сужение по stage_type здесь
+     * неприменимо — такой колонки в project_stages нет (у designer/supplier
+     * страница падала с SQL-ошибкой). Сужаем только менеджера — его заказы,
+     * как в ProjectController::scope().
+     */
+    private function scopeOverdueProjects($query, User $user): void
+    {
+        if (! $user->hasRole('manager') || $user->hasAnyRole(['admin', 'director', 'financist'])) {
+            return;
+        }
+        $query->where(fn ($w) => $w
+            ->where('responsible_user_id', $user->id)
+            ->orWhereHas('deal', fn ($d) => $d->where('responsible_user_id', $user->id)));
+    }
+
     public function overdue(Request $request): Response
     {
         $this->authorize('viewAny', Deal::class);
@@ -532,7 +561,7 @@ class DealController extends Controller
             // ЭСФ и «Оплата успешно» — не просрочка; на «Акт утверждение»
             // просроченная сделка ПОКАЗЫВАЕТСЯ (по stage_type, имя ненадёжно).
             ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf'))
-            ->tap(fn ($q) => $this->scopeForViewer($q, $request->user()))
+            ->tap(fn ($q) => $this->scopeOverdueDeals($q, $request->user()))
             ->orderBy('deadline')
             ->get()
             ->filter(function ($d) use ($esfOrders) {
@@ -555,7 +584,7 @@ class DealController extends Controller
             ->whereNotNull('deadline')
             ->whereDate('deadline', '<', $today)
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
-            ->tap(fn ($q) => $this->scopeForViewer($q, $request->user()))
+            ->tap(fn ($q) => $this->scopeOverdueProjects($q, $request->user()))
             ->orderBy('deadline')
             ->get()
             ->map(function ($p) use ($today) {

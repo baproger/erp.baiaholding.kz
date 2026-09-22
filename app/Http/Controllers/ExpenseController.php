@@ -228,7 +228,10 @@ class ExpenseController extends Controller
         $title = 'Подтвердить расход #'.$expense->id.' — '.number_format((float) $expense->amount, 0, '.', ' ').' ₸'
             .($entity?->number ? ' ('.$entity->number.')' : '');
 
-        $financists = User::where('is_active', true)->role('financist')->get();
+        // Металл подтверждает и завсклад — значит задача и уведомление идут
+        // ему тоже (правило от 22.09.2026).
+        $roles = $expense->type === 'metal' ? ['financist', 'supplier'] : ['financist'];
+        $financists = User::where('is_active', true)->role($roles)->get();
         foreach ($financists as $fin) {
             if ($entity && method_exists($entity, 'tasks')) {
                 $entity->tasks()->create([
@@ -251,11 +254,31 @@ class ExpenseController extends Controller
      */
     public function confirm(Request $request, Expense $expense): RedirectResponse
     {
-        abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Расход подтверждает бухгалтер или админ.');
+        // Металл, взятый из цеха, подтверждает ЗАВСКЛАД (supplier) наравне с
+        // бухгалтером — правило владельца от 22.09.2026.
+        $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
+        $isMetalKeeper = $request->user()->hasRole('supplier') && $expense->type === 'metal';
+        abort_unless($isAccountant || $isMetalKeeper, 403,
+            'Расход подтверждает бухгалтер, админ или завсклад (металл).');
         $this->assertOwnership($request->user(), $expense->expenseable);
 
         if ($expense->status === 'confirmed') {
             return back()->with('error', 'Расход уже подтверждён.');
+        }
+
+        // Металл из цеха: деньги за него ушли раньше, при закупе — поэтому
+        // подтверждение без чека и без кассы (payment_method остаётся пустым,
+        // касса не уменьшается), но расход идёт в расходы сделки и маржу.
+        // Правило одинаково для бухгалтера и завсклада.
+        if ($expense->type === 'metal' && ! $expense->material_id) {
+            $expense->update([
+                'status' => 'confirmed',
+                'confirmed_by' => $request->user()->id,
+                'confirmed_at' => now(),
+            ]);
+            $this->finishConfirmation($request, $expense);
+
+            return back()->with('success', 'Металл подтверждён — расход учтён по сделке.');
         }
 
         // Списание материала: чек и способ оплаты не нужны (деньги ушли при

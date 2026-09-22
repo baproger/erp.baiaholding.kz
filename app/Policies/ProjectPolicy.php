@@ -19,7 +19,8 @@ class ProjectPolicy
             return false;
         }
         // Leadership and workshop staff (observers) see the whole Цех; a manager only their own.
-        if ($user->hasAnyRole(['admin', 'director', 'financist', 'employee'])) {
+        // supplier (завсклад) наблюдает цех целиком — правило от 22.09.2026.
+        if ($user->hasAnyRole(['admin', 'director', 'financist', 'employee', 'supplier'])) {
             return true;
         }
 

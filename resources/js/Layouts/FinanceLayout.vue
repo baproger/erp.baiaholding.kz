@@ -21,7 +21,7 @@ const isLeadership = computed(() => roles.value.some((r) => ['admin', 'director'
 const allTabs = [
     { name: 'Обзор', route: 'finance.index', perm: 'invoice.viewAny', leadershipOnly: true },
     { name: 'Касса', route: 'cashBook.index', roles: ['admin', 'director', 'financist'] },
-    { name: 'Расходы', route: 'expenses.board', roles: ['admin', 'director', 'financist'] },
+    { name: 'Расходы', route: 'expenses.board', roles: ['admin', 'director', 'financist', 'supplier'] },
     { name: 'Мои расходы', route: 'myExpenses.index', perm: 'expense.create', hideForRoles: ['admin', 'financist'] },
     { name: 'Зарплата', route: 'payroll.index', perm: 'payroll.view' },
     { name: 'Бонусы', route: 'payroll.bonuses', perm: 'payroll.view' },

@@ -29,7 +29,22 @@ const monthLabel = computed(() => new Date(props.month + '-01T00:00:00')
 const confirmFor = ref(null);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const cForm = useForm({ payment_method: 'cash', file: null, date: todayStr() });
-const openConfirm = (e) => { cForm.reset(); cForm.clearErrors(); confirmFor.value = e.id; };
+// Металл из цеха: деньги ушли при закупе — подтверждаем сразу, без формы
+// оплаты (правило от 22.09.2026). Остальное — как раньше: касса + чек.
+const openConfirm = async (e) => {
+    if (e.type === 'metal') {
+        if (await confirmDialog({
+            title: 'Подтвердить металл',
+            message: `${money(e.amount)} — металл из цеха. Деньги за него ушли при закупе, касса не изменится. Подтвердить?`,
+            confirmText: '✓ Подтвердить',
+        })) {
+            router.patch(route('expenses.confirm', e.id), {}, { preserveScroll: true });
+        }
+
+        return;
+    }
+    cForm.reset(); cForm.clearErrors(); confirmFor.value = e.id;
+};
 const submitConfirm = (e) => cForm.patch(route('expenses.confirm', e.id), {
     preserveScroll: true, forceFormData: true, onSuccess: () => (confirmFor.value = null),
 });
@@ -116,7 +131,7 @@ const del = async (e) => {
                         </div>
 
                         <!-- Подтверждение: откуда платим + чек бухгалтера -->
-                        <div v-if="canManage" class="mt-3 border-t border-slate-200/60 pt-3">
+                        <div v-if="e.can_confirm || canManage" class="mt-3 border-t border-slate-200/60 pt-3">
                             <div v-if="confirmFor === e.id" class="space-y-2">
                                 <div class="flex gap-2">
                                     <button v-for="m in [['cash','💵 Наличные'],['bank','🏦 Банк']]" :key="m[0]" type="button"
@@ -139,10 +154,10 @@ const del = async (e) => {
                                 </div>
                             </div>
                             <div v-else class="flex items-center justify-between gap-2">
-                                <button class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[.98]" @click="openConfirm(e)">
-                                    ✓ Проверил, оплатить
+                                <button v-if="e.can_confirm" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[.98]" @click="openConfirm(e)">
+                                    {{ e.type === 'metal' ? '✓ Подтвердить металл' : '✓ Проверил, оплатить' }}
                                 </button>
-                                <button class="rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600" @click="del(e)">Удалить</button>
+                                <button v-if="canManage" class="rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600" @click="del(e)">Удалить</button>
                             </div>
                         </div>
                     </div>
@@ -201,9 +216,11 @@ const del = async (e) => {
                         <div class="flex w-40 shrink-0 items-center justify-end gap-1.5">
                             <a v-if="e.has_file" :href="route('expenses.receipt', e.id)" target="_blank"
                                 class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">чек ↗</a>
+                            <!-- Металл из цеха подтверждается без кассы (payment_method пуст) — это не «банк» -->
                             <span class="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                :class="e.payment_method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'">
-                                {{ e.payment_method === 'cash' ? '💵 нал' : '🏦 банк' }}</span>
+                                :class="!e.payment_method ? 'bg-slate-100 text-slate-500' : e.payment_method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'"
+                                :title="!e.payment_method ? 'Деньги ушли при закупе — касса не трогалась' : ''">
+                                {{ !e.payment_method ? '🏭 без кассы' : e.payment_method === 'cash' ? '💵 нал' : '🏦 банк' }}</span>
                         </div>
                         <!-- Сумма -->
                         <span class="w-28 shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</span>

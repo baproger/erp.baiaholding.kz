@@ -87,6 +87,9 @@ const canSubmitExpense = computed(() => expenseMode.value === 'material'
 
 // Подтверждение прочего расхода — только бухгалтер (financist) или админ.
 const canConfirm = computed(() => (usePage().props.auth.user?.roles ?? []).some((r) => ['admin', 'financist'].includes(r)));
+// Завсклад (supplier) подтверждает ТОЛЬКО металл из цеха — правило от 22.09.2026.
+const isSupplier = computed(() => (usePage().props.auth.user?.roles ?? []).includes('supplier'));
+const canConfirmRow = (e) => canConfirm.value || (isSupplier.value && e.type === 'metal');
 // Удалять расходы может только бухгалтер/админ — любые, включая ещё не
 // подтверждённые (та же проверка в ExpensePolicy::delete).
 const canManageExpense = () => canConfirm.value;
@@ -102,6 +105,18 @@ const openConfirm = async (e) => {
             ? `Смета дизайнера: «${props.estimate.name}» (${props.estimate.user ?? '—'}) — сверьте, что материал по смете.`
             : '⚠ Сметы дизайнера у сделки нет — сверить не с чем. Подтверждайте только если уверены.';
         if (await confirmDialog({ title: 'Подтвердить списание', message: `${est}\n\n${e.material.name} × ${qtyNum(e.qty)} ${e.material.unit} спишется со склада. Подтвердить?`, confirmText: '✓ Подтвердить' })) {
+            router.patch(route('expenses.confirm', e.id), {}, { preserveScroll: true });
+        }
+        return;
+    }
+    // Металл из цеха: деньги ушли при закупе — без чека и кассы, одним нажатием
+    // (как на доске «Расходы»; форма с чеком блокировала бы подтверждение).
+    if (e.type === 'metal') {
+        if (await confirmDialog({
+            title: 'Подтвердить металл',
+            message: `${money(e.amount)} — металл из цеха. Деньги за него ушли при закупе, касса не изменится. Подтвердить?`,
+            confirmText: '✓ Подтвердить',
+        })) {
             router.patch(route('expenses.confirm', e.id), {}, { preserveScroll: true });
         }
         return;
@@ -375,9 +390,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         <div class="flex items-center gap-2">
                             <span v-if="isLot(e)" class="rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" title="Плановая цифра менеджера из предсделки — подтверждения бухгалтера не требует">◧ из предсделки</span>
                             <span v-else-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
-                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Ждёт бухгалтера</span>
+                            <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{{ e.type === 'metal' ? 'Ждёт завсклада' : 'Ждёт бухгалтера' }}</span>
                             <span v-else class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Черновик</span>
-                            <button v-if="canConfirm && e.status !== 'confirmed' && confirmFor !== e.id"
+                            <button v-if="canConfirmRow(e) && e.status !== 'confirmed' && confirmFor !== e.id"
                                 class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700"
                                 @click="openConfirm(e)">✓ Подтвердить</button>
                             <!-- Подтверждённый расход проведён по кассе — удалить его

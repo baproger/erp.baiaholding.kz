@@ -57,7 +57,7 @@ const allNav = [
     { key: 'nav.finance', name: 'Финансы', icon: '₸', group: 'finance', children: [
         { key: 'nav.finance.overview', name: 'Обзор', route: 'finance.index', perm: 'invoice.viewAny', leadershipOnly: true },
         { key: 'nav.cashbook', name: 'Касса', route: 'cashBook.index', roles: ['admin', 'director', 'financist'] },
-        { key: 'nav.expenses', name: 'Расходы', route: 'expenses.board', roles: ['admin', 'director', 'financist'] },
+        { key: 'nav.expenses', name: 'Расходы', route: 'expenses.board', roles: ['admin', 'director', 'financist', 'supplier'] },
         { key: 'nav.myexpenses', name: 'Мои расходы', route: 'myExpenses.index', perm: 'expense.create', hideForRoles: ['admin', 'financist'] },
         { key: 'nav.payroll', name: 'Зарплата', route: 'payroll.index', perm: 'payroll.view' },
     ] },

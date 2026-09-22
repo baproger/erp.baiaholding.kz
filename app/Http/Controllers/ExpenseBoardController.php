@@ -22,7 +22,11 @@ class ExpenseBoardController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
-        abort_unless($user->hasAnyRole(['admin', 'director', 'financist']), 403);
+        // Завсклад (supplier) допущен на доску ради подтверждения металла, но
+        // видит ТОЛЬКО расходы типа «Металл» — зарплаты и выплаты сотрудникам
+        // ему показывать нельзя (правило от 22.09.2026).
+        abort_unless($user->hasAnyRole(['admin', 'director', 'financist', 'supplier']), 403);
+        $metalOnly = $user->hasRole('supplier') && ! $user->hasAnyRole(['admin', 'director', 'financist']);
 
         $companyId = CurrentCompany::id() ?: null;
         $month = preg_match('/^\d{4}-\d{2}$/', $request->string('month')->toString())
@@ -33,21 +37,23 @@ class ExpenseBoardController extends Controller
         // Ждут проверки — БЕЗ фильтра месяца: заявка не должна потеряться
         // из-за того, что бухгалтер смотрит другой период.
         $pending = Expense::where('status', 'pending')
+            ->when($metalOnly, fn ($q) => $q->where('type', 'metal'))
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
             ->with(['responsible:id,name,avatar', 'category:id,name', 'expenseable'])
             ->orderBy('date')->orderBy('id')
             ->get()
-            ->map(fn ($e) => $this->row($e));
+            ->map(fn ($e) => $this->row($e, $user));
 
         $confirmed = Expense::where('status', 'confirmed')
+            ->when($metalOnly, fn ($q) => $q->where('type', 'metal'))
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
             ->whereDate('date', '>=', $start)->whereDate('date', '<=', $end)
             ->with(['responsible:id,name', 'category:id,name', 'employee:id,name', 'confirmedBy:id,name', 'expenseable'])
             ->orderByDesc('date')->orderByDesc('id')
             ->get()
-            ->map(fn ($e) => $this->row($e));
+            ->map(fn ($e) => $this->row($e, $user));
 
         return Inertia::render('Finance/Expenses', [
             'month' => $month,
@@ -64,10 +70,15 @@ class ExpenseBoardController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function row(Expense $e): array
+    private function row(Expense $e, ?\App\Models\User $user = null): array
     {
         return [
             'id' => $e->id,
+            'type' => $e->type,
+            // Кто может подтвердить именно этот расход: бухгалтер/админ — любой,
+            // завсклад — только металл (правило от 22.09.2026).
+            'can_confirm' => $user !== null && ($user->hasAnyRole(['admin', 'financist'])
+                || ($user->hasRole('supplier') && $e->type === 'metal')),
             'date' => optional($e->date)->toDateString(),
             'amount' => (float) $e->amount,
             'description' => $e->description,
