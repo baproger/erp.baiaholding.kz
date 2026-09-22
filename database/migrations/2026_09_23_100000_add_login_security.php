@@ -21,7 +21,7 @@ return new class extends Migration
         $columns = [
             // Одноразовый код входа: хранится только хеш, живёт 24 часа.
             'login_code_hash' => fn (Blueprint $t) => $t->string('login_code_hash')->nullable(),
-            'login_code_expires_at' => fn (Blueprint $t) => $t->timestamp('login_code_expires_at')->nullable(),
+            'login_code_expires_at' => fn (Blueprint $t) => $t->dateTime('login_code_expires_at')->nullable(),
             'login_code_issued_by' => fn (Blueprint $t) => $t->unsignedBigInteger('login_code_issued_by')->nullable(),
             // Меняется при смене пароля / сбросе устройств / отключении —
             // все сессии со старой отметкой завершаются (любой драйвер сессий).
@@ -40,8 +40,10 @@ return new class extends Migration
                 $table->string('token_hash', 64)->unique();
                 $table->string('ip', 45)->nullable();
                 $table->string('user_agent', 255)->nullable();
-                $table->timestamp('last_used_at')->nullable();
-                $table->timestamp('expires_at');
+                $table->dateTime('last_used_at')->nullable();
+                // DATETIME, не TIMESTAMP: на проде MySQL отвергает TIMESTAMP NOT NULL
+                // без default («Invalid default value», 24.09.2026).
+                $table->dateTime('expires_at');
                 $table->timestamps();
             });
         }
@@ -54,7 +56,7 @@ return new class extends Migration
                 $table->string('result', 32)->index();
                 $table->string('ip', 45)->nullable();
                 $table->string('user_agent', 255)->nullable();
-                $table->timestamp('created_at')->index();
+                $table->dateTime('created_at')->useCurrent()->index();
                 $table->index(['user_id', 'created_at']);
             });
         }
