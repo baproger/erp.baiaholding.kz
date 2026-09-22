@@ -53,8 +53,10 @@ class LoginRequest extends FormRequest
 
         // Отключённый сотрудник: пароль верный, но входа нет (раньше флаг
         // is_active на вход не влиял вовсе).
+        // Супер-админ под этот замок не попадает (как и под удаление):
+        // владелец не должен потерять доступ из-за флага в базе.
         $user = Auth::user();
-        if (! $user->is_active) {
+        if (! $user->is_active && ! $user->isSuperAdmin()) {
             Auth::guard('web')->logout();
             \App\Models\LoginLog::record('disabled', $user, $this);
 

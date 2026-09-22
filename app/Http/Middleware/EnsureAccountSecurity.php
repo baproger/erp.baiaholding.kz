@@ -31,7 +31,7 @@ class EnsureAccountSecurity
         // Модель, созданная в памяти без is_active (фабрика в тестах), — активна:
         // из БД поле приходит всегда (default true).
         $active = array_key_exists('is_active', $user->getAttributes()) ? (bool) $user->is_active : true;
-        if (! $active || $user->trashed()) {
+        if ((! $active || $user->trashed()) && ! $user->isSuperAdmin()) {
             LoginLog::record('disabled', $user, $request);
 
             return $this->logout($request, 'Учётная запись отключена. Обратитесь к администратору.');

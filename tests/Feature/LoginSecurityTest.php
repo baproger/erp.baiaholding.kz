@@ -70,6 +70,14 @@ class LoginSecurityTest extends TestCase
         $this->assertDatabaseHas('login_logs', ['user_id' => $u->id, 'result' => 'session_revoked']);
     }
 
+    public function test_super_admin_is_never_locked_out_by_is_active_flag(): void
+    {
+        $admin = $this->user('admin', ['is_active' => false]);
+
+        $this->login($admin)->assertRedirect(route('dashboard', absolute: false));
+        $this->get('/deals')->assertOk();
+    }
+
     // ---- 4. Журнал входов + выход везде при смене пароля ----
 
     public function test_successful_and_failed_logins_are_logged(): void
