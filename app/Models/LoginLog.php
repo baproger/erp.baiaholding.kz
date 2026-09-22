@@ -40,13 +40,19 @@ class LoginLog extends Model
     public static function record(string $result, ?User $user, ?Request $request = null, ?string $email = null): void
     {
         $request ??= request();
-        static::create([
-            'user_id' => $user?->id,
-            'email' => mb_substr($email ?? $user?->email ?? '', 0, 255) ?: null,
-            'result' => $result,
-            'ip' => $request->ip(),
-            'user_agent' => mb_substr((string) $request->userAgent(), 0, 255) ?: null,
-            'created_at' => now(),
-        ]);
+        try {
+            static::create([
+                'user_id' => $user?->id,
+                'email' => mb_substr($email ?? $user?->email ?? '', 0, 255) ?: null,
+                'result' => $result,
+                'ip' => $request->ip(),
+                'user_agent' => mb_substr((string) $request->userAgent(), 0, 255) ?: null,
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // Журнал не должен ломать вход (например, миграция на проде ещё не
+            // накатилась): пишем в журнал ошибок и пропускаем.
+            report($e);
+        }
     }
 }
