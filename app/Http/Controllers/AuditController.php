@@ -72,6 +72,31 @@ class AuditController extends Controller
     }
 
     /**
+     * Аудит → «Обновить сервер» (только админ): то, что должны делать
+     * «действия развертывания» в Plesk, но на shared-хостинге они порой не
+     * запускаются — кеши, миграции, снова кеши. Идемпотентно.
+     */
+    public function refresh(\Illuminate\Http\Request $request): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403);
+
+        $lines = [];
+        foreach ([['optimize:clear', []], ['migrate', ['--force' => true]], ['optimize', []]] as [$cmd, $args]) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call($cmd, $args);
+                $out = trim(preg_replace('/\s+/', ' ', \Illuminate\Support\Facades\Artisan::output()));
+                $lines[] = "{$cmd}: ".(\Illuminate\Support\Str::limit($out, 300) ?: 'ок');
+            } catch (\Throwable $e) {
+                report($e);
+
+                return back()->with('error', "{$cmd}: ".\Illuminate\Support\Str::limit($e->getMessage(), 300).' — подробности в «Ошибки сайта».');
+            }
+        }
+
+        return back()->with('success', 'Сервер обновлён. '.implode(' · ', $lines));
+    }
+
+    /**
      * Аудит → /audit/system: диагностика сервера (только админ). Показывает,
      * включён ли OPcache и какие драйверы реально работают на проде —
      * тормоза «при 2–3 людях» чаще всего значат opcache.enable=0.

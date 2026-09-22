@@ -253,6 +253,8 @@ Route::middleware('auth')->group(function () {
     Route::get('audit/logins', [AuditController::class, 'logins'])->name('audit.logins');
     // Диагностика сервера (OPcache и т.п.) — только админ.
     Route::get('audit/system', [AuditController::class, 'system'])->name('audit.system');
+    // Кеши + миграции из браузера (только супер-админ) — когда Plesk не выполнил действия деплоя.
+    Route::post('audit/system/refresh', [AuditController::class, 'refresh'])->middleware('throttle:5,1')->name('audit.refresh');
 
     // Comments
     Route::post('comments', [CommentController::class, 'store'])->name('comments.store');

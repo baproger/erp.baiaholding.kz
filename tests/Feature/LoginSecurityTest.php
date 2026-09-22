@@ -110,6 +110,12 @@ class LoginSecurityTest extends TestCase
         $this->actingAs($admin->fresh())->get('/deals')->assertRedirect('/login');
     }
 
+    public function test_server_refresh_is_super_admin_only(): void
+    {
+        $this->actingAs($this->user('director'))->post(route('audit.refresh'))->assertForbidden();
+        $this->actingAs($this->user('ceo'))->post(route('audit.refresh'))->assertForbidden();
+    }
+
     public function test_login_journal_is_admin_only(): void
     {
         $this->actingAs($this->user('admin'))->get(route('audit.logins'))->assertOk();

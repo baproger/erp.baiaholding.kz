@@ -7,6 +7,13 @@ import Pagination from '@/Components/Pagination.vue';
 import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 
 const props = defineProps({ logs: Object, filters: Object, tables: Array, users: Array });
+
+// «Обновить сервер»: кеши + миграции из браузера (когда Plesk не выполнил действия деплоя).
+const refreshing = ref(false);
+const refreshServer = () => {
+    refreshing.value = true;
+    router.post(route('audit.refresh'), {}, { preserveScroll: true, onFinish: () => (refreshing.value = false) });
+};
 const actionLabel = { created: 'Создание', updated: 'Изменение', deleted: 'Удаление' };
 const actionColor = { created: 'text-green-600', updated: 'text-amber-600', deleted: 'text-red-600' };
 const fmt = (t) => new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -39,6 +46,9 @@ const hasFilters = () => fTable.value || fAction.value || fUser.value || fFrom.v
                     class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 shadow-sm transition-colors duration-150 hover:bg-rose-100">⚠ Ошибки сайта</Link>
                 <Link :href="route('audit.logins')"
                     class="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 shadow-sm transition-colors duration-150 hover:bg-indigo-100">⎆ Входы</Link>
+                <button type="button" :disabled="refreshing" @click="refreshServer"
+                    title="Сбросить кеши, накатить миграции, снова закешировать — если после Pull в Plesk что-то не обновилось"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition-colors duration-150 hover:bg-slate-50 disabled:opacity-50">{{ refreshing ? '⟳ Обновляю…' : '⟳ Обновить сервер' }}</button>
                 <select v-model="fTable" @change="apply" class="rounded-full border-slate-200 bg-white py-1 pl-3 pr-8 text-xs font-medium text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                     <option value="">Все разделы</option>
                     <option v-for="t in tables" :key="t.value" :value="t.value">{{ t.label }}</option>

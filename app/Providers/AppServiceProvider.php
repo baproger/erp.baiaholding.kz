@@ -14,6 +14,19 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Shared-хостинг: Plesk иногда делает только git pull, а «действия
+        // развертывания» (php artisan optimize) не выполняет. Тогда старый
+        // кеш маршрутов не знает новых роутов → Ziggy «route is not in the route
+        // list» → белый экран. Если файлы routes/ новее кеша — кеш снимаем сами;
+        // Laravel прочитает маршруты из файлов (register() идёт до загрузки роутов).
+        $cache = $this->app->getCachedRoutesPath();
+        if (is_file($cache)) {
+            $newest = max(array_map('filemtime', glob(base_path('routes/*.php')) ?: []) ?: [0]);
+            if ($newest > filemtime($cache)) {
+                @unlink($cache);
+            }
+        }
+
         // Inertia отдаёт наш Response: чистка битого UTF-8 в готовых данных
         // страницы + запись в журнал, какое поле было битым (31.08.2026).
         $this->app->singleton(\Inertia\ResponseFactory::class, \App\Http\Inertia\SanitizingInertiaFactory::class);
