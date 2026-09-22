@@ -18,7 +18,7 @@ use Spatie\Permission\Traits\HasRoles;
 // salary/contract_path скрыты по умолчанию: не утекут при случайной
 // сериализации сырой модели User во фронт. Админ-список читает их явно
 // ($u->salary) — на прямой доступ $hidden не влияет.
-#[Hidden(['password', 'remember_token', 'salary', 'contract_path'])]
+#[Hidden(['password', 'remember_token', 'salary', 'contract_path', 'login_code_hash', 'login_code_expires_at', 'login_code_issued_by', 'security_stamp'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -62,6 +62,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'login_code_expires_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
             'salary' => 'decimal:2',

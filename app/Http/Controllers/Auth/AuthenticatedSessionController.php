@@ -33,12 +33,24 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        $user = $request->user();
+        // Отметка безопасности сессии: смена пароля / сброс устройств завершит её.
+        \App\Support\LoginSecurity::stampSession($user, $request);
 
         // The chosen firm sticks only if the user actually belongs to it;
         // otherwise SetCurrentCompany falls back to their first company.
         $companyId = (int) $request->input('company_id');
         if ($companyId && $request->user()->companies()->where('companies.id', $companyId)->exists()) {
             \App\Support\CurrentCompany::set($companyId);
+        }
+
+        // Код входа (второй фактор): новое устройство — на экран кода,
+        // доверенное (код вводили ≤30 дней назад) — сразу в систему.
+        if (\App\Support\LoginSecurity::codeRequired()) {
+            if (! \App\Support\LoginSecurity::isTrustedDevice($user, $request)) {
+                return redirect()->route('login.code');
+            }
+            $request->session()->put(\App\Support\LoginSecurity::SESSION_CODE_OK, true);
         }
 
         return redirect()->intended(route('dashboard', absolute: false));

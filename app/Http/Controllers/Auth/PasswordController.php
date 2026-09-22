@@ -27,6 +27,8 @@ class PasswordController extends Controller
         $request->user()->update([
             'password' => Hash::make($validated['password']),
         ]);
+        // Смена пароля — выход на всех остальных устройствах.
+        \App\Support\LoginSecurity::bumpStamp($request->user(), keepCurrentSession: true);
 
         return back();
     }

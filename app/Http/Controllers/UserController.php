@@ -49,6 +49,7 @@ class UserController extends Controller
                 'company_names' => $u->companies->pluck('name')->join(', '),
                 'salary' => (float) $u->salary,
                 'has_contract' => (bool) $u->contract_path,
+                'has_login_code' => \App\Support\LoginSecurity::hasActiveCode($u),
             ])
             ->values();
 
@@ -62,7 +63,11 @@ class UserController extends Controller
             'companies' => \App\Models\Company::where('is_active', true)
                 ->when($companyId, fn ($q, $c) => $q->whereKey($c))
                 ->orderBy('id')->get(['id', 'name']),
-            'can' => ['manage' => $request->user()->can('create', User::class)],
+            'can' => [
+                'manage' => $request->user()->can('create', User::class),
+                // Код входа / сброс устройств — только админ.
+                'security' => $request->user()->hasRole('admin'),
+            ],
             // Цеха холдинга (у BAIA два) — чекбоксы доступа в форме сотрудника.
             'workshopOptions' => \App\Models\Company::where('is_active', true)->pluck('id')
                 ->flatMap(fn ($id) => \App\Models\ProjectStage::workshopsFor((int) $id))->unique()->values(),
@@ -313,6 +318,7 @@ class UserController extends Controller
         // ДО записи полей: не-админ не редактирует админа (иначе поля успели
         // бы обновиться до 403 на роли).
         $this->guardRoleAssignment($request, $data['role'], $user);
+        $wasActive = (bool) $user->is_active;
         $user->update([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -330,8 +336,14 @@ class UserController extends Controller
             }
             $user->update(['contract_path' => $request->file('contract')->store('contracts')]);
         }
+        if ($wasActive && ! $user->is_active) {
+            // Отключили: сессии, устройства и код — обнуляются сразу.
+            \App\Support\LoginSecurity::revokeAccess($user, $request);
+        }
         if (! empty($data['password'])) {
             $user->update(['password' => Hash::make($data['password'])]);
+            // Новый пароль — выход на всех устройствах (свою сессию админ сохраняет).
+            \App\Support\LoginSecurity::bumpStamp($user, keepCurrentSession: $user->id === $request->user()->id);
         }
         $user->syncRoles([$data['role']]);
         $user->companies()->sync($this->companyIds($request));
@@ -411,8 +423,40 @@ class UserController extends Controller
 
         // Soft-delete + deactivate rather than hard removal.
         $user->update(['is_active' => false]);
+        \App\Support\LoginSecurity::revokeAccess($user, $request);
         $user->delete();
 
         return back()->with('success', 'Сотрудник деактивирован.');
+    }
+
+    /**
+     * Код входа (второй фактор): админ выпускает 6-значный код и сам передаёт
+     * его сотруднику. Показывается один раз, в БД — только хеш, живёт 24 часа.
+     */
+    public function issueLoginCode(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin'), 403);
+        if (! $user->is_active) {
+            return back()->with('error', 'Сотрудник отключён — код входа не выпускается.');
+        }
+        $code = \App\Support\LoginSecurity::issueCode($user, $request->user(), $request);
+
+        return back()->with('login_code', [
+            'user' => $user->name,
+            'code' => $code,
+            'expires_at' => now()->addHours(\App\Support\LoginSecurity::CODE_TTL_HOURS)->toIso8601String(),
+        ]);
+    }
+
+    /** Сбросить доверенные устройства и сессии: при следующем входе снова нужен код. */
+    public function revokeDevices(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin'), 403);
+        \App\Support\LoginSecurity::revokeDevices($user, $request);
+        if ($user->id === $request->user()->id) {
+            \App\Support\LoginSecurity::stampSession($user, $request);
+        }
+
+        return back()->with('success', "Устройства «{$user->name}» сброшены — при следующем входе потребуется код.");
     }
 }

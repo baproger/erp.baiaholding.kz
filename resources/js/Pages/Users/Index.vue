@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import { confirmDialog } from '@/composables/useConfirm';
@@ -217,6 +217,21 @@ const submit = () => {
     if (editing.value) form.transform((d) => ({ ...d, _method: 'put' })).post(route('users.update', editing.value.id), opts);
     else form.post(route('users.store'), opts);
 };
+// Код входа (второй фактор): выпускается админом, показывается один раз в модалке.
+const page = usePage();
+const issuedCode = ref(null);
+watch(() => page.props.flash?.login_code, (v) => { if (v) issuedCode.value = v; }, { immediate: true });
+const issueCode = async (u) => {
+    if (u.has_login_code && !(await confirmDialog({ title: 'Выпустить новый код', message: `У «${u.name}» уже есть действующий код. Новый код заменит его.`, confirmText: 'Выпустить' }))) return;
+    router.post(route('users.login-code', u.id), {}, { preserveScroll: true });
+};
+const revokeDevices = async (u) => {
+    if (await confirmDialog({ title: 'Сбросить устройства', message: `«${u.name}» выйдет из системы на всех устройствах, при следующем входе потребуется код.`, confirmText: 'Сбросить', danger: true })) {
+        router.delete(route('users.devices.revoke', u.id), { preserveScroll: true });
+    }
+};
+const copyCode = async () => { try { await navigator.clipboard.writeText(issuedCode.value.code); } catch {} };
+const fmtExpires = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const deactivate = async (u) => {
     if (await confirmDialog({ title: 'Деактивировать сотрудника', message: `Сотрудник «${u.name}» потеряет доступ к системе.`, confirmText: 'Деактивировать', danger: true })) {
         router.delete(route('users.destroy', u.id), { preserveScroll: true });
@@ -342,6 +357,12 @@ const deactivate = async (u) => {
                             <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Изменить" @click.stop="openEdit(u)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                             </button>
+                            <button v-if="can.security && u.is_active" class="rounded p-1 transition-colors hover:text-amber-600" :class="u.has_login_code ? 'text-amber-500' : 'text-slate-300'" :title="u.has_login_code ? 'Код входа выпущен (действует). Выпустить новый' : 'Выпустить код входа'" @click.stop="issueCode(u)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.85 12.15 8.65-8.65M17 5l2 2M14 8l2 2"/></svg>
+                            </button>
+                            <button v-if="can.security && u.is_active" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Сбросить устройства (выход везде, снова нужен код)" @click.stop="revokeDevices(u)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M3 3l18 18"/></svg>
+                            </button>
                             <button v-if="u.is_active" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Отключить" @click.stop="deactivate(u)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
                             </button>
@@ -444,6 +465,20 @@ const deactivate = async (u) => {
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="show = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="form.processing" @click="submit">Сохранить</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Выпущенный код входа: виден один раз, дальше только хеш в БД -->
+        <Modal :show="!!issuedCode" max-width="sm" @close="issuedCode = null">
+            <div v-if="issuedCode" class="p-6 text-center">
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-400">Код входа</div>
+                <div class="mt-1 text-lg font-semibold text-slate-800">{{ issuedCode.user }}</div>
+                <div class="mt-4 select-all rounded-xl bg-slate-900 py-4 font-mono text-4xl font-bold tracking-[0.35em] text-emerald-300">{{ issuedCode.code }}</div>
+                <p class="mt-3 text-xs text-slate-500">Действует до {{ fmtExpires(issuedCode.expires_at) }}, одноразовый. Передайте сотруднику лично или в WhatsApp — после закрытия окна код больше не показывается.</p>
+                <div class="mt-5 flex justify-center gap-2">
+                    <SecondaryButton @click="copyCode">Скопировать</SecondaryButton>
+                    <PrimaryButton @click="issuedCode = null">Готово</PrimaryButton>
                 </div>
             </div>
         </Modal>

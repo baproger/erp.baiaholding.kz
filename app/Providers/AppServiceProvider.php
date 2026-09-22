@@ -28,6 +28,16 @@ class AppServiceProvider extends ServiceProvider
 
         Vite::prefetch(concurrency: 3);
 
+        // Пароли: минимум 8 символов и не из базы утёкших (HaveIBeenPwned,
+        // k-anonymity — сам пароль наружу не уходит). Действует на новые пароли.
+        // В тестах без сети; на проде при недоступности API правило пропускает
+        // (fail-open), таймаут 3 с — форма не зависнет.
+        \Illuminate\Validation\Rules\Password::defaults(fn () => $this->app->runningUnitTests()
+            ? \Illuminate\Validation\Rules\Password::min(8)
+            : \Illuminate\Validation\Rules\Password::min(8)->uncompromised());
+        $this->app->bind(\Illuminate\Contracts\Validation\UncompromisedVerifier::class,
+            fn ($app) => new \Illuminate\Validation\NotPwnedVerifier($app[\Illuminate\Http\Client\Factory::class], 3));
+
         // Кеш отчётов (ReportCache): любое изменение модели, влияющей на
         // цифры, сдвигает версию — все кешированные отчёты протухают разом.
         foreach ([

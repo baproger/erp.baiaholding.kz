@@ -39,4 +39,11 @@ Route::middleware('auth')->group(function () {
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
+
+    // Код входа (второй фактор) — после логина и пароля, до входа в систему.
+    Route::get('login/code', [\App\Http\Controllers\Auth\LoginCodeController::class, 'show'])->name('login.code');
+    Route::post('login/code', [\App\Http\Controllers\Auth\LoginCodeController::class, 'verify'])
+        ->middleware('throttle:10,1')->name('login.code.verify');
+    Route::post('login/code/email', [\App\Http\Controllers\Auth\LoginCodeController::class, 'email'])
+        ->middleware('throttle:3,10')->name('login.code.email');
 });

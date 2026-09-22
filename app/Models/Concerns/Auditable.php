@@ -12,7 +12,9 @@ trait Auditable
      *
      * @var array<int, string>
      */
-    protected array $auditExclude = ['updated_at', 'created_at', 'deleted_at', 'remember_token', 'password'];
+    protected array $auditExclude = ['updated_at', 'created_at', 'deleted_at', 'remember_token', 'password',
+        // поля кода входа/отметки сессий (users) — секреты, в журнал не пишутся
+        'login_code_hash', 'login_code_expires_at', 'login_code_issued_by', 'security_stamp'];
 
     public static function bootAuditable(): void
     {

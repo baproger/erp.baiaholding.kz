@@ -40,6 +40,38 @@ class AuditController extends Controller
     }
 
     /**
+     * Аудит → /audit/logins: журнал входов (только админ, не удаляется).
+     * Кто, когда, с какого IP и чем закончилось — вход, неверный пароль,
+     * отключённая учётка, код входа.
+     */
+    public function logins(\Illuminate\Http\Request $request): \Inertia\Response
+    {
+        abort_unless($request->user()->hasRole('admin'), 403);
+
+        return \Inertia\Inertia::render('Audit/Logins', [
+            'logins' => \App\Models\LoginLog::with('user:id,name')
+                ->when($request->string('search')->toString(), fn ($q, $t) => $q->where(fn ($w) => $w
+                    ->where('email', 'like', "%{$t}%")->orWhere('ip', 'like', "%{$t}%")
+                    ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$t}%"))))
+                ->when($request->string('result')->toString(), fn ($q, $r) => $q->where('result', $r))
+                ->latest('created_at')->latest('id')->paginate(50)->withQueryString()
+                ->through(fn ($l) => [
+                    'id' => $l->id,
+                    'user' => $l->user?->name,
+                    'email' => $l->email,
+                    'result' => $l->result,
+                    'label' => \App\Models\LoginLog::RESULTS[$l->result] ?? $l->result,
+                    'ok' => in_array($l->result, ['success', 'code_ok', 'code_issued', 'code_emailed', 'devices_revoked'], true),
+                    'ip' => $l->ip,
+                    'agent' => $l->user_agent,
+                    'at' => $l->created_at?->toIso8601String(),
+                ]),
+            'results' => collect(\App\Models\LoginLog::RESULTS)->map(fn ($label, $v) => ['value' => $v, 'label' => $label])->values(),
+            'filters' => $request->only('search', 'result'),
+        ]);
+    }
+
+    /**
      * Аудит → /audit/system: диагностика сервера (только админ). Показывает,
      * включён ли OPcache и какие драйверы реально работают на проде —
      * тормоза «при 2–3 людях» чаще всего значат opcache.enable=0.

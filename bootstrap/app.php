@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\SanitizeUtf8Input::class,
             \App\Http\Middleware\SecureHeaders::class,
             \App\Http\Middleware\SetLocale::class,
+            // Отключённые / сброшенные сессии / код входа — до любого контроллера.
+            \App\Http\Middleware\EnsureAccountSecurity::class,
             \App\Http\Middleware\SetCurrentCompany::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,

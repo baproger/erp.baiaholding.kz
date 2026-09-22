@@ -17,7 +17,7 @@ class UserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
-            'password' => [$userId ? 'nullable' : 'required', 'confirmed', Password::min(6)],
+            'password' => [$userId ? 'nullable' : 'required', 'confirmed', Password::defaults()],
             'department_id' => ['nullable', 'exists:departments,id'],
             // Доступ к цехам (Металл/Ағаш); пусто = все цеха.
             'workshops' => ['nullable', 'array'],

@@ -44,13 +44,27 @@ class LoginRequest extends FormRequest
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+            \App\Models\LoginLog::record('failed_password', null, $this, $this->string('email')->toString());
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
             ]);
         }
 
+        // Отключённый сотрудник: пароль верный, но входа нет (раньше флаг
+        // is_active на вход не влиял вовсе).
+        $user = Auth::user();
+        if (! $user->is_active) {
+            Auth::guard('web')->logout();
+            \App\Models\LoginLog::record('disabled', $user, $this);
+
+            throw ValidationException::withMessages([
+                'email' => 'Учётная запись отключена. Обратитесь к администратору.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
+        \App\Models\LoginLog::record('success', $user, $this);
     }
 
     /**
@@ -65,6 +79,7 @@ class LoginRequest extends FormRequest
         }
 
         event(new Lockout($this));
+        \App\Models\LoginLog::record('lockout', null, $this, $this->string('email')->toString());
 
         $seconds = RateLimiter::availableIn($this->throttleKey());
 

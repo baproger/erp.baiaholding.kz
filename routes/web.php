@@ -60,6 +60,9 @@ Route::middleware('auth')->group(function () {
     // export — до resource: иначе GET users/export сматчится как users/{user}.
     Route::get('users/export', [UserController::class, 'export'])->name('users.export');
     Route::get('users/{user}/contract', [UserController::class, 'contract'])->name('users.contract');
+    // Код входа и сброс устройств — только админ (проверка в контроллере).
+    Route::post('users/{user}/login-code', [UserController::class, 'issueLoginCode'])->middleware('throttle:30,1')->name('users.login-code');
+    Route::delete('users/{user}/devices', [UserController::class, 'revokeDevices'])->name('users.devices.revoke');
     Route::resource('users', UserController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
 
     // Reference data
@@ -246,6 +249,8 @@ Route::middleware('auth')->group(function () {
     Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
     // Журнал ошибок сайта: только админ, удаления не существует.
     Route::get('audit/errors', [AuditController::class, 'errors'])->name('audit.errors');
+    // Журнал входов — только админ, не удаляется.
+    Route::get('audit/logins', [AuditController::class, 'logins'])->name('audit.logins');
     // Диагностика сервера (OPcache и т.п.) — только админ.
     Route::get('audit/system', [AuditController::class, 'system'])->name('audit.system');
 

@@ -64,6 +64,8 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                // Выпущенный код входа: показывается админу один раз (Сотрудники).
+                'login_code' => fn () => $request->session()->get('login_code'),
             ],
             'locale' => app()->getLocale(),
             'translations' => fn () => \App\Models\UiTranslation::map(app()->getLocale()),

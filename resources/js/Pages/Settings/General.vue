@@ -13,6 +13,7 @@ const form = useForm({
     auto_create_project: !!props.settings.auto_create_project,
     default_locale: props.settings.default_locale,
     tax_percent: props.settings.tax_percent,
+    require_login_code: !!props.settings.require_login_code,
 });
 const save = () => form.put(route('settings.update'), { preserveScroll: true });
 </script>
@@ -67,6 +68,15 @@ const save = () => form.put(route('settings.update'), { preserveScroll: true });
                             <input type="checkbox" v-model="form.auto_create_project" class="rounded border-slate-300 text-indigo-600" />
                             Автоматически создавать проект при выигрыше сделки
                         </label>
+                        <div class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:col-span-2">
+                            <label class="flex items-start gap-2 text-sm text-slate-700">
+                                <input type="checkbox" v-model="form.require_login_code" class="mt-0.5 rounded border-slate-300 text-indigo-600" />
+                                <span>
+                                    <span class="font-semibold">Требовать код входа</span> (второй фактор для всех сотрудников)
+                                    <span class="mt-1 block text-xs text-slate-500">После логина и пароля сотрудник вводит 6-значный код, выпущенный администратором (Сотрудники → «Код входа»). Устройство запоминается на 30 дней. Сначала выпустите код себе и сотрудникам, затем включайте.</span>
+                                </span>
+                            </label>
+                        </div>
                     </div>
 
                     <div class="mt-6 flex justify-end">
