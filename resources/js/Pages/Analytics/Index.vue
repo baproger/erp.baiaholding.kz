@@ -87,7 +87,7 @@ onMounted(() => {
     refreshTimer = setInterval(() => {
         if (document.hidden) return;
         router.reload({ preserveScroll: true, onSuccess: () => (lastUpdated.value = new Date()) });
-    }, 60000);
+    }, 180000); // 3 мин = TTL кеша отчёта; чаще — только лишний пересчёт на слабом сервере
     requestAnimationFrame(() => (drawn.value = true));
 });
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); });

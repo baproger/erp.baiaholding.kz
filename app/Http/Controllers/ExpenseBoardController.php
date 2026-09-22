@@ -40,20 +40,28 @@ class ExpenseBoardController extends Controller
             ->when($metalOnly, fn ($q) => $q->where('type', 'metal'))
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
-            ->with(['responsible:id,name,avatar', 'category:id,name', 'expenseable'])
+            ->with(['responsible:id,name,avatar', 'category:id,name', 'expenseable' => fn ($m) => $m->morphWith([\App\Models\Project::class => ['deal:id,number,company_name']])])
             ->orderBy('date')->orderBy('id')
-            ->get()
-            ->map(fn ($e) => $this->row($e, $user));
+            ->get();
 
         $confirmed = Expense::where('status', 'confirmed')
             ->when($metalOnly, fn ($q) => $q->where('type', 'metal'))
             ->when($companyId, fn ($q, $c) => $q->where(fn ($w) => $w
                 ->where('company_id', $c)->orWhereNull('company_id')))
             ->whereDate('date', '>=', $start)->whereDate('date', '<=', $end)
-            ->with(['responsible:id,name', 'category:id,name', 'employee:id,name', 'confirmedBy:id,name', 'expenseable'])
+            ->with(['responsible:id,name', 'category:id,name', 'employee:id,name', 'confirmedBy:id,name', 'expenseable' => fn ($m) => $m->morphWith([\App\Models\Project::class => ['deal:id,number,company_name']])])
             ->orderByDesc('date')->orderByDesc('id')
-            ->get()
-            ->map(fn ($e) => $this->row($e, $user));
+            ->get();
+
+        // Сметы дизайнера по всем сделкам списка — ОДНИМ запросом (было: по
+        // запросу на каждый складской расход, N+1 на самой частой странице бухгалтера).
+        $dealIds = $pending->concat($confirmed)->filter(fn ($e) => $e->material_id && $e->expenseable_type === 'deal')
+            ->pluck('expenseable_id')->unique()->values();
+        $estimates = $dealIds->isEmpty() ? collect() : \App\Models\Document::where('documentable_type', 'deal')
+            ->whereIn('documentable_id', $dealIds)->where('kind', 'estimate')->where('is_active', true)
+            ->orderByDesc('id')->get(['id', 'name', 'documentable_id'])->unique('documentable_id')->keyBy('documentable_id');
+        $pending = $pending->map(fn ($e) => $this->row($e, $user, $estimates));
+        $confirmed = $confirmed->map(fn ($e) => $this->row($e, $user, $estimates));
 
         return Inertia::render('Finance/Expenses', [
             'month' => $month,
@@ -70,7 +78,7 @@ class ExpenseBoardController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function row(Expense $e, ?\App\Models\User $user = null): array
+    private function row(Expense $e, ?\App\Models\User $user = null, ?\Illuminate\Support\Collection $estimates = null): array
     {
         return [
             'id' => $e->id,
@@ -105,10 +113,8 @@ class ExpenseBoardController extends Controller
             'deal_id' => $e->expenseable_type === 'deal' ? $e->expenseable_id : null,
             // Материал со склада: смета дизайнера по сделке (бухгалтер сверяет перед подтверждением).
             'material' => (bool) $e->material_id,
-            'estimate' => $e->material_id && $e->expenseable_type === 'deal'
-                ? \App\Models\Document::where('documentable_type', 'deal')->where('documentable_id', $e->expenseable_id)
-                    ->where('kind', 'estimate')->where('is_active', true)->latest()->first(['id', 'name'])
-                : null,
+            'estimate' => $e->material_id && $e->expenseable_type === 'deal' && $estimates && ($est = $estimates->get($e->expenseable_id))
+                ? ['id' => $est->id, 'name' => $est->name] : null,
             // Ссылка «по какой сделке / заказу цеха» — номер и заказчик.
             'link' => $e->expenseable ? [
                 'route' => $e->expenseable_type === 'project' ? 'projects.show' : 'deals.show',

@@ -298,6 +298,8 @@ class UserController extends Controller
         }
         // Компании сотрудника (BAIA / ASU, можно обе); без выбора — привязка к обеим.
         $user->companies()->sync($this->companyIds($request));
+        \Illuminate\Support\Facades\Cache::forget('user_companies.'.$user->id);
+        \Illuminate\Support\Facades\Cache::forget('user_company_ids.'.$user->id);
         $this->realignDepartment($user);
 
         return back()->with('success', 'Сотрудник добавлен.');
@@ -333,6 +335,8 @@ class UserController extends Controller
         }
         $user->syncRoles([$data['role']]);
         $user->companies()->sync($this->companyIds($request));
+        \Illuminate\Support\Facades\Cache::forget('user_companies.'.$user->id);
+        \Illuminate\Support\Facades\Cache::forget('user_company_ids.'.$user->id);
         $this->realignDepartment($user);
 
         return back()->with('success', 'Сотрудник обновлён.');

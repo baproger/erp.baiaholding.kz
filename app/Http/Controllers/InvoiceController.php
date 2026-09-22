@@ -46,6 +46,16 @@ class InvoiceController extends Controller
         // Finance page is leadership-only; managers/workshop staff handle money inside deal cards.
         abort_unless($request->user()->hasAnyRole(['admin', 'director', 'financist']), 403);
 
+        // Самая тяжёлая страница системы (~60 агрегатов) — под ReportCache, как
+        // Аналитика/Сводный/ЗП: кеш 5 минут, сброс любым изменением денег.
+        return Inertia::render('Finance/Index', \App\Support\ReportCache::remember(
+            $request, 'finance', fn () => $this->buildFinance($request)));
+    }
+
+    /** @return array<string, mixed> */
+    private function buildFinance(Request $request): array
+    {
+
         // Финансы разделены по фирмам: счёт принадлежит компании своей сделки
         // (счета цеховых заказов идут через сделку заказа).
         $invBase = Invoice::query()
@@ -67,7 +77,9 @@ class InvoiceController extends Controller
             } elseif ($target instanceof \App\Models\Project) {
                 $link = ['type' => 'project', 'id' => $target->id, 'label' => implode(' · ', array_filter([$target->number, $target->name]))];
             } elseif ($i->invoiceable_type === 'deal' && $i->invoiceable_id) {
-                $trashed = \App\Models\Deal::withTrashed()->find($i->invoiceable_id);
+                // Мемо на запрос: один поиск на удалённую сделку, а не на каждый её счёт.
+                static $trashedMemo = [];
+                $trashed = $trashedMemo[$i->invoiceable_id] ??= \App\Models\Deal::withTrashed()->find($i->invoiceable_id);
                 if ($trashed) {
                     $number = preg_replace('/#del\d+$/', '', (string) $trashed->number);
                     $link = ['type' => 'deal', 'id' => null, 'label' => implode(' · ', array_filter([$number, $trashed->company_name])).' (сделка удалена)'];
@@ -272,7 +284,7 @@ class InvoiceController extends Controller
             : round($receiptCash + $receiptBank, 2);
         $incomeTotal = round($invoicePaidP + $receiptManualP, 2);
 
-        return Inertia::render('Finance/Index', [
+        return [
             'invoicesToday' => $invoicesToday,
             'invoicesPast' => $invoicesPast,
             'invoicesPastStats' => $invoicesPastStats,
@@ -320,7 +332,7 @@ class InvoiceController extends Controller
                 'expensesTotal' => $expensesTotal,
                 'net' => round($incomeTotal - $expensesTotal, 2),
             ],
-        ]);
+        ];
     }
 
     /**

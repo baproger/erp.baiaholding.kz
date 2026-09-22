@@ -112,7 +112,7 @@ class DealController extends Controller
                     'is_manager' => $u->roles->contains('name', 'manager'),
                     'department' => $u->department?->name,
                 ])->values(),
-            'clients' => Client::orderBy('name')->get(['id', 'name']),
+            'clients' => \Illuminate\Support\Facades\Cache::remember('clients.list', 120, fn () => Client::orderBy('name')->get(['id', 'name'])->toArray()),
             // Отделы своей фирмы: одноимённые отделы другой фирмы в фильтр не лезут.
             'departments' => Department::where('is_active', true)
                 ->forCompany(\App\Support\CurrentCompany::id() ?: null)
@@ -125,8 +125,9 @@ class DealController extends Controller
             'companies' => $request->user()->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code']),
             'currentCompanyId' => \App\Support\CurrentCompany::id(),
             // Цеха каждой фирмы: у BAIA их два — кнопка «В цех» открывает выбор.
-            'workshopsByCompany' => \App\Models\Company::where('is_active', true)->pluck('id')
-                ->mapWithKeys(fn ($id) => [$id => \App\Models\ProjectStage::workshopsFor((int) $id)]),
+            // Цеха меняются раз в месяцы — не считать на каждую загрузку канбана.
+            'workshopsByCompany' => \Illuminate\Support\Facades\Cache::remember('workshops_by_company', 600, fn () => \App\Models\Company::where('is_active', true)->pluck('id')
+                ->mapWithKeys(fn ($id) => [$id => \App\Models\ProjectStage::workshopsFor((int) $id)])->toArray()),
         ]);
     }
 
@@ -299,7 +300,7 @@ class DealController extends Controller
             'finance' => array_merge($finance->summaryFor($deal), [
                 'margin' => $dealMarginPct,
             ]),
-            'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => DealStage::pluck('name', 'id'), 'responsible_user_id' => User::pluck('name', 'id')]),
+            'history' => \App\Support\AuditFormatter::humanize(\App\Models\AuditLog::where('table_name', 'deals')->where('record_id', $deal->id)->with('user:id,name')->latest()->limit(100)->get(), ['deal_stage_id' => \App\Support\Dict::dealStages(), 'responsible_user_id' => \App\Support\Dict::users()]),
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             // Смета дизайнера (последняя активная): бухгалтер сверяет с ней материалы.
             'estimate' => ($est = $deal->documents->firstWhere('kind', 'estimate'))

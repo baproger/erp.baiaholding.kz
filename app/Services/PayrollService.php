@@ -303,7 +303,20 @@ class PayrollService
         })->mapWithKeys(fn ($v, $uid) => [(int) $uid => (float) $v]);
     }
 
+    /** Мемо на запрос: companyTotals() зовёт perUser() внутри, а страницы — ещё раз снаружи. */
+    private array $perUserMemo = [];
+
     public function perUser(bool $includeAllActive = false): Collection
+    {
+        $memoKey = ($includeAllActive ? 'all' : 'deals').':'.(\App\Support\CurrentCompany::id() ?? 'n');
+        if (isset($this->perUserMemo[$memoKey])) {
+            return $this->perUserMemo[$memoKey];
+        }
+
+        return $this->perUserMemo[$memoKey] = $this->computePerUser($includeAllActive);
+    }
+
+    private function computePerUser(bool $includeAllActive): Collection
     {
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 

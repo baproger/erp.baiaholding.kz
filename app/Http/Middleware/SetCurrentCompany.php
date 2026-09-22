@@ -19,7 +19,11 @@ class SetCurrentCompany
         $user = $request->user();
 
         if ($user) {
-            $companyIds = $user->companies()->where('is_active', true)->pluck('companies.id');
+            // Тот же кеш, что у шапки (HandleInertiaRequests): раньше это был
+            // единственный SQL-запрос на КАЖДЫЙ HTTP-запрос, включая опросы.
+            $companyIds = collect(\Illuminate\Support\Facades\Cache::remember('user_companies.'.$user->id, 60,
+                fn () => $user->companies()->where('is_active', true)->orderBy('name')->get(['companies.id', 'name', 'code'])->toArray()))
+                ->pluck('id');
             $current = CurrentCompany::id();
             // 0 = «Все компании» (общий отчёт) — доступен бухгалтеру/админу с 2+ фирмами.
             $allAllowed = $current === 0

@@ -176,19 +176,21 @@ class AuditController extends Controller
             ->withQueryString();
 
         // Сырые id внешних ключей → имена (этап, сотрудник, клиент…).
+        // Словари id→имя: 5 одинаковых выборок users сведены к одной, всё — в кеш на 5 минут.
+        $users = \App\Support\Dict::users();
         $maps = [
-            'deal_stage_id' => \App\Models\DealStage::pluck('name', 'id'),
-            'project_stage_id' => \App\Models\ProjectStage::pluck('name', 'id'),
-            'responsible_user_id' => \App\Models\User::pluck('name', 'id'),
-            'user_id' => \App\Models\User::pluck('name', 'id'),
-            'assignee_id' => \App\Models\User::pluck('name', 'id'),
-            'head_user_id' => \App\Models\User::pluck('name', 'id'),
-            'department_id' => \App\Models\Department::pluck('name', 'id'),
-            'client_id' => \App\Models\Client::pluck('name', 'id'),
-            'category_id' => \App\Models\ExpenseCategory::pluck('name', 'id'),
-            'material_id' => \App\Models\Material::pluck('name', 'id'),
-            'company_id' => \App\Models\Company::pluck('name', 'id'),
-            'confirmed_by' => \App\Models\User::pluck('name', 'id'),
+            'deal_stage_id' => \App\Support\Dict::dealStages(),
+            'project_stage_id' => \App\Support\Dict::projectStages(),
+            'responsible_user_id' => $users,
+            'user_id' => $users,
+            'assignee_id' => $users,
+            'head_user_id' => $users,
+            'department_id' => \App\Support\Dict::names(\App\Models\Department::class),
+            'client_id' => \App\Support\Dict::names(\App\Models\Client::class),
+            'category_id' => \App\Support\Dict::names(\App\Models\ExpenseCategory::class),
+            'material_id' => \App\Support\Dict::names(\App\Models\Material::class),
+            'company_id' => \App\Support\Dict::names(\App\Models\Company::class),
+            'confirmed_by' => $users,
             // Виды расхода: в снимке «delivery» читателю ничего не говорит.
             'type' => collect(['delivery' => '🚚 Доставка', 'purchase' => '📦 Закуп', 'assembly' => '🔧 '.\App\Support\CompanyTerms::assembly(), 'direct' => 'Прямой']),
         ];
@@ -256,10 +258,12 @@ class AuditController extends Controller
         return Inertia::render('Audit/Index', [
             'logs' => $logs,
             'filters' => $request->only('table', 'action', 'user', 'from', 'to'),
-            'tables' => AuditLog::query()->distinct()->orderBy('table_name')->pluck('table_name')
-                ->map(fn ($t) => ['value' => $t, 'label' => self::TABLE_LABELS[$t] ?? $t])->values(),
-            'users' => \App\Models\User::whereIn('id', AuditLog::distinct()->pluck('user_id')->filter())
-                ->orderBy('name')->get(['id', 'name']),
+            // Списки фильтров — два full scan самой большой таблицы на каждую загрузку; кеш на час.
+            'tables' => \Illuminate\Support\Facades\Cache::remember('audit.tables', 3600, fn () => AuditLog::query()
+                ->distinct()->orderBy('table_name')->pluck('table_name')
+                ->map(fn ($t) => ['value' => $t, 'label' => self::TABLE_LABELS[$t] ?? $t])->values()->all()),
+            'users' => \Illuminate\Support\Facades\Cache::remember('audit.users', 3600, fn () => \App\Models\User::whereIn('id', AuditLog::distinct()->pluck('user_id')->filter())
+                ->orderBy('name')->get(['id', 'name'])->toArray()),
         ]);
     }
 

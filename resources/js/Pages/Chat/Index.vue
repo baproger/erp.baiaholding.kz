@@ -8,6 +8,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { syncChatState, ding } from '@/composables/useChatAlerts';
+import { onLive } from '@/composables/useLive';
 
 const props = defineProps({
     chats: Array, users: Array, canCreateGroup: Boolean,
@@ -478,16 +479,21 @@ watch(() => form.message, resizeInput);
 // Передний план — полный поллинг (8с); фон — только лёгкий state раз в 60с:
 // чат остаётся живым, а сервер не захлёбывается при 15–20 сотрудниках.
 let bgTimer = null;
+let offLive = null;
 const onVisible = () => { if (!document.hidden) pollState(); };
 onMounted(() => {
     if (activeChat.value) { markSeen(activeChat.value); loadMessages(true); }
     pollState();
     askNotifyPermission();
-    timer = setInterval(() => { if (!document.hidden) pollState(); }, 8000);
-    bgTimer = setInterval(() => { if (document.hidden) pollState(); }, 60000);
+    // Опрос по событию: единый штамп /live/version дёргает pollState только когда
+    // в чате что-то изменилось (было: свой таймер каждые 8 с — 7.5 запросов/мин
+    // с каждой открытой вкладки). Редкий таймер остаётся как страховка.
+    offLive = onLive('chat', pollState);
+    timer = setInterval(() => { if (!document.hidden) pollState(); }, 60000);
+    bgTimer = setInterval(() => { if (document.hidden) pollState(); }, 180000);
     document.addEventListener('visibilitychange', onVisible);
 });
-onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); document.removeEventListener('visibilitychange', onVisible); });
+onUnmounted(() => { clearInterval(timer); clearInterval(bgTimer); offLive?.(); document.removeEventListener('visibilitychange', onVisible); });
 </script>
 
 <template>

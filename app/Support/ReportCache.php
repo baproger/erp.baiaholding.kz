@@ -37,9 +37,16 @@ final class ReportCache
         // __PHP_Incomplete_Class → json_encode делал из массива объект {} и
         // Сводный отчёт падал белым экраном (прод, 31.08.2026). Прогон через
         // json нормализует всё ровно так, как это ушло бы в браузер.
-        $value = Cache::remember($key, self::TTL, fn () => json_decode(json_encode($build()), true));
+        $normalize = function () use ($build) {
+            $json = json_encode($build());
 
-        return is_array($value) ? $value : json_decode(json_encode($build()), true);
+            return $json === false ? null : json_decode($json, true);
+        };
+        $value = Cache::remember($key, self::TTL, $normalize);
+
+        // Не закодировалось (битый UTF-8 в данных) — отдаём как есть, без кеша:
+        // SanitizedInertiaResponse подчистит и запишет в журнал, какое поле битое.
+        return is_array($value) ? $value : $build();
     }
 
     /** Сдвинуть версию: вызывается событиями моделей, влияющих на цифры. */

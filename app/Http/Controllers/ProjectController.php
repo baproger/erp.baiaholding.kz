@@ -98,7 +98,7 @@ class ProjectController extends Controller
 
         $projects = $view === 'list'
             ? (clone $base)->latest()->paginate(20)->withQueryString()
-            : (clone $base)->latest()->get();
+            : (clone $base)->latest()->limit(500)->get(); // потолок как у сделок: канбан без лимита не жил бы на 1 ГБ
 
         // Цех не видит суммы — прячем budget из сериализуемой модели, а не только в UI.
         $canSeeMoney = $this->canSeeMoney($request);
@@ -160,9 +160,9 @@ class ProjectController extends Controller
                 })
                 ->with('user:id,name')->latest()->limit(150)->get(),
             [
-                'project_stage_id' => ProjectStage::pluck('name', 'id'),
-                'deal_stage_id' => DealStage::pluck('name', 'id'),
-                'responsible_user_id' => User::pluck('name', 'id'),
+                'project_stage_id' => \App\Support\Dict::projectStages(),
+                'deal_stage_id' => \App\Support\Dict::dealStages(),
+                'responsible_user_id' => \App\Support\Dict::users(),
             ]
         );
 

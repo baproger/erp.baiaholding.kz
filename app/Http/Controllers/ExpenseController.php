@@ -59,8 +59,8 @@ class ExpenseController extends Controller
 
         $limit = (float) $deal->budget * 0.6;
         if ($spent > $limit && ($spent - $addedAmount) <= $limit) {
-            User::where('is_active', true)->role('financist')->get()
-                ->each(fn (User $u) => $u->notify(new \App\Notifications\ExpenseThresholdExceeded($deal, $spent)));
+\Illuminate\Support\Facades\Notification::send(User::where('is_active', true)->role('financist')->get(),
+                new \App\Notifications\ExpenseThresholdExceeded($deal, $spent));
         }
     }
 
@@ -367,11 +367,10 @@ class ExpenseController extends Controller
 
         // Остальным бухгалтерам — «расход уже подтверждён (Имя)», чтобы не
         // подтверждали повторно. Кроме того, кто подтвердил, и автора.
-        User::where('is_active', true)->role('financist')
+        \Illuminate\Support\Facades\Notification::send(User::where('is_active', true)->role('financist')
             ->where('id', '!=', $request->user()->id)
             ->where('id', '!=', $expense->responsible_user_id)
-            ->get()
-            ->each(fn ($fin) => $fin->notify(new \App\Notifications\ExpenseHandled($expense, $request->user())));
+            ->get(), new \App\Notifications\ExpenseHandled($expense, $request->user()));
     }
 
     /**
@@ -383,8 +382,7 @@ class ExpenseController extends Controller
         if (! $expense || ! $expense->material_id) {
             return;
         }
-        User::where('is_active', true)->role('supplier')->get()
-            ->each(fn ($u) => $u->notify(new \App\Notifications\MaterialWrittenOff($expense)));
+        \Illuminate\Support\Facades\Notification::send(User::where('is_active', true)->role('supplier')->get(), new \App\Notifications\MaterialWrittenOff($expense));
     }
 
     public function update(ExpenseRequest $request, Expense $expense): RedirectResponse

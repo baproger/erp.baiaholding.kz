@@ -39,7 +39,9 @@ class ChatController extends Controller
                 ->orWhereHas('participants', fn ($p) => $p->where('users.id', $user->id)))
             ->when(! $user->hasRole('admin'), fn ($q) => $q->where(fn ($w) => $w
                 ->whereNull('company_id')
-                ->orWhereIn('company_id', $user->companies()->pluck('companies.id'))));
+                // Кеш на минуту: visibleChats зовётся на каждый опрос состояния чата.
+                ->orWhereIn('company_id', \Illuminate\Support\Facades\Cache::remember('user_company_ids.'.$user->id, 60,
+                    fn () => $user->companies()->pluck('companies.id')->all()))));
     }
 
     public function index(Request $request): Response
@@ -257,8 +259,8 @@ class ChatController extends Controller
             $participantIds = $chat->type === 'global'
                 ? User::where('is_active', true)->pluck('id')
                 : $chat->participants()->pluck('users.id');
-            User::whereIn('id', $mentionIds->intersect($participantIds))->get()
-                ->each(fn ($u) => $u->notify(new \App\Notifications\ChatMention($chat, $request->user(), $msg)));
+            \Illuminate\Support\Facades\Notification::send(User::whereIn('id', $mentionIds->intersect($participantIds))->get(),
+                new \App\Notifications\ChatMention($chat, $request->user(), $msg));
         }
 
         // Web Push всем участникам, кроме автора — приходит как WhatsApp даже при

@@ -42,6 +42,27 @@ class AppServiceProvider extends ServiceProvider
             $model::deleted(fn () => \App\Support\ReportCache::bump());
         }
 
+        // Кешированные справочники (Dict, списки клиентов/цехов): сброс сразу
+        // при изменении, чтобы новый клиент/цех/имя не ждали истечения TTL.
+        foreach ([
+            \App\Models\Client::class => ['clients.list'],
+            \App\Models\ProjectStage::class => ['workshops_by_company', 'dict.ProjectStage'],
+            \App\Models\DealStage::class => ['dict.DealStage'],
+            User::class => ['dict.User', 'audit.users'],
+            \App\Models\Company::class => ['dict.Company', 'workshops_by_company'],
+            \App\Models\Department::class => ['dict.Department'],
+            \App\Models\ExpenseCategory::class => ['dict.ExpenseCategory'],
+            \App\Models\Material::class => ['dict.Material'],
+        ] as $model => $keys) {
+            $forget = function () use ($keys) {
+                foreach ($keys as $k) {
+                    \Illuminate\Support\Facades\Cache::forget($k);
+                }
+            };
+            $model::saved($forget);
+            $model::deleted($forget);
+        }
+
         // Живые обновления без WebSocket (LiveStamp): события двигают штамп
         // пользователя, фронт опрашивает /live/version — см. useLive.js.
         \App\Models\ChatMessage::saved(fn ($m) => \App\Support\LiveStamp::bump(
