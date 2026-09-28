@@ -52,10 +52,11 @@ class ScreenAdvanceTest extends TestCase
         $logistics = \App\Models\DealStage::create(['name' => 'Логистика', 'order' => 2, 'is_active' => true, 'stage_type' => 'logistics']);
         $deal = \App\Models\Deal::create(['number' => 'T-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 100, 'status' => 'closed', 'deal_stage_id' => $dealStage->id]);
         $project = Project::create(['number' => 'PRJ-3', 'name' => 'Стол', 'deal_id' => $deal->id, 'workshop' => 'Металл цех', 'project_stage_id' => $s1->id, 'status' => 'active']);
-        // Правило от 16.09.2026: без расходов Металл/Лист/Фурнитура «Готово» не пройдёт.
-        foreach (['metal', 'sheet', 'fittings'] as $t) {
+        // Правило 28.09.2026: Металл цех — Закуп + Фурнитура + материал со склада, иначе «Готово» не пройдёт.
+        $material = \App\Models\Material::create(['name' => 'Труба', 'unit' => 'штук', 'quantity' => 10, 'price' => 100]);
+        foreach ([['purchase', null], ['fittings', null], ['direct', $material->id]] as [$t, $mid]) {
             \App\Models\Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 100,
-                'date' => now()->toDateString(), 'status' => 'pending', 'type' => $t, 'description' => $t]);
+                'date' => now()->toDateString(), 'status' => 'pending', 'type' => $t, 'material_id' => $mid, 'description' => $t]);
         }
 
         $screen = WorkshopScreen::create(['workshop' => 'Металл цех', 'kind' => 'workshop', 'code' => '654321', 'is_active' => true]);

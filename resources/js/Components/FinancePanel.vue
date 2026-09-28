@@ -23,7 +23,7 @@ const props = defineProps({
     section: { type: String, default: 'all' },
     // Смета дизайнера по сделке ({id,name,user,at} | null) — бухгалтер сверяет материалы.
     estimate: { type: Object, default: null },
-    // Код фирмы сделки: Металл/Лист/Фурнитура — только BAIA (17.09.2026).
+    // Код фирмы сделки: «По материалам (со склада)» — только BAIA (25.09.2026); Фурнитура — у всех.
     companyCode: { type: String, default: null },
 });
 const showSummary = computed(() => ['all', 'summary'].includes(props.section));
@@ -63,7 +63,7 @@ const expenseMode = ref('other'); // other | delivery | purchase | assembly | ma
 // Приучаем к складу (правило от 13.09.2026): менеджеру форма открывается в
 // режиме «Материал со склада» с подсказкой; ручной ввод — вторым шагом.
 const openExpenseForm = () => {
-    if (!showExpense.value && !canConfirm.value && props.materials.length) expenseMode.value = 'material';
+    if (!showExpense.value && !canConfirm.value && props.companyCode === 'BAIA' && props.materials.length) expenseMode.value = 'material';
     showExpense.value = !showExpense.value;
 };
 const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly', metal: 'metal', sheet: 'sheet', fittings: 'fittings' };
@@ -270,7 +270,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <!-- Тип расхода: прочий / доставка / закуп / материалы -->
                 <div class="mb-3 flex flex-wrap gap-2">
                     <!-- Напоминание менеджеру: сначала склад, ручной расход — для того, чего на складе нет -->
-                    <div v-if="!canConfirm" class="mb-2 w-full rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs leading-snug text-amber-700">
+                    <div v-if="!canConfirm && companyCode === 'BAIA' && materials.length" class="mb-2 w-full rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs leading-snug text-amber-700">
                         💡 <b>Сначала спишите материалы со склада</b> («Материал со склада») — так остатки и расходы сходятся.
                         Ручной расход — только для того, чего на складе нет (доставка, услуги и т.п.).
                     </div>
@@ -279,18 +279,16 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             { k: 'delivery', l: '🚚 Доставка' },
                             { k: 'purchase', l: '📦 Закуп' },
                             { k: 'assembly', l: '🔧 ' + assemblyLabel() },
-                            // Металл/Лист/Фурнитура — только сделки BAIA (правило Логистики)
-                            ...(companyCode === 'BAIA' ? [
-                                { k: 'metal', l: '🔩 Металл' },
-                                { k: 'sheet', l: '▤ Лист' },
-                                { k: 'fittings', l: '🪛 Фурнитура' },
-                            ] : []),
+                            // Фурнитура — у BAIA и ASU (гейт Логистики). Металл/Лист убраны 25.09.2026:
+                            // металл берётся со склада («По материалам»), лист — закуп.
+                            { k: 'fittings', l: '🪛 Фурнитура' },
                         ]" :key="m.k" type="button" @click="expenseMode = m.k"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         {{ m.l }}
                     </button>
-                    <button v-if="materials.length" type="button" @click="expenseMode = 'material'"
+                    <!-- Склад есть только у BAIA (ASU: Закуп и Фурнитура) -->
+                    <button v-if="companyCode === 'BAIA' && materials.length" type="button" @click="expenseMode = 'material'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === 'material' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         По материалам (со склада)

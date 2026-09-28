@@ -17,7 +17,8 @@ use Tests\TestCase;
 
 /**
  * Правила от 16.09.2026:
- *  1) на «Логистику» — только с расходами Металл + Лист + Фурнитура (хватает заявки);
+ *  1) на «Логистику» — только с обязательными расходами (хватает заявки): Закуп + Фурнитура,
+ *     у заказа в «Металл цех» ещё и «По материалам (со склада)» (правило 28.09.2026);
  *  2) с «Логистики» дальше — только после галочки завсклада (роль supplier).
  */
 class LogisticsGateTest extends TestCase
@@ -58,38 +59,94 @@ class LogisticsGateTest extends TestCase
             'status' => 'active', 'deal_stage_id' => $this->assembly->id, 'responsible_user_id' => $owner->id]);
     }
 
-    private function expense(Deal $deal, string $type): void
+    private function expense(Deal $deal, string $type, ?int $materialId = null): void
     {
         Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 1000,
-            'date' => now()->toDateString(), 'status' => 'pending', 'type' => $type,
+            'date' => now()->toDateString(), 'status' => 'pending', 'type' => $type, 'material_id' => $materialId,
             'responsible_user_id' => $deal->responsible_user_id, 'description' => $type]);
     }
 
-    public function test_blocked_without_metal_sheet_fittings(): void
+    /** Базовый набор для Ағаш цеха / ASU / сделки без заказа: Закуп + Фурнитура. */
+    private function baseExpenses(Deal $deal): void
+    {
+        $this->expense($deal, 'purchase');
+        $this->expense($deal, 'fittings');
+    }
+
+    private function projectIn(Deal $deal, string $workshop): void
+    {
+        \App\Models\Project::create(['number' => 'P-'.uniqid(), 'name' => 'Заказ', 'deal_id' => $deal->id,
+            'workshop' => $workshop, 'status' => 'active']);
+    }
+
+    private function toLogistics(User $u, Deal $deal)
+    {
+        return $this->actingAs($u)->patch(route('deals.stage', $deal->id), ['deal_stage_id' => $this->logistics->id]);
+    }
+
+    public function test_blocked_without_purchase_and_fittings(): void
     {
         $mgr = $this->user('manager');
         $deal = $this->deal($mgr);
-        $this->expense($deal, 'metal'); // только один тип из трёх
+        $this->expense($deal, 'delivery'); // доставка не в счёт
 
-        $this->actingAs($mgr)->patch(route('deals.stage', $deal->id), ['deal_stage_id' => $this->logistics->id])
-            ->assertSessionHas('error');
+        $this->toLogistics($mgr, $deal)->assertSessionHas('error');
         $this->assertSame($this->assembly->id, $deal->fresh()->deal_stage_id);
         // В сообщении — чего именно не хватает.
-        $this->assertStringContainsString('Лист', session('error'));
+        $this->assertStringContainsString('Закуп', session('error'));
         $this->assertStringContainsString('Фурнитура', session('error'));
+        $this->assertStringNotContainsString('со склада', session('error'), 'без металл-цеха склад не требуется');
     }
 
-    public function test_passes_with_all_three_pending_expenses_and_gate_task_goes_to_supplier(): void
+    public function test_wood_workshop_needs_only_purchase_and_fittings(): void
+    {
+        $mgr = $this->user('manager');
+        $deal = $this->deal($mgr);
+        $this->projectIn($deal, 'Ағаш цех');
+        $this->baseExpenses($deal);
+
+        $this->toLogistics($mgr, $deal)->assertSessionHas('success');
+        $this->assertSame($this->logistics->id, $deal->fresh()->deal_stage_id);
+    }
+
+    public function test_metal_workshop_also_needs_warehouse_material(): void
+    {
+        $mgr = $this->user('manager');
+        $deal = $this->deal($mgr);
+        $this->projectIn($deal, 'Металл цех');
+        $this->baseExpenses($deal);
+
+        $this->toLogistics($mgr, $deal)->assertSessionHas('error');
+        $this->assertStringContainsString('По материалам (со склада)', session('error'));
+        $this->assertSame($this->assembly->id, $deal->fresh()->deal_stage_id);
+
+        $material = \App\Models\Material::create(['company_id' => $deal->company_id, 'name' => 'Труба', 'unit' => 'штук', 'quantity' => 10, 'price' => 100]);
+        $this->expense($deal, 'direct', $material->id);
+
+        $this->toLogistics($mgr, $deal)->assertSessionHas('success');
+        $this->assertSame($this->logistics->id, $deal->fresh()->deal_stage_id);
+    }
+
+    public function test_legacy_sheet_counts_as_purchase_and_metal_as_warehouse(): void
+    {
+        $mgr = $this->user('manager');
+        $deal = $this->deal($mgr);
+        $this->projectIn($deal, 'Металл цех');
+        $this->expense($deal, 'sheet');    // «Лист» = закуп
+        $this->expense($deal, 'metal');    // старый «Металл» из цеха = материал
+        $this->expense($deal, 'fittings');
+
+        $this->toLogistics($mgr, $deal)->assertSessionHas('success');
+    }
+
+    public function test_passes_with_pending_expenses_and_gate_task_goes_to_supplier(): void
     {
         $supplier = $this->user('supplier');
         $mgr = $this->user('manager');
         $deal = $this->deal($mgr);
-        foreach (['metal', 'sheet', 'fittings'] as $t) {
-            $this->expense($deal, $t);
-        }
+        $this->baseExpenses($deal);
 
-        $this->actingAs($mgr)->patch(route('deals.stage', $deal->id), ['deal_stage_id' => $this->logistics->id])
-            ->assertSessionHas('success');
+        $this->toLogistics($mgr, $deal)->assertSessionHas('success');
         $this->assertSame($this->logistics->id, $deal->fresh()->deal_stage_id);
 
         // Гейт-задача — снабженцу.
@@ -105,11 +162,9 @@ class LogisticsGateTest extends TestCase
 
         [$ok, $message] = app(ProjectService::class)->completeAndReturnDeal($project);
         $this->assertFalse($ok);
-        $this->assertStringContainsString('Металл', $message);
+        $this->assertStringContainsString('Закуп', $message);
 
-        foreach (['metal', 'sheet', 'fittings'] as $t) {
-            $this->expense($deal, $t);
-        }
+        $this->baseExpenses($deal);
         [$ok2] = app(ProjectService::class)->completeAndReturnDeal($project->fresh());
         $this->assertTrue($ok2);
         $this->assertSame($this->logistics->id, $deal->fresh()->deal_stage_id);
@@ -120,9 +175,7 @@ class LogisticsGateTest extends TestCase
         $supplier = $this->user('supplier');
         $mgr = $this->user('manager');
         $deal = $this->deal($mgr);
-        foreach (['metal', 'sheet', 'fittings'] as $t) {
-            $this->expense($deal, $t);
-        }
+        $this->baseExpenses($deal);
         $this->actingAs($mgr);
         app(StageTransitionService::class)->moveToStage($deal, $this->logistics);
 
@@ -139,16 +192,18 @@ class LogisticsGateTest extends TestCase
         $this->assertNotSame($this->logistics->id, $deal->fresh()->deal_stage_id);
     }
 
-    /** Уточнение от 17.09.2026: правило только для BAIA — ASU идёт свободно. */
-    public function test_asu_deal_goes_to_logistics_freely(): void
+    /** ASU (цехов нет): Закуп + Фурнитура — как Ағаш цех. */
+    public function test_asu_deal_requires_purchase_and_fittings(): void
     {
         $mgr = $this->user('manager');
         $mgr->companies()->attach(Company::where('code', 'ASU')->firstOrFail()->id);
         $deal = $this->deal($mgr, 'ASU');
 
-        // Без единого расхода Металл/Лист/Фурнитура — переход проходит.
-        $this->actingAs($mgr)->patch(route('deals.stage', $deal->id), ['deal_stage_id' => $this->logistics->id])
-            ->assertSessionHas('success');
+        $this->toLogistics($mgr, $deal)->assertSessionHas('error');
+        $this->assertSame($this->assembly->id, $deal->fresh()->deal_stage_id);
+
+        $this->baseExpenses($deal);
+        $this->toLogistics($mgr, $deal)->assertSessionHas('success');
         $this->assertSame($this->logistics->id, $deal->fresh()->deal_stage_id);
     }
 }

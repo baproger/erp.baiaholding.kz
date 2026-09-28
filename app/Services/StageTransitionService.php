@@ -18,29 +18,45 @@ class StageTransitionService
      *
      * @throws ValidationException when a gate is unmet.
      */
-    /** Типы расходов, обязательные ДО «Логистики» (правило от 16.09.2026). */
-    public const LOGISTICS_REQUIRED_TYPES = ['metal' => 'Металл', 'sheet' => 'Лист', 'fittings' => 'Фурнитура'];
-
     /**
-     * Каких обязательных расходов не хватает сделке для «Логистики».
+     * Каких обязательных расходов не хватает сделке для «Логистики» (правило
+     * владельца от 28.09.2026, зависит от цеха заказа):
+     *  - Металл цех: Закуп + Фурнитура + По материалам (со склада);
+     *  - Ағаш цех, ASU, заказа ещё нет: Закуп + Фурнитура.
      * Достаточно заявки (pending) — подтверждение бухгалтера не ждём.
+     * Старые типы засчитываются: «Лист» = Закуп, «Металл» (из цеха) = материал со склада.
      *
-     * @return array<int, string> русские названия недостающих типов
+     * @return array<int, string> русские названия недостающих расходов
      */
     public static function missingLogisticsExpenseTypes(Deal $deal): array
     {
-        // Правило действует ТОЛЬКО для BAIA (уточнение владельца 17.09.2026):
-        // сделки ASU и сделки без фирмы на Логистику идут свободно.
-        $code = $deal->company_id
-            ? \App\Models\Company::whereKey($deal->company_id)->value('code') : null;
-        if ($code !== 'BAIA') {
+        // Сделки без фирмы — свободно (как и раньше).
+        if (! $deal->company_id) {
             return [];
         }
 
-        $have = $deal->expenses()->whereIn('type', array_keys(self::LOGISTICS_REQUIRED_TYPES))
-            ->distinct()->pluck('type')->all();
+        $rows = $deal->expenses()->get(['type', 'material_id']);
+        $missing = [];
+        if (! $rows->contains(fn ($e) => in_array($e->type, ['purchase', 'sheet'], true))) {
+            $missing[] = 'Закуп';
+        }
+        if (! $rows->contains(fn ($e) => $e->type === 'fittings')) {
+            $missing[] = 'Фурнитура';
+        }
+        if (self::isMetalWorkshopDeal($deal)
+            && ! $rows->contains(fn ($e) => $e->material_id || $e->type === 'metal')) {
+            $missing[] = 'По материалам (со склада)';
+        }
 
-        return array_values(array_diff_key(self::LOGISTICS_REQUIRED_TYPES, array_flip($have)));
+        return $missing;
+    }
+
+    /** Заказ сделки идёт в металлический цех (по названию цеха — «Металл цех»). */
+    private static function isMetalWorkshopDeal(Deal $deal): bool
+    {
+        return \App\Models\Project::where('deal_id', $deal->id)
+            ->get(['workshop'])
+            ->contains(fn ($p) => $p->workshop && mb_stripos($p->workshop, 'металл') !== false);
     }
 
     public function moveToStage(Deal $deal, DealStage $target): Deal
@@ -86,12 +102,12 @@ class StageTransitionService
                 }
             }
 
-            // На «Логистику» — только когда внесены расходы Металл, Лист и
-            // Фурнитура (все три; хватает заявки). Правило от 16.09.2026.
+            // На «Логистику» — только с обязательными расходами (по цеху заказа,
+            // хватает заявки). Правило от 16.09.2026, уточнено 28.09.2026.
             if ($isForward && $target->stage_type === 'logistics'
                 && ($missing = self::missingLogisticsExpenseTypes($deal)) !== []) {
                 throw ValidationException::withMessages([
-                    'stage' => 'На «Логистику» нельзя без расходов Металл, Лист и Фурнитура. Не хватает: '
+                    'stage' => 'На «Логистику» нельзя без обязательных расходов. Не хватает: '
                         .implode(', ', $missing).' — внесите в блоке «Расходы» сделки.',
                 ]);
             }

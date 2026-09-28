@@ -6,7 +6,7 @@ import { formatDate, formatDuration } from '@/utils/format';
 
 const props = defineProps({ screen: Object, stages: Array, projects: Array });
 
-// Ошибка «Готово» (например, не внесены расходы Металл/Лист/Фурнитура) должна
+// Ошибка «Готово» (например, не внесены расходы Закуп/Фурнитура/материал со склада) должна
 // быть видна работнику цеха: красный тост поверх канбана, гаснет через 8 с.
 import { usePage } from '@inertiajs/vue3';
 import { watch } from 'vue';

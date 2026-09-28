@@ -269,7 +269,7 @@ class DealController extends Controller
             'materials' => \App\Models\Material::query()
                 ->when($deal->company_id, fn ($q, $c) => $q->where('company_id', $c))
                 ->orderBy('name')->get(['id', 'name', 'unit', 'quantity', 'price']),
-            // Код фирмы сделки: типы расходов Металл/Лист/Фурнитура — только BAIA.
+            // Код фирмы сделки: «По материалам (со склада)» — только BAIA; Металл/Лист убраны 25.09.2026 — только BAIA.
             'companyCode' => $deal->company_id ? \App\Models\Company::whereKey($deal->company_id)->value('code') : null,
             'profit' => [
                 'budget' => $dealBudget,
