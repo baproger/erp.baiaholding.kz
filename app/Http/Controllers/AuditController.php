@@ -167,6 +167,7 @@ class AuditController extends Controller
         'contract_sum' => 'Сумма договора', 'tender_deadline' => 'Срок тендера',
         'purchase_price' => 'Закуп', 'delivery' => 'Доставка', 'assembly' => 'Сборка',
         'commission' => 'Комиссия', 'partner_sum' => 'Партнёр, сумма', 'partner_pct' => 'Доля партнёра',
+        'kind' => 'Вид сделки', 'contractor_name' => 'Подрядчик', 'commission_pct' => 'Наш %',
         'tax' => 'Налог', 'remainder' => 'Остаток', 'margin' => 'Маржа',
         'contract_number' => '№ договора', 'comment' => 'Комментарий',
         'user_id' => 'Сотрудник', 'deal_id' => 'Сделка', 'client_phone' => 'Телефон клиента',
@@ -183,6 +184,7 @@ class AuditController extends Controller
 
     /** Русские значения (по полю). */
     private const VALUE_MAPS = [
+        'kind' => ['own' => 'Своя', 'contractor' => 'Подряд'],
         'status' => [
             'draft' => 'Черновик', 'sent' => 'Выставлен', 'partial' => 'Частично оплачен',
             'paid' => 'Оплачен', 'cancelled' => 'Отменён', 'active' => 'Активна',
@@ -211,7 +213,7 @@ class AuditController extends Controller
         'contract_sum', 'purchase_price', 'delivery', 'assembly', 'commission', 'partner_sum', 'tax', 'remainder'];
 
     /** Процентные поля — «20.18» → «20,18 %». */
-    private const PERCENT_FIELDS = ['margin', 'partner_pct', 'bonus_rate_override'];
+    private const PERCENT_FIELDS = ['margin', 'partner_pct', 'bonus_rate_override', 'commission_pct'];
 
     public function index(Request $request): Response
     {

@@ -25,6 +25,13 @@ import { confirmDialog } from '@/composables/useConfirm';
 const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null }, estimate: { type: Object, default: null }, companyCode: { type: String, default: null } });
 
 const tab = ref('tasks');
+// Подрядная сделка (30.09.2026): работу делает подрядчик, наш доход — %;
+// производственные этапы пропускаются, бонусов нет, заявка подрядчику — в расходах.
+const isContractor = computed(() => props.deal.kind === 'contractor');
+const SKIPPED_STAGE_TYPES = ['design', 'shop_gate', 'logistics', 'assembly'];
+const commissionSum = computed(() => Math.round(Number(props.deal.budget) * Number(props.deal.commission_pct || 0)) / 100);
+const contractorPayout = computed(() => Math.round((Number(props.deal.budget) - commissionSum.value) * 100) / 100);
+const payoutExpense = computed(() => (props.deal.expenses ?? []).find((e) => e.type === 'contractor') ?? null);
 const visibleFields = computed(() => (props.customFields ?? []).filter((f) => f.is_visible && f.value));
 const lastStage = computed(() => props.stages[props.stages.length - 1]);
 const isLastStage = computed(() => props.deal.deal_stage_id === lastStage.value?.id);
@@ -48,6 +55,7 @@ const postActIds = computed(() => [actStage.value?.id, esfStage.value?.id, wonSt
 const managerFrozen = computed(() => !canAccounting.value && postActIds.value.includes(props.deal.deal_stage_id));
 const stageLocked = (stage) => {
     if (!stage) return false;
+    if (isContractor.value && SKIPPED_STAGE_TYPES.includes(stage.stage_type)) return true;
     if (managerFrozen.value) return true;
     if (!canAccounting.value && postActIds.value.includes(stage.id) && stage.id !== actStage.value?.id) return true;
     if (stage.id === esfStage.value?.id && props.deal.deal_stage_id !== actStage.value?.id) return true;
@@ -56,6 +64,7 @@ const stageLocked = (stage) => {
     return false;
 };
 const lockHint = (stage) => {
+    if (isContractor.value && SKIPPED_STAGE_TYPES.includes(stage.stage_type)) return 'Подрядная сделка: этап производства пропускается';
     if (managerFrozen.value) return 'После «Акт утверждение» сделку двигает только бухгалтер или админ';
     if (!canAccounting.value && postActIds.value.includes(stage.id) && stage.id !== actStage.value?.id) return 'Этот этап переводит только бухгалтер или админ';
     if (stage.id === esfStage.value?.id) return 'Сначала «Акт утверждение» (галочка акта, срок 3 дня)';
@@ -120,6 +129,7 @@ const editFields = () => ({
     contract_date: dateOnly(props.deal.contract_date), source: props.deal.source ?? '',
     lot_number: props.deal.lot_number ?? '', unit: props.deal.unit ?? '', budget: props.deal.budget, partner_pct: props.deal.partner_pct ?? '', deadline: dateOnly(props.deal.deadline),
     description: props.deal.description ?? '', note: props.deal.note ?? '',
+    contractor_name: props.deal.contractor_name ?? '', commission_pct: props.deal.commission_pct ?? '',
 });
 const editForm = useForm(editFields());
 const openEdit = () => {
@@ -143,6 +153,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <!-- Длинные названия (НАО, ГУ…) обрезаются с многоточием, полное — в title -->
                 <span class="min-w-0 truncate text-lg font-semibold tracking-tight text-slate-900 sm:text-xl" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}</span>
                 <span class="flex-shrink-0 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{{ deal.number }}</span>
+                <span v-if="isContractor" class="flex-shrink-0 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200" :title="`Подрядчик: ${deal.contractor_name || '—'}`">🤝 Подряд</span>
                 <span v-if="overdue" class="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
                     <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
                     {{ $t('deal.overdue_badge', 'Просрочено') }}
@@ -211,7 +222,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
             <div class="mt-3 flex flex-wrap gap-2">
                 <PrimaryButton v-if="(can.advance ?? can.update) && !isWorkshopStage && !isLastStage && !managerFrozen" @click="advance">Далее →</PrimaryButton>
-                <button v-if="can.update && isWorkshopStage && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop()" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">
+                <button v-if="can.update && isWorkshopStage && !isContractor && (!deal.project || deal.project.status === 'completed')" @click="sendToWorkshop()" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-emerald-700">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
                     Отправить в цех
                 </button>
@@ -225,8 +236,16 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
                         <div>
-                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Компания</div>
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">{{ isContractor ? 'Заказчик' : 'Компания' }}</div>
                             <div class="mt-1 text-sm font-semibold text-slate-900">{{ deal.company_name || '—' }}</div>
+                        </div>
+                        <div v-if="isContractor">
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Подрядчик</div>
+                            <div class="mt-1 text-sm font-semibold text-amber-700">🤝 {{ deal.contractor_name || '—' }}</div>
+                        </div>
+                        <div v-if="isContractor">
+                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Наш процент</div>
+                            <div class="mt-1 text-sm font-semibold text-slate-900">{{ Number(deal.commission_pct) }}% = {{ money(commissionSum) }}</div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Адрес</div>
@@ -282,11 +301,11 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
 
                         <!-- Аванс (счета и оплаты) — самый верх финансов -->
-                <FinancePanel section="invoices" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+                <FinancePanel :deal-kind="deal.kind" section="invoices" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
 
                 <!-- Финансовая сводка — отдельным блоком выше предсделки: сумма, аванс, расходы, факт/план -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <FinancePanel section="summary" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
+                    <FinancePanel :deal-kind="deal.kind" section="summary" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" />
                 </div>
 
                 <!-- Из предварительной сделки: сразу перед Финансами — зелёное «стекло» (glassmorphism) -->
@@ -328,7 +347,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
 
                 <!-- Расходы — сразу под блоком предсделки: план лота и факт рядом -->
-                <FinancePanel section="expenses" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" :estimate="estimate" :company-code="companyCode" />
+                <FinancePanel :deal-kind="deal.kind" section="expenses" :entity-type="'deal'" :entity-id="deal.id" :client-id="deal.client_id" :invoices="deal.invoices" :expenses="deal.expenses" :finance="finance" :materials="materials" :balances="balances" :estimate="estimate" :company-code="companyCode" />
 
                 <!-- Документы / Доп. поля / История -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -386,6 +405,14 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="text-[11px] uppercase tracking-wide text-slate-400">Сумма договора</div>
                     <div class="mt-1 whitespace-nowrap text-xl font-bold tabular-nums text-slate-900">{{ money(deal.budget) }}</div>
+                    <!-- Подряд: наш доход и перечисление подрядчику (заявка в расходах) -->
+                    <div v-if="isContractor" class="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm">
+                        <div class="flex justify-between"><span class="text-slate-600">Наш доход {{ Number(deal.commission_pct) }}%</span><b class="tabular-nums text-emerald-700">{{ money(commissionSum) }}</b></div>
+                        <div class="mt-1 flex justify-between"><span class="text-slate-600">Подрядчику</span><b class="tabular-nums text-rose-700">{{ money(contractorPayout) }}</b></div>
+                        <div class="mt-1.5 text-[11px]" :class="payoutExpense?.status === 'confirmed' ? 'text-emerald-700' : 'text-amber-700'">
+                            {{ payoutExpense ? (payoutExpense.status === 'confirmed' ? '✓ перечислено — ' + (payoutExpense.payment_method === 'cash' ? 'нал' : 'банк') : '⏳ заявка ждёт подтверждения бухгалтера (блок «Расходы»)') : '— заявка не создана' }}
+                        </div>
+                    </div>
                     <div class="mt-4 space-y-2 text-sm">
                         <div class="flex justify-between"><span class="text-slate-500">Статус</span><StatusBadge :status="deal.status" /></div>
                         <div class="flex justify-between"><span class="text-slate-500">Аванс (оплачено)</span><span class="font-medium tabular-nums text-emerald-600">{{ money(finance.income) }}</span></div>
@@ -395,8 +422,12 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <div class="flex justify-between"><span class="text-slate-500">Прочие расходы</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.expense) }}</span></div>
                         <div v-if="profit.partnerPct != null" class="flex justify-between"><span class="text-slate-500">Доля партнёра {{ profit.partnerPct }}%</span><span class="font-medium tabular-nums text-rose-600">− {{ money(profit.partner) }}</span></div>
                         <div class="flex justify-between border-t border-slate-100 pt-2"><span class="text-slate-500">Остаток</span><span class="font-semibold tabular-nums text-slate-800">{{ money(profit.remainder) }}</span></div>
-                        <!-- Бонус менеджера: авто-ступень от маржи или ручной % финансиста -->
-                        <div class="flex items-center justify-between">
+                        <!-- Бонус менеджера: авто-ступень от маржи или ручной % финансиста. Подряд — без бонуса. -->
+                        <div v-if="isContractor" class="flex items-center justify-between">
+                            <span class="text-slate-500">ЗП сотрудника</span>
+                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">не начисляется (подряд)</span>
+                        </div>
+                        <div v-else class="flex items-center justify-between">
                             <span class="flex items-center gap-1.5 text-slate-500">
                                 ЗП сотрудника {{ profit.bonusRate }}%
                                 <span class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="profit.bonusManual ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'">{{ profit.bonusManual ? 'вручную' : 'авто' }}</span>
@@ -472,7 +503,15 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <InputError :message="editForm.errors.unit || editForm.errors.lot_number" class="mt-1" />
                     </div>
                     <div><InputLabel value="Сумма договора *" /><TextInput v-model="editForm.budget" type="number" step="0.01" class="mt-1 w-full" /><InputError :message="editForm.errors.budget" class="mt-1" /></div>
-                    <div>
+                    <template v-if="isContractor">
+                        <div><InputLabel value="Подрядчик" /><TextInput v-model="editForm.contractor_name" class="mt-1 w-full" :disabled="!canAccounting" /><InputError :message="editForm.errors.contractor_name" class="mt-1" /></div>
+                        <div>
+                            <InputLabel value="Наш процент, %" /><TextInput v-model="editForm.commission_pct" type="number" min="0" max="100" step="0.01" class="mt-1 w-full" :disabled="!canAccounting" />
+                            <p class="mt-1 text-[11px] text-slate-400">Заявка подрядчику пересчитается, пока она не подтверждена.</p>
+                            <InputError :message="editForm.errors.commission_pct" class="mt-1" />
+                        </div>
+                    </template>
+                    <div v-else>
                         <InputLabel value="Доля партнёра, %" /><TextInput v-model="editForm.partner_pct" type="number" min="0" max="100" step="0.01" class="mt-1 w-full" placeholder="0" />
                         <p v-if="Number(editForm.partner_pct) > 0 && Number(editForm.budget) > 0" class="mt-1 text-[11px] text-slate-400">= {{ money(Number(editForm.budget) * Number(editForm.partner_pct) / 100) }} партнёру (вычитается из остатка)</p>
                         <InputError :message="editForm.errors.partner_pct" class="mt-1" />

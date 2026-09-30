@@ -25,6 +25,8 @@ const props = defineProps({
     estimate: { type: Object, default: null },
     // Код фирмы сделки: «По материалам (со склада)» — только BAIA (25.09.2026); Фурнитура — у всех.
     companyCode: { type: String, default: null },
+    // own | contractor: у подрядной сделки только «Прочий расход» — материалы/закуп не её (30.09.2026).
+    dealKind: { type: String, default: 'own' },
 });
 const showSummary = computed(() => ['all', 'summary'].includes(props.section));
 const showInvoices = computed(() => ['all', 'operations', 'invoices'].includes(props.section));
@@ -63,11 +65,11 @@ const expenseMode = ref('other'); // other | delivery | purchase | assembly | ma
 // Приучаем к складу (правило от 13.09.2026): менеджеру форма открывается в
 // режиме «Материал со склада» с подсказкой; ручной ввод — вторым шагом.
 const openExpenseForm = () => {
-    if (!showExpense.value && !canConfirm.value && props.companyCode === 'BAIA' && props.materials.length) expenseMode.value = 'material';
+    if (!showExpense.value && !canConfirm.value && props.dealKind !== 'contractor' && props.companyCode === 'BAIA' && props.materials.length) expenseMode.value = 'material';
     showExpense.value = !showExpense.value;
 };
 const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly', metal: 'metal', sheet: 'sheet', fittings: 'fittings' };
-const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 ' + assemblyLabel(), metal: '🔩 Металл', sheet: '▤ Лист', fittings: '🪛 Фурнитура' };
+const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 ' + assemblyLabel(), metal: '🔩 Металл', sheet: '▤ Лист', fittings: '🪛 Фурнитура', contractor: '🤝 Подрядчику' };
 const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
@@ -270,11 +272,11 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 <!-- Тип расхода: прочий / доставка / закуп / материалы -->
                 <div class="mb-3 flex flex-wrap gap-2">
                     <!-- Напоминание менеджеру: сначала склад, ручной расход — для того, чего на складе нет -->
-                    <div v-if="!canConfirm && companyCode === 'BAIA' && materials.length" class="mb-2 w-full rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs leading-snug text-amber-700">
+                    <div v-if="!canConfirm && dealKind !== 'contractor' && companyCode === 'BAIA' && materials.length" class="mb-2 w-full rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs leading-snug text-amber-700">
                         💡 <b>Сначала спишите материалы со склада</b> («Материал со склада») — так остатки и расходы сходятся.
                         Ручной расход — только для того, чего на складе нет (доставка, услуги и т.п.).
                     </div>
-                    <button v-for="m in [
+                    <button v-for="m in (dealKind === 'contractor' ? [{ k: 'other', l: 'Прочий расход (чек)' }] : [
                             { k: 'other', l: 'Прочий расход (чек)' },
                             { k: 'delivery', l: '🚚 Доставка' },
                             { k: 'purchase', l: '📦 Закуп' },
@@ -282,13 +284,13 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             // Фурнитура — у BAIA и ASU (гейт Логистики). Металл/Лист убраны 25.09.2026:
                             // металл берётся со склада («По материалам»), лист — закуп.
                             { k: 'fittings', l: '🪛 Фурнитура' },
-                        ]" :key="m.k" type="button" @click="expenseMode = m.k"
+                        ])" :key="m.k" type="button" @click="expenseMode = m.k"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         {{ m.l }}
                     </button>
                     <!-- Склад есть только у BAIA (ASU: Закуп и Фурнитура) -->
-                    <button v-if="companyCode === 'BAIA' && materials.length" type="button" @click="expenseMode = 'material'"
+                    <button v-if="dealKind !== 'contractor' && companyCode === 'BAIA' && materials.length" type="button" @click="expenseMode = 'material'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === 'material' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         По материалам (со склада)

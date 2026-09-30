@@ -14,6 +14,9 @@ class Expense extends Model
     use Auditable;
     use SoftDeletes;
 
+    /** Перечисление подрядчику по подрядной сделке (ContractorDealService). */
+    public const TYPE_CONTRACTOR = 'contractor';
+
     protected $fillable = [
         'expenseable_type', 'expenseable_id', 'company_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
         'responsible_user_id', 'employee_id', 'employee_payout', 'description', 'file_path', 'confirm_file_path', 'type', 'status',

@@ -72,6 +72,8 @@ class DealController extends Controller
                 ->orWhere('company_name', 'like', "%{$s}%")))
             ->when($request->string('responsible')->toString(), fn ($q, $r) => $q->where('responsible_user_id', $r))
             ->when($request->integer('stage'), fn ($q, $s) => $q->where('deal_stage_id', $s))
+            // Вид: own — свои, contractor — подрядные (30.09.2026).
+            ->when(in_array($request->string('kind')->toString(), ['own', 'contractor'], true), fn ($q) => $q->where('kind', $request->string('kind')->toString()))
             ->when($request->date('date_from'), fn ($q, $d) => $q->whereDate('deadline', '>=', $d))
             ->when($request->date('date_to'), fn ($q, $d) => $q->whereDate('deadline', '<=', $d))
             ->when($request->date('contract_from'), fn ($q, $d) => $q->whereDate('contract_date', '>=', $d))
@@ -102,7 +104,7 @@ class DealController extends Controller
             'deals' => $deals,
             'stages' => $stages,
             'view' => $view,
-            'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to'),
+            'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to', 'kind'),
             'isLeadership' => $request->user()->hasAnyRole(['admin', 'director', 'financist']),
             // Роль/отдел — для фильтра: менеджеры сверху, остальные по отделам.
             'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->with(['roles:id,name', 'department:id,name'])
@@ -119,6 +121,8 @@ class DealController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'company_id']),
             'can' => [
                 'create' => $request->user()->can('create', Deal::class),
+                // Подрядную сделку заводит бухгалтер или админ (30.09.2026).
+                'createContractor' => $request->user()->hasAnyRole(['admin', 'financist']),
                 // Удаление (в т.ч. массовое) — только admin (DealPolicy::delete).
                 'delete' => $request->user()->hasRole('admin'),
             ],
@@ -294,7 +298,7 @@ class DealController extends Controller
             'stages' => DealStage::with('translations')->where('is_active', true)
                 ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
                 ->orderBy('order')->get()
-                ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist]),
+                ->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName(), 'color' => $s->color, 'order' => $s->order, 'is_won' => $s->is_won, 'checklist' => $s->checklist, 'stage_type' => $s->stage_type]),
             // margin = маржа ступени бонуса (остаток/сумма) — одна цифра с
             // бейджем и Сводным отчётом, всегда сходится со шкалой.
             'finance' => array_merge($finance->summaryFor($deal), [
@@ -322,9 +326,39 @@ class DealController extends Controller
         $data = $request->validated();
         // Название сделки зеркалит название компании (поле убрано из UI).
         $data['name'] = $data['company_name'];
+        if ($deal->isContractor()) {
+            // Подряд: партнёрской доли нет; наш % и подрядчик меняет бухгалтер/админ.
+            $data['partner_pct'] = 0;
+            if (! $request->user()->hasAnyRole(['admin', 'financist'])) {
+                unset($data['commission_pct'], $data['contractor_name'], $data['budget']);
+            }
+        } else {
+            unset($data['commission_pct'], $data['contractor_name']);
+        }
         $deal->update($data);
+        // Заявка на перечисление подрядчику следует за суммой/процентом (пока не подтверждена).
+        app(\App\Services\ContractorDealService::class)->syncPayout($deal->fresh(), $request->user());
 
         return back()->with('success', 'Сделка обновлена.');
+    }
+
+    /**
+     * «+ Сделка подрядчика» (правило от 30.09.2026): бухгалтер/админ заводит
+     * подрядную сделку напрямую, без предсделки. Сразу создаётся заявка на
+     * перечисление подрядчику (сумма − наш %), бонус никому не начисляется.
+     */
+    public function storeContractor(\App\Http\Requests\ContractorDealRequest $request, \App\Services\ContractorDealService $contractors): RedirectResponse
+    {
+        $data = $request->validated();
+        $memberIds = $request->user()->companies()->where('is_active', true)->pluck('companies.id');
+        $companyId = $memberIds->contains((int) ($data['company_id'] ?? 0)) ? (int) $data['company_id'] : \App\Support\CurrentCompany::id();
+        $company = $companyId ? \App\Models\Company::find($companyId) : null;
+
+        $deal = $contractors->create($data, $request->user(), $company);
+
+        return redirect()->route('deals.show', $deal)->with('success',
+            'Подрядная сделка '.$deal->number.' создана. К перечислению подрядчику: '
+            .number_format($deal->contractorPayout(), 0, '.', ' ').' ₸ — заявка в блоке «Расходы».');
     }
 
     /**
@@ -450,7 +484,10 @@ class DealController extends Controller
         $this->authorize('advance', $deal);
         // Следующий этап — по ПОЗИЦИИ в воронке (не по order > current): при
         // задвоенном order переход не перескакивает соседний этап.
-        $funnel = DealStage::funnel($deal->company_id ? (int) $deal->company_id : null)->values();
+        $funnel = DealStage::funnel($deal->company_id ? (int) $deal->company_id : null)
+            // Подрядная сделка пропускает производство: Договор → Акт → ЭСФ → Оплата → Закрыт.
+            ->when($deal->isContractor(), fn ($c) => $c->reject(fn ($s) => in_array($s->stage_type, \App\Services\ContractorDealService::SKIPPED_STAGE_TYPES, true)))
+            ->values();
         $idx = $funnel->search(fn ($s) => $s->id === $deal->deal_stage_id);
         $next = $idx !== false ? $funnel->get($idx + 1) : $funnel->first();
         if ($next) {
@@ -467,6 +504,9 @@ class DealController extends Controller
     public function sendToWorkshop(Request $request, Deal $deal, \App\Services\ProjectService $projects): \Illuminate\Http\RedirectResponse
     {
         $this->authorize('update', $deal);
+        if ($deal->isContractor()) {
+            return back()->with('error', 'Подрядная сделка в цех не идёт — работу делает подрядчик.');
+        }
         if ($deal->project && $deal->project->status !== 'completed') {
             return back()->with('error', 'Заказ уже в цехе.');
         }
@@ -488,6 +528,9 @@ class DealController extends Controller
     public function updateBonusRate(Request $request, Deal $deal): RedirectResponse
     {
         abort_unless($request->user()->hasAnyRole(['admin', 'financist']), 403, 'Процент бонуса меняет финансист или администратор.');
+        if ($deal->isContractor()) {
+            return back()->with('error', 'По подрядной сделке бонус не начисляется никому.');
+        }
         $validated = $request->validate(['bonus_rate_override' => ['nullable', 'numeric', 'min:0', 'max:100']]);
 
         $deal->update(['bonus_rate_override' => $validated['bonus_rate_override'] ?? null]);

@@ -30,8 +30,8 @@ class StageTransitionService
      */
     public static function missingLogisticsExpenseTypes(Deal $deal): array
     {
-        // Сделки без фирмы — свободно (как и раньше).
-        if (! $deal->company_id) {
+        // Сделки без фирмы — свободно (как и раньше); подрядные в цех/логистику не идут.
+        if (! $deal->company_id || $deal->isContractor()) {
             return [];
         }
 
@@ -72,6 +72,13 @@ class StageTransitionService
             if ($target->company_id && (int) $target->company_id !== $companyId) {
                 throw ValidationException::withMessages([
                     'stage' => 'Этап принадлежит воронке другой компании.',
+                ]);
+            }
+            // Подрядная сделка: производственные этапы (дизайн, закуп, логистика,
+            // сборка) ей не нужны — работу делает подрядчик (30.09.2026).
+            if ($deal->isContractor() && in_array($target->stage_type, ContractorDealService::SKIPPED_STAGE_TYPES, true)) {
+                throw ValidationException::withMessages([
+                    'stage' => 'Подрядная сделка идёт: Договор → Акт утверждение → ЭСФ → Оплата → Тендер закрыт.',
                 ]);
             }
             $actStage = DealStage::actStage($companyId);
@@ -148,7 +155,7 @@ class StageTransitionService
             // С «ЭСФ» и дальше (Оплата, Тендер закрыт) доля партнёра по
             // умолчанию — 5% от суммы договора, если её не заполнили раньше
             // (правило от 19.08.2026). Заполненную вручную долю не трогаем.
-            if ($isForward && (float) $deal->partner_pct <= 0
+            if ($isForward && ! $deal->isContractor() && (float) $deal->partner_pct <= 0
                 && (($esfStage && $target->order >= $esfStage->order) || ($wonStage && $target->id === $wonStage->id))) {
                 $deal->partner_pct = 5;
             }

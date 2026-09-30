@@ -95,6 +95,7 @@ const fFrom = ref(props.filters?.date_from ?? '');
 const fTo = ref(props.filters?.date_to ?? '');
 const fContractFrom = ref(props.filters?.contract_from ?? '');
 const fContractTo = ref(props.filters?.contract_to ?? '');
+const fKind = ref(props.filters?.kind ?? ''); // '' | own | contractor
 const applyFilters = () => router.get(route('deals.index'), {
     view: props.view,
     search: search.value || undefined,
@@ -104,21 +105,22 @@ const applyFilters = () => router.get(route('deals.index'), {
     date_to: fTo.value || undefined,
     contract_from: fContractFrom.value || undefined,
     contract_to: fContractTo.value || undefined,
+    kind: fKind.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 350); };
-const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value || fContractFrom.value || fContractTo.value);
+const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value || fContractFrom.value || fContractTo.value || fKind.value);
 // При фильтре по этапу канбан показывает ТОЛЬКО выбранную колонку —
 // остальные этапы скрываются (а не пустеют).
 const visibleStages = computed(() => fStage.value ? props.stages.filter((s) => String(s.id) === String(fStage.value)) : props.stages);
 const resetFilters = () => {
     search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = '';
-    fContractFrom.value = ''; fContractTo.value = '';
+    fContractFrom.value = ''; fContractTo.value = ''; fKind.value = '';
     clearStickyFilters('deals');
     applyFilters();
 };
 // Фильтр страницы запоминается: вернулся в сделки — тот же менеджер/этап/период.
-useStickyFilters('deals', { search, fResponsible, fStage, fFrom, fTo, fContractFrom, fContractTo }, applyFilters);
+useStickyFilters('deals', { search, fResponsible, fStage, fFrom, fTo, fContractFrom, fContractTo, fKind }, applyFilters);
 
 // Массовое удаление (вид «Список», только admin): чекбоксы + подтверждение.
 const selected = ref(new Set());
@@ -137,6 +139,17 @@ const showModal = ref(false);
 const form = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', address: '', bin: '', contract_date: '', client_name: '', lot_number: '', unit: '', source: '', responsible_user_id: '', budget: 0, partner_pct: '', deadline: '', description: '', note: '' });
 const openCreate = () => { form.reset(); form.company_id = props.currentCompanyId || props.companies[0]?.id || ''; binMatch.value = null; showBinModal.value = false; showModal.value = true; };
 const submit = () => form.post(route('deals.store'), { preserveScroll: true, onSuccess: () => (showModal.value = false) });
+
+// «+ Сделка подрядчика» (30.09.2026): бухгалтер/админ заводит подрядную сделку
+// напрямую. Заказчик платит нам всю сумму, мы оставляем свой % и перечисляем
+// остальное подрядчику (заявка создаётся автоматически). Бонусов нет.
+const showContractor = ref(false);
+const cForm = useForm({ company_id: props.currentCompanyId || props.companies[0]?.id || '', company_name: '', client_name: '', contractor_name: '',
+    budget: '', commission_pct: '', bin: '', contract_date: '', address: '', deadline: '', responsible_user_id: '', note: '' });
+const openContractor = () => { cForm.reset(); cForm.clearErrors(); cForm.company_id = props.currentCompanyId || props.companies[0]?.id || ''; showContractor.value = true; };
+const ourShare = computed(() => Math.round(Number(cForm.budget || 0) * Number(cForm.commission_pct || 0)) / 100);
+const contractorPayout = computed(() => Math.round((Number(cForm.budget || 0) - ourShare.value) * 100) / 100);
+const submitContractor = () => cForm.post(route('deals.contractor.store'), { preserveScroll: true, onSuccess: () => (showContractor.value = false) });
 
 // БИН lookup: if the entered БИН already exists, offer to copy its company data.
 const binMatch = ref(null);
@@ -175,8 +188,12 @@ const applyBinMatch = () => {
                 <button :class="view === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('kanban')">Канбан</button>
                 <button :class="view === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'" class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors duration-150" @click="switchView('list')">Список</button>
             </div>
-            <!-- Кнопки «+ Новая сделка» нет (25.08.2026): сделка появляется только
-                 из предсделки → «Выиграл ✓» -->
+            <!-- Кнопки «+ Новая сделка» нет (25.08.2026): своя сделка появляется только
+                 из предсделки → «Выиграл ✓». Подрядную заводит бухгалтер/админ. -->
+            <button v-if="can.createContractor" type="button" @click="openContractor"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-105">
+                🤝 + Сделка подрядчика
+            </button>
         </template>
 
         <!-- Единый фильтр-бар: поиск, менеджер (руководству), этап, срок с—по -->
@@ -188,6 +205,11 @@ const applyBinMatch = () => {
             </div>
             <!-- Менеджеры сверху, остальные — по отделам (свёрнуты) -->
             <ManagerPicker v-if="isLeadership" v-model="fResponsible" :users="users" width="w-full sm:w-48" @change="applyFilters" />
+            <select v-model="fKind" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                <option value="">Все виды</option>
+                <option value="own">Свои</option>
+                <option value="contractor">🤝 Подряд</option>
+            </select>
             <SearchSelect v-model="fStage" :options="stages" placeholder="Все этапы" width="w-full sm:w-52" @change="applyFilters" />
             <label class="flex items-center gap-1 text-xs text-slate-400">срок с
                 <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
@@ -226,6 +248,7 @@ const applyBinMatch = () => {
                                 <!-- Номер сделки виден ВСЕГДА, «Просрочена» — дополнительным бейджем -->
                                 <span class="flex shrink-0 flex-col items-end gap-0.5">
                                     <span class="text-[11px] text-slate-400">{{ deal.number }}</span>
+                                    <span v-if="deal.kind === 'contractor'" class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">🤝 Подряд</span>
                                     <span v-if="deal.overdue_count" class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-600">ПРОСРОЧЕНА</span>
                                 </span>
                             </div>
@@ -233,6 +256,7 @@ const applyBinMatch = () => {
                             <!-- Куда и что -->
                             <div class="mt-1.5 space-y-0.5 text-[11px] leading-4 text-slate-500">
                                 <div v-if="deal.address" class="truncate">📍 {{ deal.address }}</div>
+                                <div v-if="deal.kind === 'contractor'" class="truncate text-amber-700">🤝 {{ deal.contractor_name || 'подрядчик' }} · наши {{ Number(deal.commission_pct) }}% = {{ money(Number(deal.budget) * Number(deal.commission_pct) / 100) }}</div>
                                 <div class="truncate">📦 {{ deal.client_name || '—' }}<template v-if="deal.lot_number"> · {{ deal.lot_number }} {{ deal.unit || '' }}</template></div>
                             </div>
                             <!-- Когда и кто ведёт -->
@@ -250,7 +274,7 @@ const applyBinMatch = () => {
                         <div class="mt-2 flex items-center justify-between border-t border-slate-100 pt-1.5">
                             <Link :href="route('deals.show', deal.id)" class="text-[11px] text-slate-400 transition-colors duration-150 hover:text-indigo-600">+ Дело</Link>
                             <span v-if="stageTime(deal)" title="Время на текущем этапе" class="text-[11px] tabular-nums text-slate-400">⏱ {{ stageTime(deal) }}</span>
-                            <button v-if="workshopIds.includes(deal.deal_stage_id)" @click="toWorkshop(deal)" class="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">📦 В цех</button>
+                            <button v-if="workshopIds.includes(deal.deal_stage_id) && deal.kind !== 'contractor'" @click="toWorkshop(deal)" class="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition-colors duration-150 hover:bg-emerald-100">📦 В цех</button>
                             <button v-else-if="!wonIds.includes(deal.deal_stage_id) && (canAccounting || !postActIds.includes(deal.deal_stage_id))" @click="advance(deal)" class="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500 transition-colors duration-150 hover:bg-indigo-50 hover:text-indigo-700">Далее →</button>
                         </div>
                     </div>
@@ -290,7 +314,9 @@ const applyBinMatch = () => {
                         </td>
                         <td class="px-4 py-2.5 text-slate-400 first:px-6">{{ deal.number }}</td>
                         <td class="px-4 py-2.5">
-                            <div class="line-clamp-2 max-w-md font-medium leading-snug text-slate-900" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}</div>
+                            <div class="line-clamp-2 max-w-md font-medium leading-snug text-slate-900" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}
+                                <span v-if="deal.kind === 'contractor'" class="ml-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200" :title="`Подрядчик: ${deal.contractor_name || '—'}, наши ${Number(deal.commission_pct)}%`">🤝 Подряд</span>
+                            </div>
                         </td>
                         <td class="px-4 py-2.5"><div class="max-w-40 truncate text-slate-500" :title="deal.client_name || deal.client?.name">{{ deal.client_name || deal.client?.name || '—' }}</div></td>
                         <td class="px-4 py-2.5"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
@@ -367,6 +393,54 @@ const applyBinMatch = () => {
         </Modal>
 
         <!-- BIN EXISTS MODAL -->
+        <!-- ПОДРЯДНАЯ СДЕЛКА (бухгалтер/админ) -->
+        <Modal :show="showContractor" @close="showContractor = false" max-width="2xl">
+            <div class="p-6">
+                <h2 class="text-lg font-semibold text-slate-900">🤝 Сделка подрядчика</h2>
+                <p class="mt-1 text-xs text-slate-500">Работу делает подрядчик. Заказчик платит нам всю сумму, мы оставляем свой % и перечисляем остальное подрядчику — заявка на перечисление создастся сама. Бонус никому не начисляется; этапы: Договор → Акт → ЭСФ → Оплата → Тендер закрыт.</p>
+                <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div v-if="companies.length" class="sm:col-span-2">
+                        <InputLabel value="Компания (нумерация сделки)" />
+                        <div class="mt-1 flex gap-2">
+                            <button v-for="c in companies" :key="c.id" type="button" @click="cForm.company_id = c.id"
+                                class="rounded-lg border px-4 py-2 text-sm font-semibold transition-all"
+                                :class="cForm.company_id === c.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                                {{ c.name }} <span class="font-normal text-slate-400">({{ c.code }}-…)</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div><InputLabel value="Заказчик *" /><TextInput v-model="cForm.company_name" class="mt-1 w-full" placeholder="Кто платит нам" /><InputError :message="cForm.errors.company_name" class="mt-1" /></div>
+                    <div><InputLabel value="Подрядчик *" /><TextInput v-model="cForm.contractor_name" class="mt-1 w-full" placeholder="Кто делает работу" /><InputError :message="cForm.errors.contractor_name" class="mt-1" /></div>
+                    <div class="sm:col-span-2"><InputLabel value="Предмет договора *" /><TextInput v-model="cForm.client_name" class="mt-1 w-full" placeholder="Что поставляется / какая работа" /><InputError :message="cForm.errors.client_name" class="mt-1" /></div>
+                    <div><InputLabel value="Сумма договора *" /><TextInput v-model="cForm.budget" type="number" step="0.01" min="0" class="mt-1 w-full" /><InputError :message="cForm.errors.budget" class="mt-1" /></div>
+                    <div>
+                        <InputLabel value="Наш процент, % *" /><TextInput v-model="cForm.commission_pct" type="number" min="0" max="100" step="0.01" class="mt-1 w-full" />
+                        <InputError :message="cForm.errors.commission_pct" class="mt-1" />
+                    </div>
+                    <div v-if="Number(cForm.budget) > 0 && cForm.commission_pct !== ''" class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm sm:col-span-2">
+                        <div class="flex justify-between"><span class="text-slate-600">Наш доход ({{ Number(cForm.commission_pct) }}%)</span><b class="tabular-nums text-emerald-700">{{ money(ourShare) }}</b></div>
+                        <div class="mt-1 flex justify-between"><span class="text-slate-600">К перечислению подрядчику</span><b class="tabular-nums text-rose-700">{{ money(contractorPayout) }}</b></div>
+                    </div>
+                    <div><InputLabel value="Номер договора" /><TextInput v-model="cForm.bin" class="mt-1 w-full" /><InputError :message="cForm.errors.bin" class="mt-1" /></div>
+                    <div><InputLabel value="Дата договора" /><TextInput v-model="cForm.contract_date" type="date" class="mt-1 w-full" /><InputError :message="cForm.errors.contract_date" class="mt-1" /></div>
+                    <div><InputLabel value="Адрес / объект" /><TextInput v-model="cForm.address" class="mt-1 w-full" /><InputError :message="cForm.errors.address" class="mt-1" /></div>
+                    <div><InputLabel value="Срок" /><TextInput v-model="cForm.deadline" type="date" class="mt-1 w-full" /><InputError :message="cForm.errors.deadline" class="mt-1" /></div>
+                    <div>
+                        <InputLabel value="Ответственный" />
+                        <select v-model="cForm.responsible_user_id" class="mt-1 w-full rounded-md border-slate-300 shadow-sm">
+                            <option value="">Я</option>
+                            <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2"><InputLabel value="Заметка" /><textarea v-model="cForm.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 shadow-sm"></textarea></div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="showContractor = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="cForm.processing" @click="submitContractor">Создать подрядную сделку</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+
         <Modal :show="showBinModal" @close="showBinModal = false" max-width="lg">
             <div class="p-6">
                 <h2 class="mb-1 text-lg font-semibold text-slate-900">С этим номером договора уже есть данные</h2>

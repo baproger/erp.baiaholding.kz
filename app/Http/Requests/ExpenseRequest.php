@@ -28,7 +28,7 @@ class ExpenseRequest extends FormRequest
             'date' => ['required', 'date'],
             'description' => ['nullable', 'string'],
             // direct — прочий (чек), delivery — доставка, purchase — закуп
-            'type' => ['nullable', Rule::in(['direct', 'indirect', 'delivery', 'purchase', 'assembly', 'metal', 'sheet', 'fittings'])],
+            'type' => ['nullable', Rule::in(['direct', 'indirect', 'delivery', 'purchase', 'assembly', 'metal', 'sheet', 'fittings', 'contractor'])],
             'status' => ['nullable', Rule::in(['draft', 'pending', 'confirmed'])],
             'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
             'file' => [...$fileRule, 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],

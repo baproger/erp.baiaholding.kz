@@ -25,14 +25,39 @@ class Deal extends Model
     protected $fillable = [
         'company_id', 'number', 'name', 'client_name', 'company_name', 'address', 'bin', 'contract_date', 'lot_number', 'unit', 'source', 'client_id', 'responsible_user_id', 'department_id',
         'deal_stage_id', 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'description', 'note', 'status', 'closed_at',
+        'kind', 'contractor_name', 'commission_pct',
     ];
+
+    /** Своя сделка (из предсделки, идёт в цех). */
+    public const KIND_OWN = 'own';
+
+    /** Подрядная: работу делает подрядчик, компания оставляет себе % (30.09.2026). */
+    public const KIND_CONTRACTOR = 'contractor';
 
     protected $casts = [
         'budget' => 'decimal:2',
+        'commission_pct' => 'decimal:2',
         'deadline' => 'date',
         'contract_date' => 'date',
         'closed_at' => 'datetime',
     ];
+
+    public function isContractor(): bool
+    {
+        return $this->kind === self::KIND_CONTRACTOR;
+    }
+
+    /** Наш доход по подрядной сделке = сумма × наш %. */
+    public function commissionSum(): float
+    {
+        return round((float) $this->budget * (float) $this->commission_pct / 100, 2);
+    }
+
+    /** К перечислению подрядчику = сумма − наш доход. */
+    public function contractorPayout(): float
+    {
+        return round((float) $this->budget - $this->commissionSum(), 2);
+    }
 
     protected static function booted(): void
     {

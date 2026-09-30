@@ -88,6 +88,8 @@ Route::middleware('auth')->group(function () {
     Route::get('deals/bin-lookup', [DealController::class, 'binLookup'])
         ->middleware('throttle:30,1')
         ->name('deals.binLookup');
+    // Подрядная сделка — бухгалтер/админ (до resource, иначе POST deals/contractor не сматчится).
+    Route::post('deals/contractor', [DealController::class, 'storeContractor'])->name('deals.contractor.store');
     Route::resource('deals', DealController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage');
     Route::patch('deals/{deal}/advance', [DealController::class, 'advance'])->name('deals.advance');

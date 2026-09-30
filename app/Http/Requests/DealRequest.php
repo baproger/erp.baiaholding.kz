@@ -43,6 +43,9 @@ class DealRequest extends FormRequest
             'budget' => ['required', 'numeric', 'min:0'],
             // Доля партнёра — только %; сумма считается от суммы договора.
             'partner_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // Подрядная сделка: подрядчик и наш % (у своих сделок игнорируются).
+            'contractor_name' => ['nullable', 'string', 'max:255'],
+            'commission_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'deadline' => ['nullable', 'date'],
             'description' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
