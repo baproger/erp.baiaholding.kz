@@ -131,6 +131,7 @@ const companySections = computed(() => {
                         gross: sum('gross'),
                         adv: sum('adv_salary'),
                         penalties: sum('penalties'),
+                        bonus_month: sum('bonus_month'),
                         final: sum('salary_final'),
                     };
                 })
@@ -147,6 +148,7 @@ const companySections = computed(() => {
                     gross: counted.reduce((n, r) => n + (r.gross || 0), 0),
                     adv: counted.reduce((n, r) => n + (r.adv_salary || 0), 0),
                     penalties: counted.reduce((n, r) => n + (r.penalties || 0), 0),
+                    bonus_month: counted.reduce((n, r) => n + (r.bonus_month || 0), 0),
                     final: counted.reduce((n, r) => n + (r.salary_final || 0), 0),
                 },
             };
@@ -553,6 +555,7 @@ const delAdj = async (a) => {
                             <th class="hidden sm:table-cell px-3 py-2.5 text-right">Всего</th>
                             <th class="hidden lg:table-cell px-3 py-2.5 text-right" title="Аванс из ЗП">Аванс</th>
                             <th class="hidden lg:table-cell px-3 py-2.5 text-right" title="Штрафы, отгулы, больничные">Штраф</th>
+                            <th class="hidden lg:table-cell px-3 py-2.5 text-right" title="Бонус по марже сделок за период (детали — вкладка «Бонусы»)">Бонус</th>
                             <th class="px-3 py-2.5 text-right">К выплате</th>
                         </tr>
                     </thead>
@@ -595,6 +598,7 @@ const delAdj = async (a) => {
                             <td class="hidden sm:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums text-slate-700">{{ money(g.gross) }}</td>
                             <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.adv > 0 ? 'text-rose-600' : 'text-slate-300'">{{ g.adv > 0 ? '− ' + money(g.adv) : '—' }}</td>
                             <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.penalties > 0 ? 'text-rose-600' : 'text-slate-300'">{{ g.penalties > 0 ? '− ' + money(g.penalties) : '—' }}</td>
+                            <td class="hidden lg:table-cell px-3 py-2 text-right text-xs font-semibold tabular-nums" :class="g.bonus_month > 0 ? 'text-indigo-600' : 'text-slate-300'">{{ g.bonus_month > 0 ? money(g.bonus_month) : '—' }}</td>
                             <td class="px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-700">{{ money(g.final) }}</td>
                         </tr>
                         <template v-if="expanded.has(g.key)">
@@ -672,10 +676,12 @@ const delAdj = async (a) => {
                                 <td class="hidden sm:table-cell whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(r.gross) }}</td>
                                 <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.adv_salary > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.adv_salary > 0 ? '− ' + money(r.adv_salary) : '—' }}</td>
                                 <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.penalties > 0 ? 'font-medium text-rose-600' : 'text-slate-300'">{{ r.penalties > 0 ? '− ' + money(r.penalties) : '—' }}</td>
+                                <!-- Бонус за период: информационно, в «К выплате» (ЗП) не входит — выплачивается на вкладке «Бонусы» -->
+                                <td class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="r.bonus_month > 0 ? 'font-medium text-indigo-600' : 'text-slate-300'" :title="r.bonus_month > 0 ? 'Бонус по сделкам за ' + monthLabel + '; к выплате из бонуса: ' + money(r.bonus_final) : ''">{{ r.bonus_month > 0 ? money(r.bonus_month) : '—' }}</td>
                                 <td class="whitespace-nowrap px-3 py-2.5 text-right font-bold tabular-nums" :class="r.salary_final > 0 ? 'text-emerald-600' : 'text-slate-300'">{{ r.salary_final > 0 ? money(r.salary_final) : '—' }}</td>
                             </tr>
                             <tr v-if="open.has(r.uid)" class="bg-slate-50/60">
-                                <td colspan="10" class="px-6 py-3">
+                                <td colspan="11" class="px-6 py-3">
                                     <!-- Финансы сделок сотрудника (из колонок убраны — здесь по требованию) -->
                                     <div v-if="r.budget > 0" class="mb-3 flex flex-wrap gap-2 text-[11px]">
                                         <span class="rounded-full bg-white px-2.5 py-1 text-slate-500 ring-1 ring-slate-200">Сумма договоров <span class="font-semibold tabular-nums text-slate-700">{{ money(r.budget) }}</span></span>
@@ -836,6 +842,7 @@ const delAdj = async (a) => {
                             <td class="hidden sm:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums text-slate-900">{{ money(s.totals.gross) }}</td>
                             <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="s.totals.adv > 0 ? 'text-rose-600' : 'text-slate-300'">{{ s.totals.adv > 0 ? '− ' + money(s.totals.adv) : '—' }}</td>
                             <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="s.totals.penalties > 0 ? 'text-rose-600' : 'text-slate-300'">{{ s.totals.penalties > 0 ? '− ' + money(s.totals.penalties) : '—' }}</td>
+                            <td class="hidden lg:table-cell whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="s.totals.bonus_month > 0 ? 'text-indigo-600' : 'text-slate-300'">{{ s.totals.bonus_month > 0 ? money(s.totals.bonus_month) : '—' }}</td>
                             <td class="whitespace-nowrap px-3 py-3 text-right tabular-nums text-emerald-700">{{ money(s.totals.final) }}</td>
                         </tr>
                     </tfoot>
