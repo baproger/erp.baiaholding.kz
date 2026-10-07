@@ -443,7 +443,9 @@ class AnalyticsController extends Controller
             'period' => $period,
             'topManagers' => $topManagers,
             'filters' => ['from' => $from, 'to' => $to, 'manager' => $managerId, 'stage' => $stageId, 'search' => $search],
-            'managers' => User::where('is_active', true)->ofCompany($companyId)->orderBy('name')->get(['id', 'name']),
+            // Уволенные — в конце с пометкой: их сделки в прошлых периодах (07.10.2026).
+            'managers' => User::forReportFilter()->ofCompany($companyId)->get(['id', 'name', 'status'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->labelName()])->values(),
             'stageOptions' => $stages->map(fn ($s) => ['id' => $s->id, 'name' => $s->translatedName().(! $companyId && $s->company_id ? ' · '.($companyNames[$s->company_id] ?? '') : '')])->values(),
         ];
     }

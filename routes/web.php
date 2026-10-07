@@ -63,6 +63,8 @@ Route::middleware('auth')->group(function () {
     // Код входа и сброс устройств — только админ (проверка в контроллере).
     Route::post('users/{user}/login-code', [UserController::class, 'issueLoginCode'])->middleware('throttle:30,1')->name('users.login-code');
     Route::delete('users/{user}/devices', [UserController::class, 'revokeDevices'])->name('users.devices.revoke');
+    // Вернуть уволенного (только админ, проверка в контроллере).
+    Route::patch('users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
     Route::resource('users', UserController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
 
     // Reference data

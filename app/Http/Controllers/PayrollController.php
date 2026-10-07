@@ -207,7 +207,7 @@ class PayrollController extends Controller
         if (! $leadership) {
             $uids = $uids->filter(fn ($id) => (int) $id === (int) $user->id)->values();
         }
-        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar'])->keyBy('id');
+        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'status'])->keyBy('id');
 
         $rows = $uids->filter(fn ($id) => $people->has($id))->map(function ($uid) use ($byMonth, $paidMonth, $allTime, $paidAllBy, $people, $earnedBefore, $paidBefore) {
             $months = [];
@@ -225,7 +225,9 @@ class PayrollController extends Controller
 
             return [
                 'uid' => $uid,
-                'user' => $people[$uid]->name,
+                // Уволенный остаётся в таблице бонусов (07.10.2026) — с пометкой.
+                'user' => $people[$uid]->labelName(),
+                'fired' => $people[$uid]->isFired(),
                 'avatar' => $people[$uid]->avatar,
                 'months' => $months,
                 'year_earned' => round($yearEarned, 2),
@@ -320,7 +322,21 @@ class PayrollController extends Controller
             ])->values()->all();
         }
 
-        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms, $debtPlans, $debtList, $bonusOfMonth) {
+        $monthStartC = \Illuminate\Support\Carbon::parse($monthStart);
+        $rows = $rows->map(function ($r) use ($breakdown, $adjustments, $hoursByUser, $normHours, $deptByUser, $deptNorms, $debtPlans, $debtList, $bonusOfMonth, $monthStartC) {
+            // Уволенный (07.10.2026): до месяца увольнения — полный оклад, в месяце
+            // увольнения — пропорционально дням до даты увольнения включительно
+            // (если часы не введены), после — оклада нет.
+            $salaryRatio = 1.0;
+            if (($r['status'] ?? User::STATUS_WORKING) === User::STATUS_FIRED) {
+                $firedAt = $r['fired_at'] ? \Illuminate\Support\Carbon::parse($r['fired_at']) : null;
+                $r['salary'] = (float) ($r['salary_raw'] ?? 0);
+                if (! $firedAt || $firedAt->lt($monthStartC)) {
+                    $r['salary'] = 0.0;
+                } elseif ($firedAt->lte($monthStartC->copy()->endOfMonth())) {
+                    $salaryRatio = $firedAt->day / $monthStartC->daysInMonth;
+                }
+            }
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
             // Бонус ЗА ВЫБРАННЫЙ МЕСЯЦ — информационный срез рядом с общим
             // «за всё время». В «К выплате» НЕ участвует: формула выплаты
@@ -365,7 +381,7 @@ class PayrollController extends Controller
             $r['hourly_rate'] = $norm > 0 ? round($rate, 2) : null;
             // День и ночь раздельно (колонки Excel владельца): ночь = ставка × 1.5.
             $byHours = ($hours !== null || $night !== null) && $norm > 0;
-            $r['base_day'] = $byHours ? round(($hours ?? 0) * $rate, 2) : $r['salary'];
+            $r['base_day'] = $byHours ? round(($hours ?? 0) * $rate, 2) : round($r['salary'] * $salaryRatio, 2);
             $r['base_night'] = $byHours ? round(($night ?? 0) * $rate * 1.5, 2) : 0.0;
             $r['base'] = round($r['base_day'] + $r['base_night'], 2);
             // ВСЕГО = день + ночь + премии + командировочные.
@@ -399,7 +415,15 @@ class PayrollController extends Controller
             $r['primary_company_id'] = $companyIds->first();
 
             return $r;
-        });
+        })
+            // Уволенный виден в месяце увольнения и раньше; позже — только если у
+            // него есть цифры в этом месяце (выплата, корректировка, часы, долг, бонус).
+            ->filter(fn ($r) => ($r['status'] ?? User::STATUS_WORKING) !== User::STATUS_FIRED
+                || ($r['fired_at'] && $r['fired_at'] >= $monthStart)
+                || count($r['adjustments']) > 0
+                || $r['hours'] !== null || $r['night_hours'] !== null
+                || ! empty($r['debts']) || (float) $r['bonus_month'] != 0.0)
+            ->values();
 
         // Переключатель фирмы (шапка): выбрана конкретная компания — ведомость,
         // секции и плитки сужаются до неё; «Все» — обе фирмы, как раньше.

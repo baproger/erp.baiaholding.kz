@@ -245,8 +245,8 @@ class LoginSecurityTest extends TestCase
         $u = $this->user();
         LoginSecurity::issueCode($u, $admin);
 
-        $this->assertDatabaseMissing('audit_logs', ['field' => 'login_code_hash']);
-        $this->assertDatabaseMissing('audit_logs', ['field' => 'security_stamp']);
+        $this->assertDatabaseMissing('audit_logs', ['field_name' => 'login_code_hash']);
+        $this->assertDatabaseMissing('audit_logs', ['field_name' => 'security_stamp']);
         $this->assertArrayNotHasKey('login_code_hash', $u->fresh()->toArray());
         $this->assertArrayNotHasKey('security_stamp', $u->fresh()->toArray());
     }

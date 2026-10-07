@@ -37,7 +37,7 @@ class DepartmentController extends Controller
             'departments' => $departments,
             'filters' => $request->only('search'),
             // Селект «Руководитель» — только сотрудники этой фирмы.
-            'users' => \App\Models\User::where('is_active', true)
+            'users' => \App\Models\User::working()
                 ->when($companyId, fn ($q) => $q->whereHas('companies', fn ($c) => $c->where('companies.id', $companyId)))
                 ->orderBy('name')->get(['id', 'name', 'department_id']),
             'companies' => Company::where('is_active', true)->orderBy('id')->get(['id', 'name']),

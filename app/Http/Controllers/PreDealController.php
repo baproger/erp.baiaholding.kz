@@ -146,7 +146,7 @@ class PreDealController extends Controller
             'taxPercent' => (float) \App\Models\Setting::get('tax_percent', 3),
             'leadership' => $lead,
             'stats' => $stats,
-            'managers' => $lead ? User::role('manager')->where('is_active', true)->ofCompany($companyId)->orderBy('name')->get(['id', 'name']) : [],
+            'managers' => $lead ? User::working()->role('manager')->ofCompany($companyId)->orderBy('name')->get(['id', 'name']) : [],
             'filters' => $request->only('manager', 'status', 'month', 'day', 'action'),
             'actionLabels' => PreDeal::ACTION_LABELS,
         ]);

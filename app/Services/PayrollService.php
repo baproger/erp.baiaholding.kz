@@ -363,13 +363,17 @@ class PayrollService
         // В ведомость попадают и сотрудники без сделок, но с окладом (цех, офис).
         // Страница ЗП показывает ВСЕХ активных сотрудников — финансист вводит
         // оклад/аванс/корректировку любому, даже без сделок и оклада.
+        // Уволенные (07.10.2026) — тоже: ведомость сама решает по месяцу, виден ли
+        // он (месяц увольнения и раньше, либо есть цифры в месяце).
         $salaryUids = $includeAllActive
-            ? User::where('is_active', true)->pluck('id')
-            : User::where('is_active', true)->where('salary', '>', 0)->pluck('id');
+            ? User::where(fn ($w) => $w->where('is_active', true)->orWhere('status', User::STATUS_FIRED))->pluck('id')
+            : User::working()->where('salary', '>', 0)->pluck('id');
         $uids = $perDeal->keys()->merge($totalByUser->keys())->merge($salaryUids)->unique()->filter()->values();
 
-        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'salary'])->keyBy('id');
+        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'salary', 'status', 'fired_at'])->keyBy('id');
         // Drop orphaned responsible ids (deleted users) so only real employees show.
+        // Уволенный НЕ отбрасывается: его бонусы — история, прибыль прошлых
+        // периодов не должна расти задним числом (07.10.2026).
         $uids = $uids->filter(fn ($id) => $people->has($id))->values();
 
         return $uids->map(function ($uid) use ($perDeal, $totalByUser, $people) {
@@ -382,10 +386,18 @@ class PayrollService
             $bonus = round((float) $rows->sum('bonus'), 2);
             $company = round($remainder - $bonus, 2);
             $margin = $budget > 0 ? round($company / $budget * 100, 1) : 0.0;
+            // Уволенный: оклада сейчас нет (в своде «оклады + бонусы» не плюсуется),
+            // исходный оклад — salary_raw: ведомость считает по нему месяц увольнения.
+            $fired = $people[$uid]->isFired();
+            $rawSalary = (float) ($people[$uid]->salary ?? 0);
+            $salary = $fired ? 0.0 : $rawSalary;
 
             return [
                 'uid' => (int) $uid,
                 'user' => $people[$uid]->name ?? '—',
+                'status' => $people[$uid]->status ?: User::STATUS_WORKING,
+                'fired_at' => $people[$uid]->fired_at?->toDateString(),
+                'salary_raw' => $rawSalary,
                 'avatar' => $people[$uid]->avatar ?? null,
                 'deals' => (int) ($totalByUser[$uid] ?? 0),
                 'closed' => count($rows),
@@ -396,8 +408,8 @@ class PayrollService
                 'remainder' => $remainder,
                 'bonus' => $bonus,
                 // ЗП сотрудника = оклад (из карточки сотрудника) + бонус по марже.
-                'salary' => (float) ($people[$uid]->salary ?? 0),
-                'payout' => round((float) ($people[$uid]->salary ?? 0) + $bonus, 2),
+                'salary' => $salary,
+                'payout' => round($salary + $bonus, 2),
                 'company' => $company,
                 'net' => $company,
                 'margin' => $margin,

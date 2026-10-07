@@ -14,7 +14,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'department_id', 'workshops', 'phone', 'birth_date', 'hired_at', 'salary', 'contract_path', 'avatar', 'language', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'department_id', 'workshops', 'phone', 'birth_date', 'hired_at', 'salary', 'contract_path', 'avatar', 'language', 'is_active', 'status', 'fired_at', 'fired_note'])]
 // salary/contract_path скрыты по умолчанию: не утекут при случайной
 // сериализации сырой модели User во фронт. Админ-список читает их явно
 // ($u->salary) — на прямой доступ $hidden не влияет.
@@ -47,6 +47,47 @@ class User extends Authenticatable
         return $names->contains('admin');
     }
 
+    /** Работает (по умолчанию) / Уволен — правило владельца от 07.10.2026. */
+    public const STATUS_WORKING = 'working';
+
+    public const STATUS_FIRED = 'fired';
+
+    public function isFired(): bool
+    {
+        return $this->status === self::STATUS_FIRED;
+    }
+
+    /**
+     * Кому можно назначать дела и слать уведомления: работает и не отключён.
+     * Уволенные остаются в истории (сделки, ЗП, аудит), но сюда не попадают.
+     */
+    public function scopeWorking($query)
+    {
+        return $query->where('is_active', true)
+            ->where(fn ($w) => $w->where('status', self::STATUS_WORKING)->orWhereNull('status'));
+    }
+
+    public function scopeFired($query)
+    {
+        return $query->where('status', self::STATUS_FIRED);
+    }
+
+    /**
+     * Фильтры «по сотруднику» в отчётах: работающие + уволенные (их цифры —
+     * в прошлых периодах), уволенные — в конце списка.
+     */
+    public function scopeForReportFilter($query)
+    {
+        return $query->where(fn ($w) => $w->where('is_active', true)->orWhere('status', self::STATUS_FIRED))
+            ->orderByRaw("CASE WHEN status = 'fired' THEN 1 ELSE 0 END")->orderBy('name');
+    }
+
+    /** Имя для списков отчётов: «Иванов (уволен)». */
+    public function labelName(): string
+    {
+        return $this->isFired() ? $this->name.' (уволен)' : $this->name;
+    }
+
     /** Настоящий супер-админ (владелец системы), а не CEO. */
     public function isSuperAdmin(): bool
     {
@@ -68,6 +109,7 @@ class User extends Authenticatable
             'salary' => 'decimal:2',
             'birth_date' => 'date',
             'hired_at' => 'date',
+            'fired_at' => 'date',
             'workshops' => 'array',
         ];
     }
@@ -78,6 +120,22 @@ class User extends Authenticatable
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /** Сделки, где сотрудник ответственный (счётчик открытых дел при увольнении). */
+    public function responsibleDeals(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Deal::class, 'responsible_user_id');
+    }
+
+    public function responsibleProjects(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Project::class, 'responsible_user_id');
+    }
+
+    public function assignedTasks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Task::class, 'assignee_id');
     }
 
     /**

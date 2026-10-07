@@ -64,7 +64,7 @@ const saveEdit = () => editForm.put(route('tasks.update', editing.value.id), { p
             <div class="min-w-0">
                 <div class="truncate font-medium" :class="t.status === 'done' ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'" :title="t.title">{{ t.title }}</div>
                 <div class="truncate text-[11px] text-slate-400">
-                    {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.due_date" :class="t.status === 'done' ? '' : deadlineClass(t.due_date, false)"> · {{ t.status !== 'done' && isPastDue(t.due_date, false) ? 'просрочено ' : '' }}{{ formatDateTime(t.due_date) }}</span>
+                    {{ t.assignee?.name ?? 'Без исполнителя' }}<span v-if="t.assignee?.status === 'fired'" class="ml-1 rounded bg-slate-200 px-1 text-[10px] font-medium text-slate-600">уволен</span><span v-if="t.due_date" :class="t.status === 'done' ? '' : deadlineClass(t.due_date, false)"> · {{ t.status !== 'done' && isPastDue(t.due_date, false) ? 'просрочено ' : '' }}{{ formatDateTime(t.due_date) }}</span>
                 </div>
             </div>
             <div class="flex flex-shrink-0 items-center gap-1.5">

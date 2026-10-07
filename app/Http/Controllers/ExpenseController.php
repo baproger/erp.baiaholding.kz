@@ -59,7 +59,7 @@ class ExpenseController extends Controller
 
         $limit = (float) $deal->budget * 0.6;
         if ($spent > $limit && ($spent - $addedAmount) <= $limit) {
-\Illuminate\Support\Facades\Notification::send(User::where('is_active', true)->role('financist')->get(),
+\Illuminate\Support\Facades\Notification::send(User::working()->role('financist')->get(),
                 new \App\Notifications\ExpenseThresholdExceeded($deal, $spent));
         }
     }
@@ -231,7 +231,7 @@ class ExpenseController extends Controller
         // Металл подтверждает и завсклад — значит задача и уведомление идут
         // ему тоже (правило от 22.09.2026).
         $roles = $expense->type === 'metal' ? ['financist', 'supplier'] : ['financist'];
-        $financists = User::where('is_active', true)->role($roles)->get();
+        $financists = User::working()->role($roles)->get();
         foreach ($financists as $fin) {
             if ($entity && method_exists($entity, 'tasks')) {
                 $entity->tasks()->create([
@@ -367,7 +367,7 @@ class ExpenseController extends Controller
 
         // Остальным бухгалтерам — «расход уже подтверждён (Имя)», чтобы не
         // подтверждали повторно. Кроме того, кто подтвердил, и автора.
-        \Illuminate\Support\Facades\Notification::send(User::where('is_active', true)->role('financist')
+        \Illuminate\Support\Facades\Notification::send(User::working()->role('financist')
             ->where('id', '!=', $request->user()->id)
             ->where('id', '!=', $expense->responsible_user_id)
             ->get(), new \App\Notifications\ExpenseHandled($expense, $request->user()));
@@ -382,7 +382,7 @@ class ExpenseController extends Controller
         if (! $expense || ! $expense->material_id) {
             return;
         }
-        \Illuminate\Support\Facades\Notification::send(User::where('is_active', true)->role('supplier')->get(), new \App\Notifications\MaterialWrittenOff($expense));
+        \Illuminate\Support\Facades\Notification::send(User::working()->role('supplier')->get(), new \App\Notifications\MaterialWrittenOff($expense));
     }
 
     public function update(ExpenseRequest $request, Expense $expense): RedirectResponse

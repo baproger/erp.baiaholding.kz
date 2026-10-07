@@ -92,7 +92,7 @@ const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(
                             <!-- Ответственный — сразу видно, кто ведёт заказ -->
                             <div v-if="p.responsible" class="mt-1.5 flex items-center gap-1.5">
                                 <Avatar :name="p.responsible.name" :src="p.responsible.avatar" :size="18" />
-                                <span class="truncate text-[11px] font-medium text-slate-600">{{ p.responsible.name }}</span>
+                                <span class="truncate text-[11px] font-medium text-slate-600">{{ p.responsible.name }}</span><span v-if="p.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span>
                             </div>
                             <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-slate-400">
                                 <span title="Сколько заказ находится в цехе">⏱ в цехе <span class="font-medium text-slate-600">{{ inWorkshop(p) ?? '—' }}</span></span>
@@ -128,7 +128,7 @@ const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(
                                 <td class="whitespace-nowrap px-4 py-2.5">
                                     <span v-if="p.responsible" class="flex items-center gap-1.5">
                                         <Avatar :name="p.responsible.name" :src="p.responsible.avatar" :size="20" />
-                                        <span class="text-xs font-medium text-slate-600">{{ p.responsible.name }}</span>
+                                        <span class="text-xs font-medium text-slate-600">{{ p.responsible.name }}</span><span v-if="p.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span>
                                     </span>
                                     <span v-else class="text-xs text-slate-300">—</span>
                                 </td>

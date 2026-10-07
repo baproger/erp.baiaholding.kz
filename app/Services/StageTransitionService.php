@@ -205,7 +205,7 @@ class StageTransitionService
             return; // задача уже висит — не дублируем
         }
 
-        $assignees = User::where('is_active', true)->role($stage->gate_task_role ?: 'financist')->get();
+        $assignees = User::working()->role($stage->gate_task_role ?: 'financist')->get();
         foreach ($assignees as $assignee) {
             $task = $deal->tasks()->create([
                 'title' => $title,

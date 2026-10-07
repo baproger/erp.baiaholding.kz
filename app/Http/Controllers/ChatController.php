@@ -111,7 +111,7 @@ class ChatController extends Controller
 
         return Inertia::render('Chat/Index', [
             'chats' => $chats,
-            'users' => User::where('is_active', true)->where('id', '!=', $user->id)->orderBy('name')
+            'users' => User::working()->where('id', '!=', $user->id)->orderBy('name')
                 ->with('companies:companies.id')->get(['id', 'name', 'avatar'])
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'avatar' => $u->avatar, 'company_ids' => $u->companies->pluck('id')]),
             'companies' => \App\Models\Company::where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -257,7 +257,7 @@ class ChatController extends Controller
             ->reject(fn ($id) => $id === $request->user()->id)->unique();
         if ($mentionIds->isNotEmpty()) {
             $participantIds = $chat->type === 'global'
-                ? User::where('is_active', true)->pluck('id')
+                ? User::working()->pluck('id')
                 : $chat->participants()->pluck('users.id');
             \Illuminate\Support\Facades\Notification::send(User::whereIn('id', $mentionIds->intersect($participantIds))->get(),
                 new \App\Notifications\ChatMention($chat, $request->user(), $msg));
@@ -267,7 +267,7 @@ class ChatController extends Controller
         // свёрнутом браузере/закрытой вкладке. Шлём ПОСЛЕ ответа (terminating),
         // чтобы не задерживать отправку сообщения.
         $recipientIds = ($chat->type === 'global'
-            ? User::where('is_active', true)->pluck('id')
+            ? User::working()->pluck('id')
             : $chat->participants()->pluck('users.id'))
             ->reject(fn ($id) => (int) $id === $request->user()->id)->values()->all();
         if ($recipientIds !== []) {

@@ -22,7 +22,7 @@ class NotifyBirthdays extends Command
         $today = now()->format('m-d');
         $soon = now()->addDays(3)->format('m-d');
 
-        $people = User::where('is_active', true)
+        $people = User::working()
             ->whereNotNull('birth_date')
             ->with('department:id,name,head_user_id')
             ->get()
@@ -34,7 +34,7 @@ class NotifyBirthdays extends Command
             return self::SUCCESS;
         }
 
-        $leadership = User::where('is_active', true)
+        $leadership = User::working()
             ->role(['admin', 'director', 'financist'])->get();
 
         $sent = 0;
@@ -43,7 +43,7 @@ class NotifyBirthdays extends Command
             $recipients = $leadership->keyBy('id');
             // Руководитель отдела именинника — тоже в курсе.
             if (($headId = $person->department?->head_user_id) && $headId !== $person->id) {
-                $head = User::where('is_active', true)->find($headId);
+                $head = User::working()->find($headId);
                 if ($head) {
                     $recipients->put($head->id, $head);
                 }

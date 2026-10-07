@@ -279,6 +279,8 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Ответственный</div>
                             <select :value="deal.responsible_user_id ?? ''" @change="setResponsible" class="mt-1 w-full rounded-lg border-slate-200 py-1.5 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                                 <option value="">— не назначен —</option>
+                                <!-- Уволенный ответственный (07.10.2026): виден, но выбрать заново нельзя -->
+                                <option v-if="deal.responsible?.status === 'fired'" :value="deal.responsible.id" disabled>{{ deal.responsible.name }} (уволен)</option>
                                 <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
                             </select>
                         </div>

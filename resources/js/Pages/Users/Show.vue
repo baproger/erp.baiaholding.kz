@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
 import { useStickyFilters } from '@/composables/useStickyFilters';
+import { confirmDialog } from '@/composables/useConfirm';
 
 const props = defineProps({
     person: Object,
@@ -18,6 +19,15 @@ const props = defineProps({
     debtPlan: { type: Object, default: null },
     can: { type: Object, default: () => ({ manage: false }) },
 });
+
+// Уволенный (07.10.2026): профиль и вся история доступны, сверху — плашка.
+const isFired = computed(() => props.person.status === 'fired');
+const firedLabel = computed(() => (props.person.fired_at ? props.person.fired_at.split('-').reverse().join('.') : ''));
+const restoreUser = async () => {
+    if (await confirmDialog({ title: 'Восстановить сотрудника', message: `«${props.person.name}» снова сможет войти в систему и получать дела.`, confirmText: 'Восстановить' })) {
+        router.patch(route('users.restore', props.person.id), {}, { preserveScroll: true });
+    }
+};
 
 // Месяц денежных блоков (корректировки + долг) — как на стр. Зарплата.
 const monthSel = ref(props.month);
@@ -72,6 +82,14 @@ const stats = computed(() => ({
         </template>
 
         <PageLayout :title="person.name" :subtitle="roleLabels[person.role] ?? person.role ?? '—'">
+            <!-- Уволен: история сохранена, вход закрыт -->
+            <div v-if="isFired" class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-300 bg-slate-100 px-5 py-3">
+                <span class="text-sm font-semibold text-slate-700">Уволен {{ firedLabel }}</span>
+                <span v-if="person.fired_note" class="text-sm text-slate-500">· {{ person.fired_note }}</span>
+                <span class="text-xs text-slate-400">— вход закрыт, сделки, ЗП и бонусы сохранены в истории</span>
+                <button v-if="can.restore" type="button" @click="restoreUser"
+                    class="ml-auto rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">Восстановить</button>
+            </div>
             <!-- Шапка профиля — секция §6 -->
             <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div class="flex flex-wrap items-start gap-4">

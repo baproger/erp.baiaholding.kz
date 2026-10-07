@@ -59,7 +59,7 @@ class ProjectController extends Controller
             // Цех тоже разделён по фирмам: заказ принадлежит компании исходной сделки.
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->whereHas('deal', fn ($d) => $d->where('company_id', $c)))
             // Цеху на карточке нужны срок, описание, заметка и адрес (город) из сделки.
-            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order', 'deal:id,number,company_name,client_name,address,deadline,description,note'])
+            ->with(['client:id,name', 'responsible:id,name,avatar,status', 'stage:id,name,color,order', 'deal:id,number,company_name,client_name,address,deadline,description,note'])
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             // Тайминг: когда заказ вошёл на текущий этап (открытый лог).
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
@@ -122,11 +122,11 @@ class ProjectController extends Controller
         $this->assertWorkshopAccess($project);
 
         $project->load([
-            'client', 'responsible:id,name,avatar', 'department:id,name',
+            'client', 'responsible:id,name,avatar,status', 'department:id,name',
             // company_id ОБЯЗАТЕЛЕН в select: по нему фильтруется воронка цеха
             // ниже — без него грузились обе фирмы (Кесу+Кесу в степпере).
             'stage', 'deal:id,number,name,company_name,company_id',
-            'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
+            'tasks' => fn ($q) => $q->with('assignee:id,name,status')->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
@@ -173,7 +173,7 @@ class ProjectController extends Controller
 
         return Inertia::render('Projects/Show', [
             'project' => $project,
-            'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get(['id', 'name']),
+            'users' => User::working()->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get(['id', 'name']),
             // Остатки касса/банк — бухгалтеру в форме расхода («доступно N»).
             'balances' => $request->user()->hasAnyRole(['admin', 'financist'])
                 ? $finance->companyBalances($project->deal?->company_id ? (int) $project->deal->company_id : null)

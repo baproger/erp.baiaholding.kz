@@ -26,6 +26,13 @@ class UserController extends Controller
         // поиск и фильтры — мгновенные на клиенте.
         $users = User::query()->ofCompany($companyId)
             ->with(['department:id,name,code,company_id', 'roles:id,name', 'companies:companies.id,name'])
+            // Открытые дела — для модалки «Уволить → передать дела» (одним запросом).
+            ->withCount([
+                'responsibleDeals as open_deals' => fn ($q) => $q->whereNotIn('status', ['closed', 'cancelled'])
+                    ->whereNotIn('deal_stage_id', \App\Models\DealStage::where('is_won', true)->select('id')),
+                'responsibleProjects as open_projects' => fn ($q) => $q->where('status', 'active'),
+                'assignedTasks as open_tasks' => fn ($q) => $q->where('status', '!=', 'done'),
+            ])
             ->orderBy('name')
             ->get()
             ->map(fn ($u) => [
@@ -37,6 +44,13 @@ class UserController extends Controller
                 'birth_date' => $u->birth_date?->toDateString(),
                 'hired_at' => $u->hired_at?->toDateString(),
                 'is_active' => $u->is_active,
+                // Работает / Уволен (07.10.2026): уволенный остаётся в списке на своей вкладке.
+                'status' => $u->status ?: User::STATUS_WORKING,
+                'fired_at' => $u->fired_at?->toDateString(),
+                'fired_note' => $u->fired_note,
+                'open_deals' => (int) $u->open_deals,
+                'open_projects' => (int) $u->open_projects,
+                'open_tasks' => (int) $u->open_tasks,
                 'department' => $u->department,
                 'department_id' => $u->department_id,
                 // Отделы свои у каждой фирмы; code — общий ключ одноимённых
@@ -67,6 +81,9 @@ class UserController extends Controller
                 'manage' => $request->user()->can('create', User::class),
                 // Код входа / сброс устройств — только админ.
                 'security' => $request->user()->hasRole('admin'),
+                // Уволить — у кого есть право удаления сотрудника; вернуть — только админ.
+                'fire' => $request->user()->can('delete', new User),
+                'restore' => $request->user()->hasRole('admin'),
             ],
             // Цеха холдинга (у BAIA два) — чекбоксы доступа в форме сотрудника.
             'workshopOptions' => \App\Models\Company::where('is_active', true)->pluck('id')
@@ -179,6 +196,9 @@ class UserController extends Controller
                 'birth_date' => $user->birth_date?->toDateString(),
                 'hired_at' => $user->hired_at?->toDateString(),
                 'is_active' => $user->is_active,
+                'status' => $user->status ?: User::STATUS_WORKING,
+                'fired_at' => $user->fired_at?->toDateString(),
+                'fired_note' => $user->fired_note,
                 'department' => $user->department?->name,
                 'head_of' => $headOf,
                 'role' => $user->roles->first()?->name,
@@ -204,7 +224,7 @@ class UserController extends Controller
                 'note' => $d->note,
             ])->values(),
             'debtPlan' => $debtPlan,
-            'can' => ['manage' => $viewer->can('update', $user)],
+            'can' => ['manage' => $viewer->can('update', $user), 'restore' => $viewer->hasRole('admin')],
         ]);
     }
 
@@ -411,22 +431,52 @@ class UserController extends Controller
         return User::where('is_active', true)->role('admin')->count();
     }
 
-    public function destroy(Request $request, User $user): RedirectResponse
+    /**
+     * «Уволить» (правило владельца от 07.10.2026). Сотрудник НЕ удаляется:
+     * статус fired + дата; вход закрыт, сессии/устройства сброшены, вся
+     * история остаётся. Передача открытых дел преемнику — по желанию.
+     */
+    public function destroy(Request $request, User $user, \App\Services\EmployeeStatusService $staff): RedirectResponse
     {
         $this->authorize('delete', $user);
-        // Аккаунт администратора не удаляется через систему НИКЕМ — даже
+        // Аккаунт администратора не увольняется через систему НИКЕМ — даже
         // другим админом (24.08.2026 на проде удалили админа). Чтобы убрать
         // админа, сначала смените ему роль — смена роли пишется в аудит.
         if ($user->hasRole('admin')) {
-            abort(403, 'Аккаунт администратора удалить нельзя. Сначала смените ему роль.');
+            abort(403, 'Аккаунт администратора уволить нельзя. Сначала смените ему роль.');
         }
 
-        // Soft-delete + deactivate rather than hard removal.
-        $user->update(['is_active' => false]);
-        \App\Support\LoginSecurity::revokeAccess($user, $request);
-        $user->delete();
+        $data = $request->validate([
+            'fired_at' => ['nullable', 'date'],
+            'fired_note' => ['nullable', 'string', 'max:255'],
+            'successor_user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+        $successor = null;
+        if (! empty($data['successor_user_id'])) {
+            $successor = User::working()->whereKey($data['successor_user_id'])->first();
+            if (! $successor || $successor->id === $user->id) {
+                return back()->withErrors(['successor_user_id' => 'Передать дела можно только работающему сотруднику (не самому увольняемому).']);
+            }
+        }
+        $firedAt = ! empty($data['fired_at']) ? \Illuminate\Support\Carbon::parse($data['fired_at']) : now();
 
-        return back()->with('success', 'Сотрудник деактивирован.');
+        $moved = $staff->fire($user, $firedAt, $data['fired_note'] ?? null, $successor, $request);
+
+        $message = "Сотрудник «{$user->name}» уволен с ".$firedAt->format('d.m.Y').'.';
+        if ($successor) {
+            $message .= " Передано: {$moved['deals']} сделок, {$moved['projects']} заказов, {$moved['tasks']} задач → {$successor->name}.";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /** «Восстановить» уволенного (вернулся на работу) — только админ. */
+    public function restore(Request $request, User $user, \App\Services\EmployeeStatusService $staff): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin'), 403, 'Восстанавливает только администратор.');
+        $staff->restore($user);
+
+        return back()->with('success', "Сотрудник «{$user->name}» снова работает.");
     }
 
     /**

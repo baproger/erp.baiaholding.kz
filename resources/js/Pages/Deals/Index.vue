@@ -266,7 +266,7 @@ const applyBinMatch = () => {
                                         <img v-if="deal.responsible?.avatar" :src="deal.responsible.avatar" class="h-full w-full object-cover" />
                                         <template v-else>{{ deal.responsible?.name?.charAt(0) ?? '—' }}</template>
                                     </span>
-                                    <span class="truncate text-[11px] text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span>
+                                    <span class="truncate text-[11px] text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span><span v-if="deal.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span>
                                 </span>
                                 <span v-if="deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsfDeal(deal)) || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</span>
                             </div>
@@ -322,7 +322,7 @@ const applyBinMatch = () => {
                         <td class="px-4 py-2.5"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
                         <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(deal.budget) }}</td>
                         <td class="px-4 py-2.5" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsfDeal(deal))">{{ formatDate(deal.deadline) }}</td>
-                        <td class="px-4 py-2.5 text-slate-500">{{ deal.responsible?.name ?? '—' }}</td>
+                        <td class="px-4 py-2.5 text-slate-500">{{ deal.responsible?.name ?? '—' }}<span v-if="deal.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span></td>
                     </tr>
                 </tbody>
             </table>

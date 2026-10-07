@@ -106,7 +106,7 @@ const sendToAct = () => router.post(route('projects.toAct', props.project.id), {
                         <div class="p-6">
                         <div v-if="tab==='info'" class="space-y-3 text-sm">
                             <div class="flex justify-between border-b border-slate-100 py-2"><span class="text-slate-500">Клиент</span><span class="font-medium text-slate-800">{{ project.client?.name ?? '—' }}</span></div>
-                            <div class="flex justify-between border-b border-slate-100 py-2"><span class="text-slate-500">Ответственный</span><span class="font-medium text-slate-800">{{ project.responsible?.name ?? '—' }}</span></div>
+                            <div class="flex justify-between border-b border-slate-100 py-2"><span class="text-slate-500">Ответственный</span><span class="font-medium text-slate-800">{{ project.responsible?.name ?? '—' }}<span v-if="project.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span></span></div>
                             <div v-if="project.deal && canSeeMoney" class="flex justify-between border-b border-slate-100 py-2">
                                 <span class="text-slate-500">Из сделки</span>
                                 <Link :href="route('deals.show', project.deal.id)" class="font-medium text-indigo-600 hover:underline">{{ project.deal.number }}</Link>

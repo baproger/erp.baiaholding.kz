@@ -72,16 +72,22 @@ const search = ref('');
 // отдельным отделом, но чип на них один. '' = «Без отдела».
 const deptFilter = ref('all');
 const companyFilter = ref('all'); // 'all' | id компании
-const showInactive = ref(false);
-// Фильтр страницы запоминается: ушёл и вернулся — те же фирма/отдел/поиск.
-useStickyFilters('users', { search, deptFilter, companyFilter, showInactive });
+// Вкладки «Работают / Уволенные» (правило владельца от 07.10.2026): уволенный
+// не удаляется — его сделки, ЗП и бонусы остаются в истории.
+const staffTab = ref('working'); // 'working' | 'fired'
+// Фильтр страницы запоминается: ушёл и вернулся — те же фирма/отдел/поиск/вкладка.
+useStickyFilters('users', { search, deptFilter, companyFilter, staffTab });
 
-const inactiveCount = computed(() => props.users.filter((u) => !u.is_active).length);
+const statusOf = (u) => u.status || 'working';
+const inTab = (u) => statusOf(u) === staffTab.value;
+const workingCount = computed(() => props.users.filter((u) => statusOf(u) === 'working').length);
+const firedCount = computed(() => props.users.filter((u) => statusOf(u) === 'fired').length);
+const inactiveCount = computed(() => props.users.filter((u) => statusOf(u) === 'working' && !u.is_active).length);
 
 const visibleUsers = computed(() => {
     const q = search.value.trim().toLowerCase();
     return props.users.filter((u) => {
-        if (!showInactive.value && !u.is_active) return false;
+        if (!inTab(u)) return false;
         if (deptFilter.value !== 'all' && (u.department_code ?? '') !== deptFilter.value) return false;
         if (!q) return true;
         return [u.name, u.email, u.phone, u.department?.name, roleLabels[u.role]]
@@ -103,9 +109,9 @@ const departmentsByCompany = computed(() => {
     return map;
 });
 
-// Чипы отделов с количеством (учитывают переключатель «отключённые», но не поиск).
+// Чипы отделов с количеством (учитывают вкладку «работают/уволенные», но не поиск).
 const deptChips = computed(() => {
-    const pool = props.users.filter((u) => showInactive.value || u.is_active);
+    const pool = props.users.filter(inTab);
     const counts = {};
     pool.forEach((u) => { const k = u.department_code ?? ''; counts[k] = (counts[k] ?? 0) + 1; });
     // Одноимённые отделы разных фирм схлопываются в один чип (общий code).
@@ -162,7 +168,7 @@ const companySections = computed(() => {
 
 const stats = computed(() => ({
     total: props.users.length,
-    active: props.users.length - inactiveCount.value,
+    active: workingCount.value - inactiveCount.value,
     // Отделы считаем по коду: «Отдел продаж» BAIA+ASU — один отдел холдинга.
     departments: new Set(props.users.filter((u) => u.is_active && u.department_code).map((u) => u.department_code)).size,
 }));
@@ -232,11 +238,24 @@ const revokeDevices = async (u) => {
 };
 const copyCode = async () => { try { await navigator.clipboard.writeText(issuedCode.value.code); } catch {} };
 const fmtExpires = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const deactivate = async (u) => {
-    if (await confirmDialog({ title: 'Деактивировать сотрудника', message: `Сотрудник «${u.name}» потеряет доступ к системе.`, confirmText: 'Деактивировать', danger: true })) {
-        router.delete(route('users.destroy', u.id), { preserveScroll: true });
+// «Уволить» (07.10.2026): вход закрывается, история остаётся; открытые дела
+// можно передать преемнику (по желанию).
+const today = () => new Date().toISOString().slice(0, 10);
+const firing = ref(null);
+const fireForm = useForm({ fired_at: today(), fired_note: '', successor_user_id: '' });
+const openFire = (u) => { fireForm.reset(); fireForm.clearErrors(); fireForm.fired_at = today(); firing.value = u; };
+const successors = computed(() => firing.value
+    ? props.users.filter((x) => statusOf(x) === 'working' && x.is_active && x.id !== firing.value.id)
+    : []);
+const openTotal = computed(() => firing.value ? (firing.value.open_deals + firing.value.open_projects + firing.value.open_tasks) : 0);
+const submitFire = () => fireForm.transform((d) => ({ ...d, successor_user_id: d.successor_user_id || null }))
+    .delete(route('users.destroy', firing.value.id), { preserveScroll: true, onSuccess: () => (firing.value = null) });
+const restoreUser = async (u) => {
+    if (await confirmDialog({ title: 'Восстановить сотрудника', message: `«${u.name}» снова сможет войти в систему и получать дела.`, confirmText: 'Восстановить' })) {
+        router.patch(route('users.restore', u.id), {}, { preserveScroll: true });
     }
 };
+const fmtDate = (d) => (d ? d.split('-').reverse().join('.') : '');
 </script>
 
 <template>
@@ -298,10 +317,20 @@ const deactivate = async (u) => {
                     :class="deptFilter === c.code ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
                     {{ c.name }} <span class="tabular-nums" :class="deptFilter === c.code ? 'text-indigo-400' : 'text-slate-400'">{{ c.count }}</span>
                 </button>
-                <label v-if="inactiveCount" class="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
-                    <input type="checkbox" v-model="showInactive" class="rounded border-slate-300 text-indigo-600" />
-                    Отключённые ({{ inactiveCount }})
-                </label>
+            </div>
+
+            <!-- Работают / Уволенные (07.10.2026) — чипы-фильтры §10 -->
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" @click="staffTab = 'working'; deptFilter = 'all'"
+                    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                    :class="staffTab === 'working' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                    Работают <span class="tabular-nums opacity-70">{{ workingCount }}</span>
+                </button>
+                <button type="button" @click="staffTab = 'fired'; deptFilter = 'all'"
+                    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                    :class="staffTab === 'fired' ? 'border-slate-500 bg-slate-100 text-slate-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                    Уволенные <span class="tabular-nums opacity-70">{{ firedCount }}</span>
+                </button>
             </div>
 
             <!-- Секции §6: компания → отделы -->
@@ -320,7 +349,7 @@ const deactivate = async (u) => {
                          и одна строка на человека читается быстрее сетки плиток. -->
                     <div v-for="u in g.users" :key="u.id"
                         class="group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-2.5 transition-colors duration-150 last:border-b-0 hover:bg-slate-50/60 sm:px-6"
-                        :class="{ 'opacity-50': !u.is_active }"
+                        :class="{ 'opacity-50': !u.is_active || statusOf(u) === 'fired' }"
                         @click="router.visit(route('users.show', u.id))">
                         <Avatar :name="u.name" :src="u.avatar" :size="34" class="shrink-0" />
 
@@ -331,7 +360,8 @@ const deactivate = async (u) => {
                                 <span class="truncate text-sm font-medium text-slate-900" :title="tenure(u) ? 'В компании ' + tenure(u) : ''">{{ u.name }}</span>
                                 <span v-if="daysToBirthday(u) === 0" class="shrink-0 text-pink-500" title="День рождения сегодня">🎂</span>
                                 <span v-else-if="daysToBirthday(u) !== null && daysToBirthday(u) <= 7" class="shrink-0 text-pink-400" :title="'День рождения через ' + daysToBirthday(u) + ' дн.'">🎂</span>
-                                <span v-if="!u.is_active" class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Отключён</span>
+                                <span v-if="statusOf(u) === 'fired'" class="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600" :title="u.fired_note || ''">Уволен {{ fmtDate(u.fired_at) }}</span>
+                                <span v-else-if="!u.is_active" class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Отключён</span>
                             </div>
                             <!-- Контакты и цеха — второй строкой, приглушённо -->
                             <div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400">
@@ -363,8 +393,11 @@ const deactivate = async (u) => {
                             <button v-if="can.security && u.is_active" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Сбросить устройства (выход везде, снова нужен код)" @click.stop="revokeDevices(u)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M3 3l18 18"/></svg>
                             </button>
-                            <button v-if="u.is_active" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Отключить" @click.stop="deactivate(u)">
-                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
+                            <button v-if="can.fire && statusOf(u) === 'working'" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Уволить (история и ЗП сохраняются)" @click.stop="openFire(u)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/></svg>
+                            </button>
+                            <button v-if="can.restore && statusOf(u) === 'fired'" class="rounded p-1 text-slate-300 transition-colors hover:text-emerald-600" title="Восстановить (вернулся на работу)" @click.stop="restoreUser(u)">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
                             </button>
                         </div>
                     </div>
@@ -465,6 +498,44 @@ const deactivate = async (u) => {
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="show = false">Отмена</SecondaryButton>
                     <PrimaryButton :disabled="form.processing" @click="submit">Сохранить</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Уволить (07.10.2026): история остаётся, дела — преемнику по желанию -->
+        <Modal :show="!!firing" max-width="md" @close="firing = null">
+            <div v-if="firing" class="p-6">
+                <h2 class="text-lg font-semibold text-slate-900">Уволить сотрудника</h2>
+                <p class="mt-1 text-sm text-slate-500"><b class="text-slate-700">{{ firing.name }}</b> потеряет доступ к системе. Его сделки, заказы, ЗП и бонусы останутся в истории и отчётах.</p>
+                <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <InputLabel value="Дата увольнения *" />
+                        <TextInput v-model="fireForm.fired_at" type="date" class="mt-1 w-full" />
+                        <InputError :message="fireForm.errors.fired_at" class="mt-1" />
+                    </div>
+                    <div>
+                        <InputLabel value="Причина" />
+                        <TextInput v-model="fireForm.fired_note" maxlength="255" class="mt-1 w-full" placeholder="необязательно" />
+                        <InputError :message="fireForm.errors.fired_note" class="mt-1" />
+                    </div>
+                </div>
+                <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="text-xs font-semibold text-slate-600">Передать дела</div>
+                    <div class="mt-1 text-xs text-slate-500">
+                        Открытых сделок: <b class="tabular-nums text-slate-700">{{ firing.open_deals }}</b> ·
+                        заказов: <b class="tabular-nums text-slate-700">{{ firing.open_projects }}</b> ·
+                        задач: <b class="tabular-nums text-slate-700">{{ firing.open_tasks }}</b>
+                    </div>
+                    <select v-model="fireForm.successor_user_id" :disabled="!openTotal" class="mt-2 w-full rounded-md border-slate-300 text-sm shadow-sm disabled:opacity-50">
+                        <option value="">{{ openTotal ? '— не передавать —' : 'открытых дел нет' }}</option>
+                        <option v-for="x in successors" :key="x.id" :value="x.id">{{ x.name }}</option>
+                    </select>
+                    <InputError :message="fireForm.errors.successor_user_id" class="mt-1" />
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <SecondaryButton @click="firing = null">Отмена</SecondaryButton>
+                    <button type="button" :disabled="fireForm.processing || !fireForm.fired_at" @click="submitFire"
+                        class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50">Уволить</button>
                 </div>
             </div>
         </Modal>

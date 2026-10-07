@@ -131,7 +131,8 @@ class ReportController extends Controller
             // Менеджеры для фильтра — только те, у чьих лотов есть сделки.
             'managers' => \App\Models\User::whereIn('id', \App\Models\PreDeal::whereNotNull('deal_id')
                     ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->select('user_id'))
-                ->orderBy('name')->get(['id', 'name'])->toArray(),
+                ->orderByRaw("CASE WHEN status = 'fired' THEN 1 ELSE 0 END")->orderBy('name')->get(['id', 'name', 'status'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->labelName()])->values()->all(),
         ];
     }
 
@@ -382,13 +383,14 @@ class ReportController extends Controller
             'canPlanFact' => $user->hasAnyRole(['admin', 'director']),
             // Для фильтра: менеджеры отдельно, остальные — по отделам (сворачиваются).
             // МОПу выбирать не из кого — отчёт и так только по его сделкам.
-            'managers' => \App\Models\User::where('is_active', true)->ofCompany($companyId)
+            // Уволенные — в конце с пометкой: их сделки в прошлых периодах (07.10.2026).
+            'managers' => \App\Models\User::forReportFilter()->ofCompany($companyId)
                 ->when(! $isLeadership, fn ($q) => $q->whereKey($user->id))
                 ->with(['roles:id,name', 'department:id,name'])
-                ->orderBy('name')->get(['id', 'name', 'department_id'])
+                ->get(['id', 'name', 'department_id', 'status'])
                 ->map(fn ($u) => [
                     'id' => $u->id,
-                    'name' => $u->name,
+                    'name' => $u->labelName(),
                     'is_manager' => $u->roles->contains('name', 'manager'),
                     'department' => $u->department?->name,
                 ])->values(),

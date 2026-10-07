@@ -58,7 +58,7 @@ class DealController extends Controller
             ->addSelect(['stage_entered_at' => \App\Models\DealStageLog::select('entered_at')
                 ->whereColumn('deal_id', 'deals.id')->whereNull('left_at')
                 ->latest('entered_at')->limit(1)])
-            ->with(['client:id,name', 'responsible:id,name,avatar', 'stage:id,name,color,order'])
+            ->with(['client:id,name', 'responsible:id,name,avatar,status', 'stage:id,name,color,order'])
             ->withCount('tasks')
             ->withCount(['tasks as overdue_count' => fn ($q) => $q->where('status', '!=', 'done')->whereNotNull('due_date')->where('due_date', '<', now())])
             ->where('status', '!=', 'closed')
@@ -107,7 +107,7 @@ class DealController extends Controller
             'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to', 'kind'),
             'isLeadership' => $request->user()->hasAnyRole(['admin', 'director', 'financist']),
             // Роль/отдел — для фильтра: менеджеры сверху, остальные по отделам.
-            'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->with(['roles:id,name', 'department:id,name'])
+            'users' => User::working()->ofCompany(\App\Support\CurrentCompany::id() ?: null)->with(['roles:id,name', 'department:id,name'])
                 ->orderBy('name')->get(['id', 'name', 'department_id'])
                 ->map(fn ($u) => [
                     'id' => $u->id, 'name' => $u->name,
@@ -173,9 +173,9 @@ class DealController extends Controller
         $this->authorize('view', $deal);
 
         $deal->load([
-            'client', 'responsible:id,name,avatar', 'department:id,name',
+            'client', 'responsible:id,name,avatar,status', 'department:id,name',
             'stage', 'project:id,number,name,status',
-            'tasks' => fn ($q) => $q->with('assignee:id,name')->latest(),
+            'tasks' => fn ($q) => $q->with('assignee:id,name,status')->latest(),
             'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')
                 ->with('payments')->latest(),
             'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'material:id,name,unit'])->latest(),
@@ -294,7 +294,7 @@ class DealController extends Controller
             ],
             'chatId' => $dealChat->id,
             'workshops' => \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null),
-            'users' => User::where('is_active', true)->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get(['id', 'name']),
+            'users' => User::working()->ofCompany(\App\Support\CurrentCompany::id() ?: null)->orderBy('name')->get(['id', 'name']),
             'stages' => DealStage::with('translations')->where('is_active', true)
                 ->when($deal->company_id, fn ($q, $c) => $q->where(fn ($w) => $w->where('company_id', $c)->orWhereNull('company_id')))
                 ->orderBy('order')->get()

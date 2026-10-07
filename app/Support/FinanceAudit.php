@@ -18,7 +18,7 @@ class FinanceAudit
     public static function notifyDeleted(string $what, ?string $url = null): void
     {
         $actor = auth()->user();
-        \Illuminate\Support\Facades\Notification::send(User::where('is_active', true)
+        \Illuminate\Support\Facades\Notification::send(User::working()
             ->whereHas('roles', fn ($q) => $q->whereIn('name', ['admin', 'director']))
             ->when($actor, fn ($q) => $q->where('id', '!=', $actor->id))
             ->get(), new FinanceRecordDeleted($what, $actor?->name ?? 'система', $url));

@@ -168,6 +168,7 @@ class AuditController extends Controller
         'purchase_price' => 'Закуп', 'delivery' => 'Доставка', 'assembly' => 'Сборка',
         'commission' => 'Комиссия', 'partner_sum' => 'Партнёр, сумма', 'partner_pct' => 'Доля партнёра',
         'kind' => 'Вид сделки', 'contractor_name' => 'Подрядчик', 'commission_pct' => 'Наш %',
+        'fired_at' => 'Дата увольнения', 'fired_note' => 'Причина увольнения',
         'tax' => 'Налог', 'remainder' => 'Остаток', 'margin' => 'Маржа',
         'contract_number' => '№ договора', 'comment' => 'Комментарий',
         'user_id' => 'Сотрудник', 'deal_id' => 'Сделка', 'client_phone' => 'Телефон клиента',
@@ -186,6 +187,7 @@ class AuditController extends Controller
     private const VALUE_MAPS = [
         'kind' => ['own' => 'Своя', 'contractor' => 'Подряд'],
         'status' => [
+            'working' => 'Работает', 'fired' => 'Уволен',
             'draft' => 'Черновик', 'sent' => 'Выставлен', 'partial' => 'Частично оплачен',
             'paid' => 'Оплачен', 'cancelled' => 'Отменён', 'active' => 'Активна',
             'closed' => 'Закрыта', 'new' => 'Новая', 'todo' => 'К выполнению',

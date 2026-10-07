@@ -56,7 +56,7 @@ class LoginRequest extends FormRequest
         // Супер-админ под этот замок не попадает (как и под удаление):
         // владелец не должен потерять доступ из-за флага в базе.
         $user = Auth::user();
-        if (! $user->is_active && ! $user->isSuperAdmin()) {
+        if ((! $user->is_active || $user->isFired()) && ! $user->isSuperAdmin()) {
             Auth::guard('web')->logout();
             \App\Models\LoginLog::record('disabled', $user, $this);
 

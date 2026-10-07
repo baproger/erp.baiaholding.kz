@@ -59,16 +59,24 @@ const deptByCompanyCode = computed(() => {
 // Поиск и отборы по ведомости — на клиенте: данные уже загружены.
 const search = ref('');
 const onlyWith = ref(''); // '' | 'bonus' | 'debt' | 'deductions'
+// Работают / Уволенные (07.10.2026). Сервер уже оставил уволенного только в
+// месяцах, где у него есть цифры; итоговые плитки считаются на сервере по всем.
+const staffSel = ref(''); // '' | 'working' | 'fired'
+const isFiredRow = (r) => r.status === 'fired';
+const firedCount = computed(() => props.rows.filter(isFiredRow).length);
+const fmtD = (d) => (d ? d.split('-').reverse().join('.') : '');
 const onlyLabels = { bonus: 'с бонусом за месяц', debt: 'с долгом', deductions: 'с удержаниями' };
 const matches = (r) => {
     const q = search.value.trim().toLowerCase();
     if (q && !(r.user ?? '').toLowerCase().includes(q)) return false;
+    if (staffSel.value === 'working' && isFiredRow(r)) return false;
+    if (staffSel.value === 'fired' && !isFiredRow(r)) return false;
     if (onlyWith.value === 'bonus' && !(r.bonus_month > 0)) return false;
     if (onlyWith.value === 'debt' && !(r.debts?.length)) return false;
     if (onlyWith.value === 'deductions' && !(r.deductions > 0 || r.additions > 0)) return false;
     return true;
 };
-const filterActive = computed(() => !!search.value.trim() || !!onlyWith.value);
+const filterActive = computed(() => !!search.value.trim() || !!onlyWith.value || !!staffSel.value);
 
 // Ведомость — раздельно по фирмам, внутри фирмы — секциями по отделам
 // (отделы с большей выплатой сверху, «Без отдела» — как обычная секция;
@@ -271,6 +279,11 @@ const delAdj = async (a) => {
                     <button v-for="(label, k) in onlyLabels" :key="k" type="button" @click="onlyWith = onlyWith === k ? '' : k"
                         class="whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
                         :class="onlyWith === k ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">{{ label }}</button>
+                    <template v-if="firedCount">
+                        <button v-for="(label, k) in { working: 'Работают', fired: 'Уволенные (' + firedCount + ')' }" :key="k" type="button" @click="staffSel = staffSel === k ? '' : k"
+                            class="whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
+                            :class="staffSel === k ? 'border-slate-500 bg-slate-100 text-slate-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">{{ label }}</button>
+                    </template>
                     <button type="button" @click="toggleAll"
                         class="whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:bg-slate-50">
                         {{ allExpanded ? 'свернуть всё' : 'развернуть всё' }}
@@ -557,6 +570,7 @@ const delAdj = async (a) => {
                                         <div class="min-w-0 leading-tight">
                                             <div class="flex items-center gap-1.5">
                                                 <span class="truncate font-medium text-slate-900">{{ r.user }}</span>
+                                                <span v-if="isFiredRow(r)" class="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">уволен {{ fmtD(r.fired_at) }}</span>
                                                 <!-- Работает в обеих фирмах: показан в обеих секциях, но
                                                      в суммы входит только у основной фирмы. -->
                                                 <span v-if="(r.company_ids?.length ?? 0) > 1" class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
