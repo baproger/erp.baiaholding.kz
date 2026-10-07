@@ -191,11 +191,12 @@ const monthOptions = computed(() => {
 });
 const monthSel = computed(() => (monthNum.value ? `${yearSel.value}-${monthNum.value}` : ''));
 const setMonth = () => {
-    // Сменили год, а выбранный месяц в нём ещё не наступил — откатываемся на последний доступный.
-    if (monthNum.value && !monthOptions.value.some((m) => m.v === monthNum.value)) monthNum.value = monthOptions.value.at(-1).v;
+    if (monthNum.value && !monthOptions.value.some((m) => m.v === monthNum.value)) monthNum.value = '';
     const q = monthNum.value ? { month: monthSel.value } : { year: yearSel.value || undefined };
     router.get(route('payroll.index'), q, { preserveState: true, preserveScroll: true, replace: true });
 };
+// Выбрали год — месяц сбрасывается в «весь год»: сразу годовой свод (правило владельца от 08.10.2026).
+const setYear = () => { monthNum.value = ''; setMonth(); };
 // Выбранный период ведомости запоминается за страницей.
 useStickyFilters('payroll', { yearSel, monthNum, search, onlyWith }, setMonth);
 
@@ -296,7 +297,7 @@ const delAdj = async (a) => {
             <template #actions>
                 <!-- Период: год → месяц; месяц «весь год» = годовой свод (только просмотр) -->
                 <label class="flex items-center gap-1 text-xs font-normal text-slate-400">год
-                    <select v-model.number="yearSel" @change="setMonth" class="rounded-lg border-slate-200 py-1.5 pl-3 pr-8 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                    <select v-model.number="yearSel" @change="setYear" class="rounded-lg border-slate-200 py-1.5 pl-3 pr-8 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
                         <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
                     </select>
                 </label>
