@@ -176,22 +176,28 @@ const allExpanded = computed(() => allKeys.value.length > 0 && allKeys.value.eve
 const toggleAll = () => { expanded.value = allExpanded.value ? new Set() : new Set(allKeys.value); };
 
 
-// Период ведомости — серверный фильтр: месяц или год (07.10.2026).
-// Год = сумма помесячных ведомостей, только просмотр.
+// Период ведомости — серверный фильтр: «год» + «месяц» (07.10.2026).
+// Месяц «весь год» = годовой свод (сумма помесячных ведомостей, только просмотр).
 const isYear = computed(() => !!props.year);
-const periodMode = ref(props.year ? 'year' : 'month'); // 'month' | 'year'
-const monthSel = ref(props.month);
 const yearSel = ref(props.year ?? Number((props.month ?? '').slice(0, 4)) ?? new Date().getFullYear());
+const monthNum = ref(props.year ? '' : (props.month ?? '').slice(5, 7)); // '' = весь год | '01'…'12'
 const yearOptions = computed(() => (props.years?.length ? props.years : [new Date().getFullYear()]));
+const MONTHS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+    .map((m) => ({ v: m, l: new Date(`2026-${m}-01T00:00:00`).toLocaleDateString('ru-RU', { month: 'long' }) }));
+// В текущем году будущие месяцы не показываем — в них ещё нет ведомости.
+const monthOptions = computed(() => {
+    const now = new Date();
+    return Number(yearSel.value) === now.getFullYear() ? MONTHS.slice(0, now.getMonth() + 1) : MONTHS;
+});
+const monthSel = computed(() => (monthNum.value ? `${yearSel.value}-${monthNum.value}` : ''));
 const setMonth = () => {
-    const q = periodMode.value === 'year'
-        ? { year: yearSel.value || undefined }
-        : { month: monthSel.value || undefined };
+    // Сменили год, а выбранный месяц в нём ещё не наступил — откатываемся на последний доступный.
+    if (monthNum.value && !monthOptions.value.some((m) => m.v === monthNum.value)) monthNum.value = monthOptions.value.at(-1).v;
+    const q = monthNum.value ? { month: monthSel.value } : { year: yearSel.value || undefined };
     router.get(route('payroll.index'), q, { preserveState: true, preserveScroll: true, replace: true });
 };
-const setMode = (m) => { if (periodMode.value === m) return; periodMode.value = m; setMonth(); };
 // Выбранный период ведомости запоминается за страницей.
-useStickyFilters('payroll', { periodMode, monthSel, yearSel, search, onlyWith }, setMonth);
+useStickyFilters('payroll', { yearSel, monthNum, search, onlyWith }, setMonth);
 
 const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', payout: 'Выплата', bonus: 'Премия', trip: 'Командировка' };
 // Аванс и долг — РАЗНЫЕ вещи, обе заводятся модалкой:
@@ -288,17 +294,19 @@ const delAdj = async (a) => {
         </template>
         <FinanceLayout title="Зарплата" subtitle="оклад по часам (день/ночь), премии, штрафы, авансы из ЗП — бонусы на своей вкладке" active="payroll.index" :wide="leadership">
             <template #actions>
-                <!-- Период: месяц или год (годовой свод — сумма месяцев, только просмотр) -->
-                <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-                    <button type="button" @click="setMode('month')" class="rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150"
-                        :class="periodMode === 'month' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'">Месяц</button>
-                    <button type="button" @click="setMode('year')" class="rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150"
-                        :class="periodMode === 'year' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'">Год</button>
-                </div>
-                <input v-if="periodMode === 'month'" v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
-                <select v-else v-model.number="yearSel" @change="setMonth" class="rounded-lg border-slate-200 py-1.5 pl-3 pr-8 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
-                    <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
-                </select>
+                <!-- Период: год → месяц; месяц «весь год» = годовой свод (только просмотр) -->
+                <label class="flex items-center gap-1 text-xs font-normal text-slate-400">год
+                    <select v-model.number="yearSel" @change="setMonth" class="rounded-lg border-slate-200 py-1.5 pl-3 pr-8 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                        <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
+                    </select>
+                </label>
+                <label class="flex items-center gap-1 text-xs font-normal text-slate-400">месяц
+                    <select v-model="monthNum" @change="setMonth" class="rounded-lg py-1.5 pl-3 pr-8 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                        :class="monthNum ? 'border-slate-200 font-normal' : 'border-indigo-300 bg-indigo-50 font-semibold text-indigo-700'">
+                        <option value="">весь год</option>
+                        <option v-for="m in monthOptions" :key="m.v" :value="m.v">{{ m.l }}</option>
+                    </select>
+                </label>
                 <template v-if="leadership">
                     <input v-model="search" type="search" placeholder="Поиск по сотруднику…"
                         class="w-44 rounded-lg border-slate-200 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
