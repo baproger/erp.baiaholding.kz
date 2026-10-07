@@ -528,18 +528,18 @@ class PayrollController extends Controller
 
             return $r;
         })
-            // Уволенный виден в месяце увольнения и раньше, принятый — с месяца приёма;
-            // вне этого периода — только если есть цифры в месяце (выплата,
-            // корректировка, часы, долг, бонус).
-            ->filter(function ($r) use ($monthStart, $monthEnd) {
+            // Уволенные (правило владельца от 07.10.2026) видны в ведомости ВСЕГДА —
+            // отдельной группой «Уволенные» после «Без отдела»: после месяца
+            // увольнения оклад у них 0, но история, долги и выплаты на месте.
+            // Принятый — с месяца приёма; раньше — только если есть цифры в месяце.
+            ->filter(function ($r) use ($monthEnd) {
+                if (($r['status'] ?? User::STATUS_WORKING) === User::STATUS_FIRED) {
+                    return true;
+                }
                 $hasData = count($r['adjustments']) > 0 || $r['hours'] !== null || $r['night_hours'] !== null
                     || ! empty($r['debts']) || (float) $r['bonus_month'] != 0.0;
-                if (! empty($r['hired_at']) && $r['hired_at'] > $monthEnd && ! $hasData) {
-                    return false;
-                }
 
-                return ($r['status'] ?? User::STATUS_WORKING) !== User::STATUS_FIRED
-                    || ($r['fired_at'] && $r['fired_at'] >= $monthStart) || $hasData;
+                return empty($r['hired_at']) || $r['hired_at'] <= $monthEnd || $hasData;
             })
             ->values();
 

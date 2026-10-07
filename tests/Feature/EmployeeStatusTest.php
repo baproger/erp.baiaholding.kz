@@ -129,13 +129,22 @@ class EmployeeStatusTest extends TestCase
         $this->assertSame(0.0, $row['salary'], 'оклада у уволенного сейчас нет');
         $this->assertEquals($totalsBefore, $payroll()->companyTotals(), 'прибыль компании не меняется задним числом');
 
-        // Месяц увольнения — в ведомости; следующий (без цифр) — нет.
+        // Уволенный виден в ведомости всегда (группа «Уволенные»): в месяце
+        // увольнения — с окладом, в следующем — с нулевым окладом.
         $thisMonth = now()->format('Y-m');
         $nextMonth = now()->addMonthNoOverflow()->format('Y-m');
         $this->actingAs($admin)->get(route('payroll.index', ['month' => $thisMonth]))
-            ->assertInertia(fn (Assert $p) => $p->where('rows', fn ($rows) => collect($rows)->contains('uid', $mgr->id)));
+            ->assertInertia(fn (Assert $p) => $p->where('rows', function ($rows) use ($mgr) {
+                $r = collect($rows)->firstWhere('uid', $mgr->id);
+
+                return $r !== null && $r['status'] === 'fired' && $r['base'] > 0;
+            }));
         $this->actingAs($admin)->get(route('payroll.index', ['month' => $nextMonth]))
-            ->assertInertia(fn (Assert $p) => $p->where('rows', fn ($rows) => ! collect($rows)->contains('uid', $mgr->id)));
+            ->assertInertia(fn (Assert $p) => $p->where('rows', function ($rows) use ($mgr) {
+                $r = collect($rows)->firstWhere('uid', $mgr->id);
+
+                return $r !== null && $r['status'] === 'fired' && (float) $r['base'] === 0.0 && (float) $r['salary_final'] === 0.0;
+            }));
     }
 
     public function test_salary_in_firing_month_is_prorated_by_days(): void
