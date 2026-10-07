@@ -26,8 +26,13 @@ class PayrollController extends Controller
         abort_unless($request->user()->can('payroll.view'), 403);
 
         // Ведомость — под кешем ReportCache (5 минут, сброс при изменении денег/часов).
+        // ?year=2026 — годовой свод (07.10.2026): сумма помесячных ведомостей года.
+        $year = $request->integer('year');
+
         return Inertia::render('Payroll/Index', \App\Support\ReportCache::remember(
-            $request, 'payroll', fn () => $this->sheet($request, $payroll, $debts)));
+            $request, 'payroll', fn () => $year
+                ? $this->yearSheet($request, $payroll, $debts, $year)
+                : $this->sheet($request, $payroll, $debts)));
     }
 
     /**
@@ -254,8 +259,104 @@ class PayrollController extends Controller
         ];
     }
 
+    /**
+     * Годовой свод ЗП (правило владельца от 07.10.2026): сумма помесячных
+     * ведомостей выбранного года — те же формулы, что у месяца, без пересчёта
+     * «по-годовому». Будущие месяцы не входят. Только просмотр: часы, нормы и
+     * корректировки вводятся помесячно.
+     *
+     * @return array<string, mixed>
+     */
+    private function yearSheet(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts, int $year): array
+    {
+        $year = max(2020, min($year, (int) now()->year));
+        $lastMonth = $year === (int) now()->year ? (int) now()->month : 12;
+
+        // Помесячные суммы строки: начисления, удержания, бонус месяца, часы.
+        $sumFields = ['base_day', 'base_night', 'base', 'additions', 'trip', 'gross', 'penalties', 'adv_salary', 'adv_bonus',
+            'deductions', 'salary_final', 'bonus_month', 'bonus_final', 'debt_charge', 'debt_planned', 'payout', 'final'];
+        // Итоги, которые от месяца не зависят (сделки за всё время, текущий остаток долга) — берём из последнего месяца.
+        $lastOnlyTotals = ['budget', 'tax', 'expense', 'bonus', 'company', 'debt_remaining'];
+
+        $rows = [];
+        $totals = [];
+        $base = null;
+        for ($m = 1; $m <= $lastMonth; $m++) {
+            $sheet = $this->sheet($request, $payroll, $debts, sprintf('%d-%02d', $year, $m));
+            $base ??= $sheet;
+            foreach ($sheet['rows'] as $r) {
+                $uid = $r['uid'];
+                if (! isset($rows[$uid])) {
+                    $rows[$uid] = $r;
+                    $rows[$uid]['adjustments'] = collect($r['adjustments'])->values()->all();
+                    $rows[$uid]['debts_by_id'] = collect($r['debts'])->keyBy('id')->all();
+                    $rows[$uid]['months'] = 1;
+
+                    continue;
+                }
+                $acc = &$rows[$uid];
+                foreach ($sumFields as $f) {
+                    $acc[$f] = round((float) ($acc[$f] ?? 0) + (float) ($r[$f] ?? 0), 2);
+                }
+                foreach (['hours', 'night_hours'] as $f) {
+                    if ($r[$f] !== null) {
+                        $acc[$f] = round((float) ($acc[$f] ?? 0) + (float) $r[$f], 2);
+                    }
+                }
+                $acc['adjustments'] = array_merge($acc['adjustments'], collect($r['adjustments'])->values()->all());
+                foreach ($r['debts'] as $d) {
+                    $paid = (float) ($acc['debts_by_id'][$d['id']]['paid_this_month'] ?? 0) + (float) $d['paid_this_month'];
+                    $acc['debts_by_id'][$d['id']] = array_merge($d, ['paid_this_month' => round($paid, 2)]);
+                }
+                // Состояние на конец периода — из последнего месяца со строкой.
+                foreach (['salary', 'debt_remaining', 'debt_after', 'department', 'department_id', 'department_code',
+                    'company_ids', 'primary_company_id', 'status', 'fired_at'] as $f) {
+                    $acc[$f] = $r[$f] ?? null;
+                }
+                $acc['months']++;
+                unset($acc);
+            }
+            foreach ($sheet['totals'] as $k => $v) {
+                $totals[$k] = in_array($k, $lastOnlyTotals, true) ? (float) $v : round((float) ($totals[$k] ?? 0) + (float) $v, 2);
+            }
+        }
+
+        $rows = collect($rows)->map(function ($r) {
+            $r['debts'] = array_values($r['debts_by_id']);
+            unset($r['debts_by_id']);
+            $r['hourly_rate'] = null; // ставка — помесячная, в годовом своде не показываем
+
+            return $r;
+        })->sortByDesc('bonus')->values();
+
+        $base ??= $this->sheet($request, $payroll, $debts, sprintf('%d-01', $year));
+
+        return array_merge($base, [
+            'rows' => $rows,
+            'totals' => $totals ?: $base['totals'],
+            'year' => $year,
+            'month' => sprintf('%d-%02d', $year, $lastMonth),
+            'years' => $this->payrollYears(),
+            // Годовой свод — только просмотр: вводить часы/корректировки — в месяце.
+            'canManage' => false,
+        ]);
+    }
+
+    /** Годы для фильтра: от первого года с данными ЗП до текущего. @return array<int, int> */
+    private function payrollYears(): array
+    {
+        $first = collect([
+            PayrollAdjustment::min('date'),
+            WorkHour::min('month'),
+            \App\Models\Deal::min('created_at'),
+        ])->filter()->map(fn ($d) => (int) substr((string) $d, 0, 4))->min() ?? (int) now()->year;
+        $first = max(2020, min($first, (int) now()->year));
+
+        return range((int) now()->year, $first);
+    }
+
     /** Общий расчёт ведомости для страниц «Зарплата» и «Бонусы». @return array<string, mixed> */
-    private function sheet(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): array
+    private function sheet(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts, ?string $monthOverride = null): array
     {
         $user = $request->user();
         abort_unless($user->can('payroll.view'), 403);
@@ -264,8 +365,8 @@ class PayrollController extends Controller
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
         // Месяц корректировок (отгулы/больничные/штрафы/премии): YYYY-MM.
-        $month = preg_match('/^\d{4}-\d{2}$/', $request->string('month')->toString())
-            ? $request->string('month')->toString() : now()->format('Y-m');
+        $month = $monthOverride ?? (preg_match('/^\d{4}-\d{2}$/', $request->string('month')->toString())
+            ? $request->string('month')->toString() : now()->format('Y-m'));
         $monthStart = $month.'-01';
         $monthEnd = \Illuminate\Support\Carbon::parse($monthStart)->endOfMonth()->toDateString();
 
@@ -328,13 +429,24 @@ class PayrollController extends Controller
             // увольнения — пропорционально дням до даты увольнения включительно
             // (если часы не введены), после — оклада нет.
             $salaryRatio = 1.0;
+            $monthEndC = $monthStartC->copy()->endOfMonth();
+            // Принят в этом месяце — оклад с даты приёма (симметрично увольнению);
+            // месяцы до приёма оклада не дают (07.10.2026, годовой свод).
+            $hiredAt = ! empty($r['hired_at']) ? \Illuminate\Support\Carbon::parse($r['hired_at']) : null;
+            if ($hiredAt && $hiredAt->gt($monthEndC)) {
+                $r['salary'] = 0.0;
+            } elseif ($hiredAt && $hiredAt->gt($monthStartC)) {
+                $salaryRatio = ($monthStartC->daysInMonth - $hiredAt->day + 1) / $monthStartC->daysInMonth;
+            }
             if (($r['status'] ?? User::STATUS_WORKING) === User::STATUS_FIRED) {
                 $firedAt = $r['fired_at'] ? \Illuminate\Support\Carbon::parse($r['fired_at']) : null;
                 $r['salary'] = (float) ($r['salary_raw'] ?? 0);
-                if (! $firedAt || $firedAt->lt($monthStartC)) {
+                if (! $firedAt || $firedAt->lt($monthStartC) || ($hiredAt && $hiredAt->gt($monthEndC))) {
                     $r['salary'] = 0.0;
-                } elseif ($firedAt->lte($monthStartC->copy()->endOfMonth())) {
-                    $salaryRatio = $firedAt->day / $monthStartC->daysInMonth;
+                } elseif ($firedAt->lte($monthEndC)) {
+                    // Принят и уволен в одном месяце — дни между датами включительно.
+                    $from = $hiredAt && $hiredAt->gt($monthStartC) ? $hiredAt->day : 1;
+                    $salaryRatio = max(0, $firedAt->day - $from + 1) / $monthStartC->daysInMonth;
                 }
             }
             $r['dealsList'] = array_values(($breakdown->get($r['uid']) ?? collect())->all());
@@ -416,13 +528,19 @@ class PayrollController extends Controller
 
             return $r;
         })
-            // Уволенный виден в месяце увольнения и раньше; позже — только если у
-            // него есть цифры в этом месяце (выплата, корректировка, часы, долг, бонус).
-            ->filter(fn ($r) => ($r['status'] ?? User::STATUS_WORKING) !== User::STATUS_FIRED
-                || ($r['fired_at'] && $r['fired_at'] >= $monthStart)
-                || count($r['adjustments']) > 0
-                || $r['hours'] !== null || $r['night_hours'] !== null
-                || ! empty($r['debts']) || (float) $r['bonus_month'] != 0.0)
+            // Уволенный виден в месяце увольнения и раньше, принятый — с месяца приёма;
+            // вне этого периода — только если есть цифры в месяце (выплата,
+            // корректировка, часы, долг, бонус).
+            ->filter(function ($r) use ($monthStart, $monthEnd) {
+                $hasData = count($r['adjustments']) > 0 || $r['hours'] !== null || $r['night_hours'] !== null
+                    || ! empty($r['debts']) || (float) $r['bonus_month'] != 0.0;
+                if (! empty($r['hired_at']) && $r['hired_at'] > $monthEnd && ! $hasData) {
+                    return false;
+                }
+
+                return ($r['status'] ?? User::STATUS_WORKING) !== User::STATUS_FIRED
+                    || ($r['fired_at'] && $r['fired_at'] >= $monthStart) || $hasData;
+            })
             ->values();
 
         // Переключатель фирмы (шапка): выбрана конкретная компания — ведомость,
@@ -445,6 +563,8 @@ class PayrollController extends Controller
             'leadership' => $leadership,
             'canManage' => $this->canManage($request),
             'month' => $month,
+            'year' => null,
+            'years' => $monthOverride === null ? $this->payrollYears() : [],
             'normHours' => $normHours,
             'deptNorms' => $deptNorms,
             'taxRate' => $taxRate * 100,

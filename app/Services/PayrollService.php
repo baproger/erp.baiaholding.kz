@@ -122,7 +122,17 @@ class PayrollService
      *
      * @return Collection<int, Collection<int, array<string, mixed>>>  keyed by user id
      */
+    /** Мемо на запрос: годовая ведомость собирается из 12 месяцев, разбивка сделок от месяца не зависит. */
+    private array $breakdownMemo = [];
+
     public function dealBreakdown(): Collection
+    {
+        $key = (string) (\App\Support\CurrentCompany::id() ?? 'n');
+
+        return $this->breakdownMemo[$key] ??= $this->computeDealBreakdown();
+    }
+
+    private function computeDealBreakdown(): Collection
     {
         $taxRate = ((float) Setting::get('tax_percent', 3)) / 100;
 
@@ -370,7 +380,7 @@ class PayrollService
             : User::working()->where('salary', '>', 0)->pluck('id');
         $uids = $perDeal->keys()->merge($totalByUser->keys())->merge($salaryUids)->unique()->filter()->values();
 
-        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'salary', 'status', 'fired_at'])->keyBy('id');
+        $people = User::whereIn('id', $uids)->get(['id', 'name', 'avatar', 'salary', 'status', 'fired_at', 'hired_at'])->keyBy('id');
         // Drop orphaned responsible ids (deleted users) so only real employees show.
         // Уволенный НЕ отбрасывается: его бонусы — история, прибыль прошлых
         // периодов не должна расти задним числом (07.10.2026).
@@ -397,6 +407,7 @@ class PayrollService
                 'user' => $people[$uid]->name ?? '—',
                 'status' => $people[$uid]->status ?: User::STATUS_WORKING,
                 'fired_at' => $people[$uid]->fired_at?->toDateString(),
+                'hired_at' => $people[$uid]->hired_at?->toDateString(),
                 'salary_raw' => $rawSalary,
                 'avatar' => $people[$uid]->avatar ?? null,
                 'deals' => (int) ($totalByUser[$uid] ?? 0),

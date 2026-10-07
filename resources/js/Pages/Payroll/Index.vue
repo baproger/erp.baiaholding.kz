@@ -11,7 +11,7 @@ import { money, formatDate, formatDateTime } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 
-const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number, totals: Object, companies: { type: Array, default: () => [] }, departments: { type: Array, default: () => [] } });
+const props = defineProps({ rows: Array, leadership: Boolean, canManage: Boolean, month: String, year: { type: Number, default: null }, years: { type: Array, default: () => [] }, normHours: Number, deptNorms: { type: [Object, Array], default: () => ({}) }, taxRate: Number, totals: Object, companies: { type: Array, default: () => [] }, departments: { type: Array, default: () => [] } });
 // ВАЖНО: computed, а не разовый захват props. Inertia переиспользует компонент
 // при переходе на ту же страницу (переключение фирмы, смена месяца) — обычная
 // константа осталась бы от прежней фирмы, и данные обновлялись бы только по F5.
@@ -176,11 +176,22 @@ const allExpanded = computed(() => allKeys.value.length > 0 && allKeys.value.eve
 const toggleAll = () => { expanded.value = allExpanded.value ? new Set() : new Set(allKeys.value); };
 
 
-// Месяц корректировок (отгулы/больничные/штрафы) — серверный фильтр.
+// Период ведомости — серверный фильтр: месяц или год (07.10.2026).
+// Год = сумма помесячных ведомостей, только просмотр.
+const isYear = computed(() => !!props.year);
+const periodMode = ref(props.year ? 'year' : 'month'); // 'month' | 'year'
 const monthSel = ref(props.month);
-const setMonth = () => router.get(route('payroll.index'), { month: monthSel.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
-// Выбранный месяц ведомости запоминается за страницей.
-useStickyFilters('payroll', { monthSel, search, onlyWith }, setMonth);
+const yearSel = ref(props.year ?? Number((props.month ?? '').slice(0, 4)) ?? new Date().getFullYear());
+const yearOptions = computed(() => (props.years?.length ? props.years : [new Date().getFullYear()]));
+const setMonth = () => {
+    const q = periodMode.value === 'year'
+        ? { year: yearSel.value || undefined }
+        : { month: monthSel.value || undefined };
+    router.get(route('payroll.index'), q, { preserveState: true, preserveScroll: true, replace: true });
+};
+const setMode = (m) => { if (periodMode.value === m) return; periodMode.value = m; setMonth(); };
+// Выбранный период ведомости запоминается за страницей.
+useStickyFilters('payroll', { periodMode, monthSel, yearSel, search, onlyWith }, setMonth);
 
 const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 'Штраф', advance: 'Аванс', payout: 'Выплата', bonus: 'Премия', trip: 'Командировка' };
 // Аванс и долг — РАЗНЫЕ вещи, обе заводятся модалкой:
@@ -189,9 +200,9 @@ const typeLabels = { absence: 'Отгул', sick: 'Больничный', fine: 
 // и только из бонуса. Аванс остаётся типом корректировки.
 const newAdjTypes = { payout: 'Выплата', advance: 'Аванс', bonus: 'Премия', trip: 'Командировка', fine: 'Штраф', absence: 'Отгул', sick: 'Больничный' };
 // «2026-07» → «июль 2026» для заголовков (computed — месяц меняется без перезагрузки).
-const monthLabel = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
+const monthLabel = computed(() => isYear.value ? `${props.year} год` : new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
 // Короткий вариант для заголовка колонки — «август 2026 г.» её распирает.
-const monthShort = computed(() => new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' }));
+const monthShort = computed(() => isYear.value ? `${props.year} год` : new Date(props.month + '-01').toLocaleDateString('ru-RU', { month: 'long' }));
 const typeClass = (t) => t === 'bonus' ? 'bg-emerald-100 text-emerald-700' : t === 'trip' ? 'bg-sky-100 text-sky-700' : t === 'fine' ? 'bg-rose-100 text-rose-700' : t === 'advance' ? 'bg-indigo-100 text-indigo-700' : t === 'payout' ? 'bg-slate-800 text-white' : 'bg-amber-100 text-amber-700';
 
 // Оклад: инлайн-правка (бухгалтер/админ).
@@ -277,9 +288,17 @@ const delAdj = async (a) => {
         </template>
         <FinanceLayout title="Зарплата" subtitle="оклад по часам (день/ночь), премии, штрафы, авансы из ЗП — бонусы на своей вкладке" active="payroll.index" :wide="leadership">
             <template #actions>
-                <label class="flex items-center gap-1 text-xs font-normal text-slate-400">месяц
-                    <input v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
-                </label>
+                <!-- Период: месяц или год (годовой свод — сумма месяцев, только просмотр) -->
+                <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                    <button type="button" @click="setMode('month')" class="rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150"
+                        :class="periodMode === 'month' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'">Месяц</button>
+                    <button type="button" @click="setMode('year')" class="rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150"
+                        :class="periodMode === 'year' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'">Год</button>
+                </div>
+                <input v-if="periodMode === 'month'" v-model="monthSel" @change="setMonth" type="month" class="rounded-lg border-slate-200 py-1.5 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
+                <select v-else v-model.number="yearSel" @change="setMonth" class="rounded-lg border-slate-200 py-1.5 pl-3 pr-8 text-xs font-normal shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20">
+                    <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
+                </select>
                 <template v-if="leadership">
                     <input v-model="search" type="search" placeholder="Поиск по сотруднику…"
                         class="w-44 rounded-lg border-slate-200 py-1.5 text-xs shadow-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" />
@@ -438,8 +457,11 @@ const delAdj = async (a) => {
 
         <!-- Leadership: everyone -->
         <template v-else>
+            <div v-if="isYear" class="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 px-5 py-3 text-sm text-indigo-800">
+                📅 Годовой свод за <b>{{ year }}</b>: сумма помесячных ведомостей (январь — {{ new Date(month + '-01').toLocaleDateString('ru-RU', { month: 'long' }) }}). Только просмотр — часы, нормы и корректировки вводятся в режиме «Месяц».
+            </div>
             <!-- Норма часов месяца — на виду у финансиста: ставка/час = оклад ÷ норма -->
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-white px-5 py-4 shadow-sm">
+            <div v-else class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-white px-5 py-4 shadow-sm">
                 <div class="flex items-center gap-3.5">
                     <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -537,7 +559,7 @@ const delAdj = async (a) => {
                                         <span class="whitespace-nowrap font-medium normal-case tracking-normal text-slate-400">{{ g.list.length }}<span class="hidden sm:inline"> сотр.</span></span>
                                         <!-- Своя норма часов отдела; пусто при правке — сброс на общую.
                                              На телефоне скрыта: разрывала строку отдела на три. -->
-                                        <span v-if="g.id != null" class="hidden normal-case tracking-normal sm:inline" @click.stop>
+                                        <span v-if="g.id != null && !isYear" class="hidden normal-case tracking-normal sm:inline" @click.stop>
                                             <span v-if="editingDeptNorm === g.key" class="flex items-center gap-1">
                                                 <input v-model="deptNormVal" type="number" min="1" max="744" :placeholder="normHours"
                                                     class="w-16 rounded-md border-indigo-300 py-0.5 text-right text-xs font-semibold tabular-nums"
@@ -628,7 +650,7 @@ const delAdj = async (a) => {
                                             <svg class="h-3 w-3 text-slate-300 group-hover:text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                         </button>
                                         <span v-else :class="r.base_day > 0 ? 'font-medium text-slate-800' : 'text-slate-300'">{{ r.base_day > 0 ? money(r.base_day) : '—' }}</span>
-                                        <div class="text-[10px] text-slate-400">оклад {{ money(r.salary) }}<template v-if="r.hours != null"> · {{ r.hours }} ч × {{ money(r.hourly_rate ?? 0) }}</template></div>
+                                        <div class="text-[10px] text-slate-400">оклад {{ money(r.salary) }}<template v-if="isYear"> /мес</template><template v-if="r.hours != null && r.hourly_rate != null"> · {{ r.hours }} ч × {{ money(r.hourly_rate) }}</template></div>
                                     </template>
                                 </td>
                                 <!-- Ночь: ставка × 1.5 -->

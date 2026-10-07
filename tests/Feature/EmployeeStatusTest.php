@@ -160,6 +160,45 @@ class EmployeeStatusTest extends TestCase
             }));
     }
 
+    // Годовой свод ЗП: сумма помесячных ведомостей, будущие месяцы не входят, только просмотр.
+    public function test_year_view_sums_months_and_is_read_only(): void
+    {
+        Carbon::setTestNow('2026-03-15 10:00:00');
+        $admin = $this->user('admin');
+        $worker = $this->user('employee', ['salary' => 100000]);
+        // Январь–март (текущий месяц март) → 3 оклада; премия в феврале.
+        \App\Models\PayrollAdjustment::create(['user_id' => $worker->id, 'type' => 'bonus', 'amount' => 5000,
+            'date' => '2026-02-10', 'created_by' => $admin->id]);
+
+        $this->actingAs($admin)->get(route('payroll.index', ['year' => 2026]))
+            ->assertInertia(fn (Assert $p) => $p->component('Payroll/Index')
+                ->where('year', 2026)
+                ->where('canManage', false)
+                ->where('rows', function ($rows) use ($worker) {
+                    $r = collect($rows)->firstWhere('uid', $worker->id);
+
+                    return $r !== null && abs($r['base'] - 300000.0) < 0.01 && abs($r['additions'] - 5000.0) < 0.01
+                        && count($r['adjustments']) === 1;
+                }));
+        Carbon::setTestNow();
+    }
+
+    public function test_hire_month_prorated_and_months_before_hire_excluded(): void
+    {
+        $admin = $this->user('admin');
+        // Принят 22-го в месяце из 31 дня → 10/31 оклада; месяц раньше — нет в ведомости.
+        $worker = $this->user('employee', ['salary' => 310000, 'hired_at' => '2026-10-22']);
+
+        $this->actingAs($admin)->get(route('payroll.index', ['month' => '2026-10']))
+            ->assertInertia(fn (Assert $p) => $p->where('rows', function ($rows) use ($worker) {
+                $r = collect($rows)->firstWhere('uid', $worker->id);
+
+                return $r !== null && abs($r['base'] - 100000.0) < 0.01;
+            }));
+        $this->actingAs($admin)->get(route('payroll.index', ['month' => '2026-09']))
+            ->assertInertia(fn (Assert $p) => $p->where('rows', fn ($rows) => ! collect($rows)->contains('uid', $worker->id)));
+    }
+
     // 4. Передача дел
     public function test_handover_moves_only_open_items_to_successor(): void
     {
