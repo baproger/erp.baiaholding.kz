@@ -56,7 +56,9 @@ class LoginRequest extends FormRequest
         // Супер-админ под этот замок не попадает (как и под удаление):
         // владелец не должен потерять доступ из-за флага в базе.
         $user = Auth::user();
-        if ((! $user->is_active || $user->isFired()) && ! $user->isSuperAdmin()) {
+        // Уволенный не входит НИКОГДА — даже с ролью admin: миграция 07.10.2026
+        // вернула ранее удалённые аккаунты (в т.ч. бывших админов) как уволенных.
+        if ($user->isFired() || (! $user->is_active && ! $user->isSuperAdmin())) {
             Auth::guard('web')->logout();
             \App\Models\LoginLog::record('disabled', $user, $this);
 

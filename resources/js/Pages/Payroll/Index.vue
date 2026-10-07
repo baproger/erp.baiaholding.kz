@@ -63,6 +63,7 @@ const onlyWith = ref(''); // '' | 'bonus' | 'debt' | 'deductions'
 // месяцах, где у него есть цифры; итоговые плитки считаются на сервере по всем.
 const staffSel = ref(''); // '' | 'working' | 'fired'
 const isFiredRow = (r) => r.status === 'fired';
+const FIRED_GROUP = 'Уволенные';
 const firedCount = computed(() => props.rows.filter(isFiredRow).length);
 const fmtD = (d) => (d ? d.split('-').reverse().join('.') : '');
 const onlyLabels = { bonus: 'с бонусом за месяц', debt: 'с долгом', deductions: 'с удержаниями' };
@@ -90,6 +91,13 @@ const companySections = computed(() => {
     const orphan = { id: 0, name: 'Без фирмы', map: new Map() };
 
     const put = (section, r) => {
+        // Уволенные (07.10.2026) — отдельной группой в конце фирмы, после «Без отдела»;
+        // своей нормы часов у группы нет (id = null).
+        if (isFiredRow(r)) {
+            if (!section.map.has(FIRED_GROUP)) section.map.set(FIRED_GROUP, { list: [], id: null });
+            section.map.get(FIRED_GROUP).list.push({ ...r, counted: (r.primary_company_id ?? 0) === section.id });
+            return;
+        }
         const own = r.department_code ? deptByCompanyCode.value.get(`${section.id}|${r.department_code}`) : null;
         const name = own?.name ?? r.department ?? 'Без отдела';
         if (!section.map.has(name)) section.map.set(name, { list: [], id: own?.id ?? r.department_id ?? null });
@@ -126,7 +134,7 @@ const companySections = computed(() => {
                         final: sum('salary_final'),
                     };
                 })
-                .sort((a, b) => b.final - a.final || a.name.localeCompare(b.name, 'ru'));
+                .sort((a, b) => (a.name === FIRED_GROUP) - (b.name === FIRED_GROUP) || b.final - a.final || a.name.localeCompare(b.name, 'ru'));
             const counted = groups.flatMap((g) => g.list).filter((r) => r.counted);
             return {
                 id: s.id, name: s.name, groups,

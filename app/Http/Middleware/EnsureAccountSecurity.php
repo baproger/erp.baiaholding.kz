@@ -32,7 +32,9 @@ class EnsureAccountSecurity
         // из БД поле приходит всегда (default true).
         $active = array_key_exists('is_active', $user->getAttributes()) ? (bool) $user->is_active : true;
         // Уволенный (07.10.2026) — тоже выход, даже если is_active вернули вручную.
-        if ((! $active || $user->isFired() || $user->trashed()) && ! $user->isSuperAdmin()) {
+        // Исключение супер-админа — только для флага «Активен»; уволенный/удалённый
+        // выходит всегда (бывший админ, восстановленный миграцией, не должен войти).
+        if ($user->isFired() || $user->trashed() || (! $active && ! $user->isSuperAdmin())) {
             LoginLog::record('disabled', $user, $request);
 
             return $this->logout($request, 'Учётная запись отключена. Обратитесь к администратору.');

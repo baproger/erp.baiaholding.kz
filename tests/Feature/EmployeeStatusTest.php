@@ -258,6 +258,20 @@ class EmployeeStatusTest extends TestCase
         $this->assertFalse($fresh->is_active);
     }
 
+    // Безопасность: удалённый ранее админ, возвращённый миграцией как уволенный, войти не может.
+    public function test_restored_former_admin_cannot_log_in(): void
+    {
+        $exAdmin = $this->user('admin');
+        $exAdmin->delete();
+        EmployeeStatusService::restoreSoftDeleted();
+
+        $this->post('/login', ['email' => $exAdmin->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->assertGuest();
+
+        // И уже открытая сессия такого аккаунта завершается.
+        $this->actingAs(User::find($exAdmin->id))->get('/deals')->assertRedirect('/login');
+    }
+
     // 8. Супер-админ
     public function test_super_admin_cannot_be_fired(): void
     {
