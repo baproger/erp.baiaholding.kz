@@ -2,14 +2,15 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import Avatar from '@/Components/Avatar.vue';
+import { useServerClock } from '@/composables/useServerClock';
 
-const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, funnel: { type: Array, default: () => [] } });
+const props = defineProps({ screen: Object, plan: Number, month: String, monthLabel: String, managers: Array, leader: Object, funnel: { type: Array, default: () => [] } , serverNow: { type: Number, default: 0 }, tzOffset: { type: Number, default: 0 } });
 
 // ТВ-режим: часы + автообновление раз в 10 секунд. Без автопрокрутки —
 // список статичен, весь во всю ширину (просьба владельца 31.07.2026).
-const clock = ref('');
-let clockTimer = null, refreshTimer = null;
-const tick = () => (clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+// Часы — по времени СЕРВЕРА (часы телевизора бывают сбиты), без Intl.
+let refreshTimer = null;
+const { clock, serverMonth } = useServerClock(() => props.serverNow, () => props.tzOffset);
 
 // ---- Живучесть ТВ (правило от 22.08.2026): сервер временно недоступен
 // (перегруз, деплой, лимит хостинга) — экран НЕ ломается: глушим модалки
@@ -32,8 +33,6 @@ const safeReload = () => {
 let offInvalid = null, offException = null;
 
 onMounted(() => {
-    tick();
-    clockTimer = setInterval(tick, 1000);
     // Тик каждые 30с, но реальное обновление — по расписанию живучести
     // (обычно раз в 2 минуты; при недоступном сервере пауза растёт до 10).
     refreshTimer = setInterval(() => { if (Date.now() >= nextTryAt) safeReload(); }, 30000);
@@ -41,7 +40,7 @@ onMounted(() => {
     offInvalid = router.on('invalid', (e) => e.preventDefault());
     offException = router.on('exception', (e) => e.preventDefault());
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); offInvalid?.(); offException?.(); });
+onUnmounted(() => { clearInterval(refreshTimer); offInvalid?.(); offException?.(); });
 
 const title = computed(() => ['Офис', props.screen?.company].filter(Boolean).join(' · '));
 const leave = () => router.post(route('screen.leave'));
@@ -49,7 +48,7 @@ const leave = () => router.post(route('screen.leave'));
 // Фильтр месяца: кто был лучшим сотрудником в выбранном месяце.
 const monthF = ref(props.month ?? '');
 const applyMonth = () => router.get(route('screen.show'), { month: monthF.value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
-const isCurrent = computed(() => props.month === new Date().toISOString().slice(0, 7));
+const isCurrent = computed(() => props.month === serverMonth());
 
 const convClass = (c) => c >= 50 ? 'bg-emerald-50 text-emerald-700' : c >= 25 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500';
 const barClass = (s) => s >= 70 ? 'bg-emerald-500' : s >= 30 ? 'bg-indigo-500' : 'bg-amber-400';

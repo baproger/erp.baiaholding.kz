@@ -62,6 +62,18 @@ class WorkshopScreenController extends Controller
         $lotProducts = \App\Models\PreDeal::whereIn('deal_id', $projects->pluck('deal_id')->filter())
             ->pluck('product', 'deal_id');
 
+        // Таймеры считает СЕРВЕР (09.10.2026): у ТВ часто сбиты часы, а старые
+        // браузеры не разбирают часть форматов дат — табло показывало «0м».
+        $nowTs = now()->getTimestamp();
+        $secondsSince = function ($at) use ($nowTs): ?int {
+            if (! $at) {
+                return null;
+            }
+            $ts = $at instanceof \DateTimeInterface ? $at->getTimestamp() : \Illuminate\Support\Carbon::parse($at)->getTimestamp();
+
+            return max(0, $nowTs - $ts);
+        };
+
         $projects = $projects
             ->map(fn ($p) => [
                 'id' => $p->id, 'number' => $p->number,
@@ -80,10 +92,15 @@ class WorkshopScreenController extends Controller
                 'stage_entered_at' => $p->stage_entered_at,
                 // Когда заказ отправлен в цех — для таймера «в цехе».
                 'created_at' => optional($p->created_at)->toIso8601String(),
+                'in_workshop_seconds' => $secondsSince($p->created_at),
+                'on_stage_seconds' => $secondsSince($p->stage_entered_at),
             ]);
 
         return Inertia::render('Screen/Workshop', [
             'screen' => ['workshop' => $screen->workshop, 'company' => $screen->company?->name],
+            // «Сейчас» сервера и смещение пояса — часы табло не зависят от часов ТВ.
+            'serverNow' => now()->getTimestampMs(),
+            'tzOffset' => now()->getOffset(),
             'stages' => $stages,
             'projects' => $projects,
         ]);
@@ -165,6 +182,8 @@ class WorkshopScreenController extends Controller
 
         return Inertia::render('Screen/Office', [
             'screen' => ['company' => $screen->company?->name],
+            'serverNow' => now()->getTimestampMs(),
+            'tzOffset' => now()->getOffset(),
             'plan' => $plan,
             'month' => $month,
             'monthLabel' => \Illuminate\Support\Carbon::parse($mStart)->locale('ru')->translatedFormat('F Y'),

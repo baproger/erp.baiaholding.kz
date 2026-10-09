@@ -16,6 +16,32 @@ class ScreenAdvanceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Таймеры табло считает сервер (09.10.2026): у ТВ сбиты часы → было «0м».
+     * Экран получает готовые секунды «в цехе / на этапе» и «сейчас» сервера.
+     */
+    public function test_screen_sends_server_computed_timers(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow('2026-10-09 12:00:00');
+        $stage = ProjectStage::create(['name' => 'Упаковка', 'order' => 1, 'is_active' => true, 'workshop' => 'Ағаш цех']);
+        \Illuminate\Support\Carbon::setTestNow('2026-10-01 18:00:00'); // отправлен в цех 7д 18ч назад
+        $project = Project::create(['number' => 'PRJ-9', 'name' => 'Мебель', 'workshop' => 'Ағаш цех', 'project_stage_id' => $stage->id, 'status' => 'active']);
+        \App\Models\ProjectStageLog::where('project_id', $project->id)->whereNull('left_at')
+            ->update(['entered_at' => '2026-10-07 12:00:00']); // на этапе ровно 2 суток
+        \Illuminate\Support\Carbon::setTestNow('2026-10-09 12:00:00');
+
+        $screen = WorkshopScreen::create(['workshop' => 'Ағаш цех', 'kind' => 'workshop', 'code' => '111222', 'is_active' => true]);
+
+        $this->withSession(['workshop_screen_id' => $screen->id, 'workshop_screen_code' => '111222'])
+            ->get(route('screen.show'))
+            ->assertInertia(fn ($page) => $page->component('Screen/Workshop')
+                ->where('serverNow', now()->getTimestampMs())
+                ->where('tzOffset', now()->getOffset())
+                ->where('projects.0.in_workshop_seconds', 7 * 86400 + 18 * 3600)
+                ->where('projects.0.on_stage_seconds', 2 * 86400));
+        \Illuminate\Support\Carbon::setTestNow();
+    }
+
     public function test_screen_advances_own_workshop_order_only(): void
     {
         $s1 = ProjectStage::create(['name' => 'Кесу', 'order' => 1, 'is_active' => true, 'workshop' => 'Металл цех']);

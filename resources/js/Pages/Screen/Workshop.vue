@@ -3,8 +3,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import Avatar from '@/Components/Avatar.vue';
 import { formatDate, formatDuration } from '@/utils/format';
+import { useServerClock } from '@/composables/useServerClock';
 
-const props = defineProps({ screen: Object, stages: Array, projects: Array });
+const props = defineProps({ screen: Object, stages: Array, projects: Array, serverNow: { type: Number, default: 0 }, tzOffset: { type: Number, default: 0 } });
 
 // Ошибка «Готово» (например, не внесены расходы Закуп/Фурнитура/материал со склада) должна
 // быть видна работнику цеха: красный тост поверх канбана, гаснет через 8 с.
@@ -26,14 +27,12 @@ const stageIds = computed(() => new Set(props.stages.map((s) => s.id)));
 const byStage = (id) => props.projects.filter((p) => p.stage_id === id
     || (id === props.stages[0]?.id && !stageIds.value.has(p.stage_id)));
 
-// ТВ-режим: часы + автообновление раз в 30 секунд.
-const clock = ref('');
-let clockTimer = null, refreshTimer = null;
-const nowTs = ref(Date.now());
-const tick = () => { clock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); nowTs.value = Date.now(); };
-const onStage = (p) => p.stage_entered_at ? formatDuration((nowTs.value - new Date(p.stage_entered_at).getTime()) / 1000) : null;
+// ТВ-режим: часы и таймеры — по времени СЕРВЕРА (часы телевизора бывают сбиты).
+let refreshTimer = null;
+const { clock, elapsed } = useServerClock(() => props.serverNow, () => props.tzOffset);
+const onStage = (p) => (p.on_stage_seconds != null ? formatDuration(elapsed(p.on_stage_seconds)) : null);
 // Сколько заказ ВСЕГО в цехе (с момента отправки) — как на странице «Цех».
-const inWorkshop = (p) => p.created_at ? formatDuration((nowTs.value - new Date(p.created_at).getTime()) / 1000) : null;
+const inWorkshop = (p) => (p.in_workshop_seconds != null ? formatDuration(elapsed(p.in_workshop_seconds)) : null);
 
 // ---- Живучесть ТВ (правило от 22.08.2026): сервер временно недоступен
 // (перегруз, деплой, лимит хостинга) — экран НЕ ломается: глушим модалки
@@ -56,8 +55,6 @@ const safeReload = () => {
 let offInvalid = null, offException = null;
 
 onMounted(() => {
-    tick();
-    clockTimer = setInterval(tick, 1000);
     // Тик каждые 30с, но реальное обновление — по расписанию живучести
     // (обычно раз в 2 минуты; при недоступном сервере пауза растёт до 10).
     refreshTimer = setInterval(() => { if (Date.now() >= nextTryAt) safeReload(); }, 30000);
@@ -66,7 +63,7 @@ onMounted(() => {
     offException = router.on('exception', (e) => e.preventDefault());
 
 });
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(refreshTimer); offInvalid?.(); offException?.(); });
+onUnmounted(() => { clearInterval(refreshTimer); offInvalid?.(); offException?.(); });
 
 const title = computed(() => [props.screen?.company, props.screen?.workshop].filter(Boolean).join(' · ') || 'Цех');
 const leave = () => router.post(route('screen.leave'));
