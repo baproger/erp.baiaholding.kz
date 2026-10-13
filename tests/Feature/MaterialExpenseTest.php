@@ -44,6 +44,47 @@ class MaterialExpenseTest extends TestCase
         $this->material = Material::create(['company_id' => $company->id, 'name' => 'ЛДСП', 'unit' => 'штук', 'quantity' => 20]);
     }
 
+    /**
+     * Склад есть и у ASU (правило от 13.10.2026): менеджер ASU списывает ткани
+     * в свою сделку по необходимости, бухгалтер подтверждает — остаток ASU
+     * уменьшается; материал BAIA в сделку ASU списать нельзя.
+     */
+    public function test_asu_manager_writes_off_own_warehouse_and_accountant_confirms(): void
+    {
+        $asu = Company::where('code', 'ASU')->firstOrFail();
+        $mgr = User::factory()->create();
+        $mgr->assignRole('manager');
+        $mgr->companies()->attach($asu->id);
+        $fin = User::factory()->create();
+        $fin->assignRole('financist');
+        $fin->companies()->attach($asu->id);
+        $deal = Deal::create([
+            'company_id' => $asu->id, 'number' => 'ASU-T-1', 'name' => 'Т', 'company_name' => 'ТОО',
+            'client_name' => 'Шторы', 'budget' => 100000, 'status' => 'active',
+            'deal_stage_id' => DealStage::orderBy('order')->first()->id, 'responsible_user_id' => $mgr->id,
+        ]);
+        $fabric = Material::create(['company_id' => $asu->id, 'name' => 'Ткань блэкаут', 'unit' => 'м', 'quantity' => 50, 'price' => 2000]);
+
+        $this->actingAs($mgr)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $deal->id,
+            'material_id' => $fabric->id, 'qty' => 10, 'date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors();
+        $expense = Expense::where('expenseable_id', $deal->id)->firstOrFail();
+        $this->assertSame('pending', $expense->status);
+        $this->assertEquals(20000.0, (float) $expense->amount, '10 м × 2000');
+        $this->assertEquals(50.0, (float) $fabric->fresh()->quantity, 'до подтверждения склад не трогаем');
+
+        $this->actingAs($fin)->patch(route('expenses.confirm', $expense))->assertSessionHasNoErrors();
+        $this->assertSame('confirmed', $expense->fresh()->status);
+        $this->assertEquals(40.0, (float) $fabric->fresh()->quantity);
+
+        // Материал BAIA в сделку ASU — отказ.
+        $this->actingAs($mgr)->post(route('expenses.store'), [
+            'expenseable_type' => 'deal', 'expenseable_id' => $deal->id,
+            'material_id' => $this->material->id, 'qty' => 1, 'amount' => 100, 'date' => now()->toDateString(),
+        ])->assertSessionHasErrors('material_id');
+    }
+
     public function test_manager_material_expense_is_pending_until_accountant_confirms(): void
     {
         // Правило от 18.08.2026: списание менеджера ждёт бухгалтера,

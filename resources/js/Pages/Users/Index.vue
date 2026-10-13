@@ -424,12 +424,12 @@ const fmtDate = (d) => (d ? d.split('-').reverse().join('.') : '');
                     </div>
                     <div>
                         <InputLabel :value="editing ? 'Новый пароль (если менять)' : 'Пароль'" />
-                        <TextInput v-model="form.password" type="password" class="mt-1 w-full" />
+                        <TextInput v-model="form.password" type="password" class="mt-1 w-full" autocomplete="new-password" placeholder="минимум 8 символов" />
                         <InputError :message="form.errors.password" class="mt-1" />
                     </div>
                     <div>
                         <InputLabel value="Повтор пароля" />
-                        <TextInput v-model="form.password_confirmation" type="password" class="mt-1 w-full" />
+                        <TextInput v-model="form.password_confirmation" type="password" class="mt-1 w-full" autocomplete="new-password" />
                     </div>
                     <div>
                         <InputLabel value="Отдел" />
@@ -440,12 +440,14 @@ const fmtDate = (d) => (d ? d.split('-').reverse().join('.') : '');
                                 <option v-for="d in departmentsByCompany[c.id] ?? []" :key="d.id" :value="d.id">{{ d.name }}</option>
                             </optgroup>
                         </select>
+                        <InputError :message="form.errors.department_id" class="mt-1" />
                     </div>
                     <div>
                         <InputLabel value="Роль" />
                         <select v-model="form.role" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm">
                             <option v-for="r in roles" :key="r" :value="r">{{ roleLabels[r] ?? r }}</option>
                         </select>
+                        <InputError :message="form.errors.role" class="mt-1" />
                     </div>
                     <div v-if="workshopOptions.length" class="sm:col-span-2">
                         <InputLabel value="Доступ к цехам (пусто = все цеха; можно выбрать оба)" />

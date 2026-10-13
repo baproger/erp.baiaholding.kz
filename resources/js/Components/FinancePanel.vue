@@ -23,7 +23,8 @@ const props = defineProps({
     section: { type: String, default: 'all' },
     // Смета дизайнера по сделке ({id,name,user,at} | null) — бухгалтер сверяет материалы.
     estimate: { type: Object, default: null },
-    // Код фирмы сделки: «По материалам (со склада)» — только BAIA (25.09.2026); Фурнитура — у всех.
+    // Код фирмы сделки: у BAIA форма менеджера открывается сразу на «По материалам (со склада)»
+    // (металл обязателен); у ASU склад тоже есть, но списание по необходимости (13.10.2026).
     companyCode: { type: String, default: null },
     // own | contractor: у подрядной сделки только «Прочий расход» — материалы/закуп не её (30.09.2026).
     dealKind: { type: String, default: 'own' },
@@ -289,8 +290,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         :class="expenseMode === m.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         {{ m.l }}
                     </button>
-                    <!-- Склад есть только у BAIA (ASU: Закуп и Фурнитура) -->
-                    <button v-if="dealKind !== 'contractor' && companyCode === 'BAIA' && materials.length" type="button" @click="expenseMode = 'material'"
+                    <!-- Склад есть у BAIA и ASU (13.10.2026): у BAIA металл со склада обязателен
+                         для Металл цеха, у ASU (ткани) списание — по необходимости. -->
+                    <button v-if="dealKind !== 'contractor' && materials.length" type="button" @click="expenseMode = 'material'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseMode === 'material' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 text-slate-500 hover:border-slate-300'">
                         По материалам (со склада)

@@ -301,33 +301,44 @@ class UserController extends Controller
         $this->authorize('create', User::class);
 
         $data = $request->validated();
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'department_id' => $data['department_id'] ?? null,
-            'workshops' => array_values(array_filter($data['workshops'] ?? [])) ?: null,
-            'phone' => $data['phone'] ?? null,
-            'birth_date' => $data['birth_date'] ?? null,
-            'hired_at' => $data['hired_at'] ?? null,
-            'salary' => $data['salary'] ?? 0,
-            'contract_path' => $request->hasFile('contract') ? $request->file('contract')->store('contracts') : null,
-            'is_active' => $data['is_active'] ?? true,
-            'language' => 'ru',
-        ]);
+        // Права на роль — ДО создания: иначе при 403 оставался бы сотрудник без роли.
         $this->guardRoleAssignment($request, $data['role']);
-        $user->assignRole($data['role']);
 
-        if ($user->department_id) {
-            $user->departments()->syncWithoutDetaching([$user->department_id]);
+        // Одной транзакцией: сотрудник, роль, отдел, фирмы — либо всё, либо ничего.
+        $user = \Illuminate\Support\Facades\DB::transaction(function () use ($data, $request) {
+            $user = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'department_id' => $data['department_id'] ?? null,
+                'workshops' => array_values(array_filter($data['workshops'] ?? [])) ?: null,
+                'phone' => $data['phone'] ?? null,
+                'birth_date' => $data['birth_date'] ?? null,
+                'hired_at' => $data['hired_at'] ?? null,
+                'salary' => $data['salary'] ?? 0,
+                'is_active' => $data['is_active'] ?? true,
+                'status' => User::STATUS_WORKING,
+                'language' => 'ru',
+            ]);
+            $user->assignRole($data['role']);
+
+            if ($user->department_id) {
+                $user->departments()->syncWithoutDetaching([$user->department_id]);
+            }
+            // Компании сотрудника (BAIA / ASU, можно обе); без выбора — привязка к обеим.
+            $user->companies()->sync($this->companyIds($request));
+            $this->realignDepartment($user);
+
+            return $user;
+        });
+        // Файл договора — после успешной записи (не плодим «сирот» в хранилище).
+        if ($request->hasFile('contract')) {
+            $user->update(['contract_path' => $request->file('contract')->store('contracts')]);
         }
-        // Компании сотрудника (BAIA / ASU, можно обе); без выбора — привязка к обеим.
-        $user->companies()->sync($this->companyIds($request));
         \Illuminate\Support\Facades\Cache::forget('user_companies.'.$user->id);
         \Illuminate\Support\Facades\Cache::forget('user_company_ids.'.$user->id);
-        $this->realignDepartment($user);
 
-        return back()->with('success', 'Сотрудник добавлен.');
+        return back()->with('success', "Сотрудник «{$user->name}» добавлен.");
     }
 
     public function update(UserRequest $request, User $user): RedirectResponse

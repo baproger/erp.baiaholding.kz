@@ -32,4 +32,32 @@ class UserRequest extends FormRequest
             'is_active' => ['boolean'],
         ];
     }
+
+    /**
+     * Русские сообщения формы сотрудника: файла lang/ru/validation.php в проекте
+     * нет, без этого бухгалтер видел английские ошибки (13.10.2026).
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'Укажите ФИО сотрудника.',
+            'email.required' => 'Укажите email — это логин для входа.',
+            'email.email' => 'Email указан неверно.',
+            'email.unique' => 'Сотрудник с таким email уже есть. Если он уволен — найдите его на вкладке «Уволенные» и нажмите «Восстановить».',
+            'password.required' => 'Придумайте пароль (минимум 8 символов).',
+            'password.confirmed' => 'Пароли не совпадают.',
+            'password.min' => 'Пароль — минимум 8 символов.',
+            'password.uncompromised' => 'Этот пароль слишком простой или уже утёк в интернет — придумайте другой.',
+            'role.required' => 'Выберите роль.',
+            'role.exists' => 'Такой роли нет.',
+            'department_id.exists' => 'Такого отдела нет.',
+            'birth_date.before' => 'Дата рождения должна быть в прошлом.',
+            'salary.numeric' => 'Оклад — числом.',
+            'salary.min' => 'Оклад не может быть отрицательным.',
+            'contract.mimes' => 'Договор — PDF, фото (JPG/PNG/WEBP) или Word.',
+            'contract.max' => 'Файл договора — не больше 10 МБ.',
+        ];
+    }
 }
