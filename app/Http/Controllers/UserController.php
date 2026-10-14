@@ -440,6 +440,7 @@ class UserController extends Controller
 
         // Выдать/снять роль admin и вообще править супер-админа может только супер-админ.
         if (($role === 'admin' || $targetWasAdmin) && ! $actorIsAdmin) {
+            report(new \App\Exceptions\EmployeeFormRejected('Сотрудник не сохранён: роль «Администратор» выдаёт только супер-администратор ('.$request->user()->email.').'));
             abort(403, 'Супер-администратора и роль «Администратор» меняет только супер-администратор.');
         }
         // Нельзя разжаловать последнего активного админа.

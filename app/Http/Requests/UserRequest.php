@@ -34,6 +34,21 @@ class UserRequest extends FormRequest
     }
 
     /**
+     * Форму сотрудника отклонила проверка — причина уходит в журнал «Ошибки сайта»
+     * и во flash (14.10.2026): владелец не мог понять, почему «не создаётся».
+     */
+    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void
+    {
+        $reasons = collect($validator->errors()->all())->implode(' ');
+        report(new \App\Exceptions\EmployeeFormRejected(
+            ($this->route('user') ? 'Сотрудник не изменён: ' : 'Сотрудник не создан: ').$reasons
+        ));
+        $this->session()->flash('error', 'Сотрудник не сохранён: '.$reasons);
+
+        parent::failedValidation($validator);
+    }
+
+    /**
      * Русские сообщения формы сотрудника: файла lang/ru/validation.php в проекте
      * нет, без этого бухгалтер видел английские ошибки (13.10.2026).
      *
@@ -49,7 +64,8 @@ class UserRequest extends FormRequest
             'password.required' => 'Придумайте пароль (минимум 8 символов).',
             'password.confirmed' => 'Пароли не совпадают.',
             'password.min' => 'Пароль — минимум 8 символов.',
-            'password.uncompromised' => 'Этот пароль слишком простой или уже утёк в интернет — придумайте другой.',
+            'password.letters' => 'В пароле должна быть хотя бы одна буква.',
+            'password.numbers' => 'В пароле должна быть хотя бы одна цифра.',
             'role.required' => 'Выберите роль.',
             'role.exists' => 'Такой роли нет.',
             'department_id.exists' => 'Такого отдела нет.',
