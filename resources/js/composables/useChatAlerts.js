@@ -35,9 +35,11 @@ const unlockAudio = () => {
 };
 
 export const ding = () => {
-    if (!soundOn()) return;
+    // До первого клика/клавиши контекста ещё нет: создавать его здесь браузер
+    // запрещает (предупреждение «AudioContext was not allowed to start») —
+    // просто молчим, после первого жеста звук заработает.
+    if (!soundOn() || !audioCtx) return;
     try {
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
         const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
         o.connect(g); g.connect(audioCtx.destination);

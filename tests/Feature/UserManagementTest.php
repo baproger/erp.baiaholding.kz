@@ -147,4 +147,22 @@ class UserManagementTest extends TestCase
         ]);
         $this->assertStringContainsString('Пароли не совпадают', implode(' ', session('errors')->get('password')));
     }
+
+    /** Добавили в другую фирму, а в шапке выбрана текущая — прямое предупреждение (14.10.2026). */
+    public function test_created_employee_in_other_company_gets_clear_notice(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $admin = \App\Models\User::factory()->create();
+        $admin->assignRole('admin');
+        $baia = \App\Models\Company::where('code', 'BAIA')->firstOrFail();
+        $asu = \App\Models\Company::where('code', 'ASU')->firstOrFail();
+
+        $admin->companies()->attach([$baia->id, $asu->id]);
+        $this->actingAs($admin)->withSession(['company_id' => $baia->id])->post(route('users.store'), [
+            'name' => 'Ермек Рахматулла', 'email' => 'ermek@baia.kz', 'role' => 'employee',
+            'password' => 'Qw9!zx7Lm', 'password_confirmation' => 'Qw9!zx7Lm', 'company_ids' => [$asu->id],
+        ])->assertSessionHasNoErrors()->assertSessionHas('created_user_id');
+
+        $this->assertStringContainsString('переключите фирму', (string) session('success'));
+    }
 }

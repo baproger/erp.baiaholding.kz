@@ -89,9 +89,9 @@ class AppServiceProvider extends ServiceProvider
         // Живые обновления без WebSocket (LiveStamp): события двигают штамп
         // пользователя, фронт опрашивает /live/version — см. useLive.js.
         \App\Models\ChatMessage::saved(fn ($m) => \App\Support\LiveStamp::bump(
-            $m->chat?->participants()->pluck('users.id'), 'chat'));
+            self::chatAudience($m), 'chat'));
         \App\Models\ChatMessage::deleted(fn ($m) => \App\Support\LiveStamp::bump(
-            $m->chat?->participants()->pluck('users.id'), 'chat'));
+            self::chatAudience($m), 'chat'));
         \App\Models\Task::saved(fn ($t) => \App\Support\LiveStamp::bump(
             [$t->assignee_id, $t->creator_id, $t->getOriginal('assignee_id')], 'tasks'));
         \App\Models\Task::deleted(fn ($t) => \App\Support\LiveStamp::bump([$t->assignee_id, $t->creator_id], 'tasks'));
@@ -109,5 +109,25 @@ class AppServiceProvider extends ServiceProvider
             'project' => Project::class,
             'user' => User::class,
         ]);
+    }
+
+    /**
+     * Кого будить штампом «чат» при новом сообщении. У чата сделки участников
+     * нет (доступ — по праву на сделку): будим ответственного и всех, кто уже
+     * писал в этот чат (14.10.2026) — их карточка сделки обновится сама.
+     */
+    private static function chatAudience(\App\Models\ChatMessage $m): \Illuminate\Support\Collection
+    {
+        $chat = $m->chat;
+        if (! $chat) {
+            return collect();
+        }
+        $ids = $chat->participants()->pluck('users.id');
+        if ($chat->deal_id) {
+            $ids = $ids->merge(\App\Models\ChatMessage::where('chat_id', $chat->id)->distinct()->pluck('user_id'))
+                ->push(\App\Models\Deal::whereKey($chat->deal_id)->value('responsible_user_id'));
+        }
+
+        return $ids->filter()->unique()->values();
     }
 }

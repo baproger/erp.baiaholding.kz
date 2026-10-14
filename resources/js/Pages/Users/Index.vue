@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageLayout from '@/Layouts/PageLayout.vue';
@@ -189,7 +189,7 @@ const toggleWorkshop = (w) => {
 };
 
 const openCreate = () => {
-    editing.value = null; form.reset(); form.role = 'employee'; form.is_active = true;
+    editing.value = null; form.reset(); form.clearErrors(); form.role = 'employee'; form.is_active = true;
     form.company_ids = companyFilter.value === 'all' ? props.companies.map((c) => c.id) : [companyFilter.value];
     // Если открыт фильтр по отделу — подставляем отдел выбранной фирмы
     // (при «Все фирмы» отдел не угадать: одноимённых столько же, сколько фирм).
@@ -202,6 +202,7 @@ const openCreate = () => {
 const openEdit = (u) => {
     if (!props.can.manage) return;
     editing.value = u;
+    form.clearErrors();
     Object.assign(form, {
         name: u.name, email: u.email, password: '', password_confirmation: '',
         department_id: u.department_id ?? '', workshops: [...(u.workshops ?? [])], phone: u.phone ?? '',
@@ -217,14 +218,33 @@ const toggleCompany = (id) => {
         ? form.company_ids.filter((c) => c !== id)
         : [...form.company_ids, id];
 };
+// Ошибки формы — списком у кнопки «Сохранить»: длинная модалка прокручена
+// вниз, и ошибка у поля вверху (например, «email уже есть») была не видна.
+const formErrors = computed(() => Object.values(form.errors).filter(Boolean));
 const submit = () => {
-    const opts = { preserveScroll: true, onSuccess: () => (show.value = false) };
+    const opts = {
+        preserveScroll: true,
+        onSuccess: () => (show.value = false),
+        onError: () => nextTick(() => document.querySelector('[data-user-form] .text-red-600, [data-user-form] [data-error]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })),
+    };
     // Файл договора требует multipart — обновление идёт POST-ом с _method=put.
+    // transform задаём ВСЕГДА (14.10.2026): Inertia запоминает его в форме, и после
+    // «Изменить» создание нового сотрудника уходило как PUT /users — сотрудник не создавался.
     if (editing.value) form.transform((d) => ({ ...d, _method: 'put' })).post(route('users.update', editing.value.id), opts);
-    else form.post(route('users.store'), opts);
+    else form.transform((d) => { const { _method, ...rest } = d; return rest; }).post(route('users.store'), opts);
 };
 // Код входа (второй фактор): выпускается админом, показывается один раз в модалке.
 const page = usePage();
+// Только что добавленный сотрудник: сбрасываем фильтры, которые могли его
+// спрятать (поиск, отдел, фирма, вкладка), прокручиваем и подсвечиваем строку.
+const justCreated = ref(null);
+watch(() => page.props.flash?.created_user_id, (id) => {
+    if (!id) return;
+    search.value = ''; deptFilter.value = 'all'; companyFilter.value = 'all'; staffTab.value = 'working';
+    justCreated.value = id;
+    nextTick(() => document.getElementById(`user-row-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    setTimeout(() => { if (justCreated.value === id) justCreated.value = null; }, 8000);
+}, { immediate: true });
 const issuedCode = ref(null);
 watch(() => page.props.flash?.login_code, (v) => { if (v) issuedCode.value = v; }, { immediate: true });
 const issueCode = async (u) => {
@@ -347,9 +367,9 @@ const fmtDate = (d) => (d ? d.split('-').reverse().join('.') : '');
                     </div>
                     <!-- Список, а не карточки: справочник сканируют глазами сверху вниз,
                          и одна строка на человека читается быстрее сетки плиток. -->
-                    <div v-for="u in g.users" :key="u.id"
+                    <div v-for="u in g.users" :key="u.id" :id="`user-row-${u.id}`"
                         class="group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-2.5 transition-colors duration-150 last:border-b-0 hover:bg-slate-50/60 sm:px-6"
-                        :class="{ 'opacity-50': !u.is_active || statusOf(u) === 'fired' }"
+                        :class="{ 'opacity-50': !u.is_active || statusOf(u) === 'fired', 'bg-emerald-50 ring-2 ring-inset ring-emerald-400': justCreated === u.id }"
                         @click="router.visit(route('users.show', u.id))">
                         <Avatar :name="u.name" :src="u.avatar" :size="34" class="shrink-0" />
 
@@ -409,7 +429,7 @@ const fmtDate = (d) => (d ? d.split('-').reverse().join('.') : '');
         </PageLayout>
 
         <Modal :show="show" @close="show = false" max-width="2xl">
-            <div class="p-6">
+            <div class="p-6" data-user-form>
                 <h2 class="mb-4 text-lg font-semibold text-slate-900">{{ editing ? 'Изменить сотрудника' : 'Новый сотрудник' }}</h2>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
@@ -497,9 +517,15 @@ const fmtDate = (d) => (d ? d.split('-').reverse().join('.') : '');
                         <input type="checkbox" v-model="form.is_active" class="rounded border-slate-300 text-indigo-600" /> Активен
                     </label>
                 </div>
+                <div v-if="formErrors.length" data-error class="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200">
+                    <div class="font-semibold">Сотрудник не сохранён — исправьте:</div>
+                    <ul class="mt-1 list-disc space-y-0.5 pl-5">
+                        <li v-for="(err, i) in formErrors" :key="i">{{ err }}</li>
+                    </ul>
+                </div>
                 <div class="mt-6 flex justify-end gap-2">
                     <SecondaryButton @click="show = false">Отмена</SecondaryButton>
-                    <PrimaryButton :disabled="form.processing" @click="submit">Сохранить</PrimaryButton>
+                    <PrimaryButton :disabled="form.processing" @click="submit">{{ form.processing ? 'Сохраняю…' : 'Сохранить' }}</PrimaryButton>
                 </div>
             </div>
         </Modal>

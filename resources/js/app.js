@@ -37,8 +37,18 @@ router.on('success', (event) => {
 // Шлём кратко и без повторов: один и тот же текст — один раз за вкладку,
 // не больше 5 сообщений, чтобы не завалить журнал в цикле перерисовки.
 const reportedErrors = new Set();
+// Не ошибки сайта (14.10.2026): обрыв связи у сотрудника и чужие скрипты
+// (расширения браузера — «reading 'M_ID'» и т.п.) только засоряли журнал.
+const NETWORK_NOISE = /^(Network Error|Request aborted|timeout of \d+ms exceeded|Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?)$/i;
+const isForeign = (source, stack) => {
+    const where = `${source ?? ''}\n${stack ?? ''}`;
+    if (/(chrome|moz|safari(-web)?)-extension:\/\//i.test(where)) return true;
+    // Есть стек, но в нём ни одной строки нашего приложения — скрипт не наш.
+    return !!stack && !where.includes('/build/') && !where.includes(window.location.origin);
+};
 const reportClientError = (name, message, source, stack) => {
     if (!message || reportedErrors.size >= 5) return;
+    if (NETWORK_NOISE.test(String(message).trim()) || isForeign(source, stack)) return;
     const key = `${name}|${message}`.slice(0, 300);
     if (reportedErrors.has(key)) return;
     reportedErrors.add(key);

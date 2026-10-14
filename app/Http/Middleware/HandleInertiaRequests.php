@@ -66,6 +66,8 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 // Выпущенный код входа: показывается админу один раз (Сотрудники).
                 'login_code' => fn () => $request->session()->get('login_code'),
+                // Только что добавленный сотрудник — список подсвечивает его (14.10.2026).
+                'created_user_id' => fn () => $request->session()->get('created_user_id'),
             ],
             'locale' => app()->getLocale(),
             'translations' => fn () => \App\Models\UiTranslation::map(app()->getLocale()),

@@ -338,7 +338,18 @@ class UserController extends Controller
         \Illuminate\Support\Facades\Cache::forget('user_companies.'.$user->id);
         \Illuminate\Support\Facades\Cache::forget('user_company_ids.'.$user->id);
 
-        return back()->with('success', "Сотрудник «{$user->name}» добавлен.");
+        // Новый сотрудник должен быть сразу виден (14.10.2026): список Сотрудников
+        // показывает только выбранную в шапке фирму — если добавили в другую,
+        // говорим об этом прямо, а не «пропал».
+        $message = "Сотрудник «{$user->name}» добавлен.";
+        $current = \App\Support\CurrentCompany::id();
+        $ids = $user->companies()->pluck('companies.id');
+        if ($current && $ids->isNotEmpty() && ! $ids->contains($current)) {
+            $names = \App\Models\Company::whereIn('id', $ids)->pluck('name')->implode(', ');
+            $message .= " Он работает в фирме {$names} — чтобы увидеть его в списке, переключите фирму в шапке на «{$names}» или «Все».";
+        }
+
+        return back()->with('success', $message)->with('created_user_id', $user->id);
     }
 
     public function update(UserRequest $request, User $user): RedirectResponse

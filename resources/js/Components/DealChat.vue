@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { usePage, useForm } from '@inertiajs/vue3';
+import { onLive } from '@/composables/useLive';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 
 const props = defineProps({ chatId: Number });
@@ -10,17 +11,30 @@ const messages = ref([]);
 const lastId = ref(0);
 const scroller = ref(null);
 let timer = null;
+let offLive = null;
+let stopped = false;
 const form = useForm({ message: '' });
 
 const scrollBottom = () => nextTick(() => { if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight; });
 
+let loading = false;
 const load = async () => {
-    if (!props.chatId) return;
-    const { data } = await window.axios.get(route('chat.messages', props.chatId), { params: { after: lastId.value } });
-    if (data.messages.length) {
-        messages.value.push(...data.messages);
-        lastId.value = data.messages[data.messages.length - 1].id;
-        scrollBottom();
+    if (!props.chatId || stopped || loading) return;
+    loading = true;
+    try {
+        const { data } = await window.axios.get(route('chat.messages', props.chatId), { params: { after: lastId.value } });
+        if (data.messages.length) {
+            messages.value.push(...data.messages);
+            lastId.value = data.messages[data.messages.length - 1].id;
+            scrollBottom();
+        }
+    } catch (e) {
+        // Сделку удалили/доступ сняли, пока страница открыта — молча прекращаем
+        // опрос (раньше это сыпало «403» в журнал ошибок). Сеть — просто ждём следующего раза.
+        const status = e?.response?.status;
+        if (status === 403 || status === 404 || status === 401 || status === 419) stopped = true;
+    } finally {
+        loading = false;
     }
 };
 const send = () => {
@@ -29,10 +43,18 @@ const send = () => {
 };
 const fmt = (t) => new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+// Новые сообщения — по единому штампу /live/version (без SQL на сервере);
+// раньше чат сделки сам опрашивал сервер каждые 4 с с каждой открытой карточки —
+// это и «Too many connections» к базе на хостинге (14.10.2026). Страховка — раз в 30 с.
 // Фоновая вкладка сервер не дёргает; вернулись — догружаем сразу.
 const onVisible = () => { if (!document.hidden) load(); };
-onMounted(() => { load(); timer = setInterval(() => { if (!document.hidden) load(); }, 4000); document.addEventListener('visibilitychange', onVisible); });
-onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); });
+onMounted(() => {
+    load();
+    offLive = onLive('chat', load);
+    timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
+    document.addEventListener('visibilitychange', onVisible);
+});
+onUnmounted(() => { clearInterval(timer); offLive?.(); document.removeEventListener('visibilitychange', onVisible); });
 </script>
 
 <template>
