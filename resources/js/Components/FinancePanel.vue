@@ -71,7 +71,9 @@ const openExpenseForm = () => {
 };
 const EXPENSE_TYPE = { other: 'direct', delivery: 'delivery', purchase: 'purchase', assembly: 'assembly', metal: 'metal', sheet: 'sheet', fittings: 'fittings' };
 const expenseTypeLabels = { delivery: '🚚 Доставка', purchase: '📦 Закуп', assembly: '🔧 ' + assemblyLabel(), metal: '🔩 Металл', sheet: '▤ Лист', fittings: '🪛 Фурнитура', contractor: '🤝 Подрядчику' };
-const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null });
+const expenseForm = useForm({ expenseable_type: props.entityType, expenseable_id: props.entityId, material_id: '', qty: '', amount: 0, date: new Date().toISOString().slice(0, 10), description: '', type: 'direct', status: 'confirmed', payment_method: 'cash', file: null , funding: 'cash', supplier_name: '', supplier_contact: '', debt_due_date: '' });
+// «Оплачено деньгами» / «В долг» (ТЗ 02.11.2026, п.3): долг — поставщик, контакт, срок и документ обязательны.
+const isDebtMode = computed(() => expenseMode.value !== 'material' && expenseForm.funding === 'debt');
 const onReceipt = (e) => { expenseForm.file = e.target.files[0] ?? null; };
 const selectedMaterial = computed(() => props.materials.find((m) => m.id === expenseForm.material_id));
 const qtyNum = (v) => new Intl.NumberFormat('ru-RU').format(Number(v ?? 0));
@@ -136,11 +138,15 @@ const submitConfirm = (e) => confirmForm
 const addExpense = () => expenseForm
     .transform((d) => expenseMode.value === 'material'
         ? { ...d, file: null, amount: autoAmount.value ?? d.amount } // сервер пересчитает: кол-во × цена
-        : { ...d, material_id: '', qty: '', type: EXPENSE_TYPE[expenseMode.value] ?? 'direct' })
+        : { ...d, material_id: '', qty: '', type: EXPENSE_TYPE[expenseMode.value] ?? 'direct',
+            ...(d.funding === 'debt' ? { payment_method: '' } : { supplier_name: '', supplier_contact: '', debt_due_date: '' }) })
     .post(route('expenses.store'), {
         preserveScroll: true, forceFormData: true,
-        onSuccess: () => { expenseForm.reset('amount', 'description', 'file', 'material_id', 'qty'); if (receiptInput.value) receiptInput.value.value = ''; showExpense.value = false; },
+        onSuccess: () => { expenseForm.reset('amount', 'description', 'file', 'material_id', 'qty', 'funding', 'supplier_name', 'supplier_contact', 'debt_due_date'); if (receiptInput.value) receiptInput.value.value = ''; showExpense.value = false; },
     });
+// Документ нужен ручным расходам сделки (не склад/металл/подрядчик) — ТЗ 02.11.2026, п.3.2.
+const needsDoc = (e) => !e.material && !e.material_id && !e.employee_id && !['metal', 'contractor'].includes(e.type) && e.funding !== 'debt';
+const fmtDay = (v) => (v ? String(v).slice(0, 10).split('-').reverse().join('.') : '—');
 const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 const isImage = (path) => /\.(jpe?g|png|webp|heic)$/i.test(path ?? '');
 
@@ -331,8 +337,21 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <TextInput v-model="expenseForm.date" type="date" />
                 </div>
                 <TextInput v-model="expenseForm.description" placeholder="Описание" class="mt-2 w-full" />
+                <!-- Деньгами или в долг (ТЗ 02.11.2026) — не для списания со склада -->
+                <div v-if="expenseMode !== 'material' && dealKind !== 'contractor'" class="mt-2 flex flex-wrap gap-2">
+                    <button type="button" @click="expenseForm.funding = 'cash'" class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseForm.funding === 'cash' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">💵 Оплачено деньгами</button>
+                    <button type="button" @click="expenseForm.funding = 'debt'" class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseForm.funding === 'debt' ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">🧾 В долг (у поставщика)</button>
+                </div>
+                <div v-if="isDebtMode" class="mt-2 grid grid-cols-1 gap-2 rounded-xl border border-orange-200 bg-orange-50/60 p-3 sm:grid-cols-3">
+                    <div><TextInput v-model="expenseForm.supplier_name" placeholder="Поставщик *" class="w-full" /><div v-if="expenseForm.errors.supplier_name" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.supplier_name }}</div></div>
+                    <div><TextInput v-model="expenseForm.supplier_contact" placeholder="Телефон или БИН *" class="w-full" /><div v-if="expenseForm.errors.supplier_contact" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.supplier_contact }}</div></div>
+                    <div><label class="block text-[11px] text-orange-700">Срок погашения *</label><TextInput v-model="expenseForm.debt_due_date" type="date" class="w-full" /><div v-if="expenseForm.errors.debt_due_date" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.debt_due_date }}</div></div>
+                    <p class="text-[11px] text-orange-700 sm:col-span-3">Касса не уменьшится: расход сразу входит в затраты сделки, а долг появится в Финансы → «Долг сделкам». Бухгалтер погасит его позже с чеком.</p>
+                </div>
                 <!-- Способ оплаты: нал / банк — и для прочих, и для материальных -->
-                <div class="mt-2 flex gap-2">
+                <div v-if="!isDebtMode" class="mt-2 flex gap-2">
                     <button type="button" @click="expenseForm.payment_method = 'cash'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseForm.payment_method === 'cash' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">Наличные</button>
@@ -346,7 +365,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <template v-if="overBalance"> — расход превышает остаток {{ expenseForm.payment_method === 'cash' ? 'кассы' : 'счёта' }}!</template>
                 </div>
                 <div v-if="expenseMode !== 'material'" class="mt-2">
-                    <label class="mb-1 block text-xs font-medium text-slate-500">Заявка / чек менеджера (фото или PDF) — бухгалтер сверит его и приложит свой чек оплаты</label>
+                    <label class="mb-1 block text-xs font-medium" :class="isDebtMode ? 'text-orange-700' : 'text-slate-500'">{{ isDebtMode ? 'Счёт или накладная поставщика * (фото или PDF)' : 'Чек или счёт на оплату (фото или PDF) — без него бухгалтер расход не подтвердит' }}</label>
                     <input ref="receiptInput" type="file" accept="image/*,.pdf" @change="onReceipt"
                         class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
                     <div v-if="expenseForm.errors.file" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.file }}</div>
@@ -371,6 +390,14 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                                 <a v-if="e.material && estimate" :href="route('documents.download', estimate.id)" target="_blank" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-200" :title="'Смета: ' + estimate.name">📐 смета</a>
                                 <span v-else-if="e.material && e.status !== 'confirmed'" class="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600" title="Дизайнер ещё не прикрепил смету к сделке">⚠ нет сметы</span>
                                 <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
+                                <span v-if="e.funding === 'debt' && e.supplier_debt" class="rounded-full px-2 py-0.5 font-semibold"
+                                    :class="e.supplier_debt.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'"
+                                    :title="'Поставщик: ' + e.supplier_debt.supplier_name + (e.supplier_debt.supplier_contact ? ' · ' + e.supplier_debt.supplier_contact : '')">
+                                    🧾 в долг · {{ e.supplier_debt.supplier_name }} ·
+                                    <template v-if="e.supplier_debt.status === 'paid'">погашен</template>
+                                    <template v-else>остаток {{ money(Number(e.supplier_debt.amount) - Number(e.supplier_debt.paid)) }} · до {{ fmtDay(e.supplier_debt.due_date) }}</template>
+                                </span>
+                                <span v-else-if="needsDoc(e) && !e.file_path && e.status !== 'confirmed'" class="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700" title="ТЗ: без чека или счёта расход не подтверждается">📎 нет чека/счёта</span>
                                 <span v-if="e.responsible">{{ e.responsible.name }}</span>
                                 <span>· {{ fmtDateTime(e.created_at) }}</span>
                             </div>
@@ -394,8 +421,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             <span v-else-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
                             <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{{ e.type === 'metal' ? 'Ждёт завсклада' : 'Ждёт бухгалтера' }}</span>
                             <span v-else class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Черновик</span>
-                            <button v-if="canConfirmRow(e) && e.status !== 'confirmed' && confirmFor !== e.id"
-                                class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700"
+                            <button v-if="canConfirmRow(e) && e.status !== 'confirmed' && confirmFor !== e.id" :disabled="needsDoc(e) && !e.file_path"
+                                :title="needsDoc(e) && !e.file_path ? 'Сначала прикрепите чек или счёт («➕ добавить»)' : ''"
+                                class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                                 @click="openConfirm(e)">✓ Подтвердить</button>
                             <!-- Подтверждённый расход проведён по кассе — удалить его
                                  может только бухгалтер (та же проверка в ExpensePolicy). -->

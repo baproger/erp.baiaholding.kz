@@ -43,6 +43,7 @@ class StageGateRoleTest extends TestCase
         $mgr = $this->user('manager');
         $deal = Deal::create(['number' => 'BAIA-001', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 100000, 'status' => 'active', 'deal_stage_id' => $first->id, 'responsible_user_id' => $mgr->id]);
         app(StageTransitionService::class)->moveToStage($deal, $design->fresh());
+        $this->giveEstimate($deal); // смета есть — проверяем именно галочку дизайнера
 
         return $deal->fresh();
     }

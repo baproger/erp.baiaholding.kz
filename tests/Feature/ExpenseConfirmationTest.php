@@ -51,6 +51,7 @@ class ExpenseConfirmationTest extends TestCase
         $this->actingAs($this->manager)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id,
             'amount' => 5000, 'date' => now()->toDateString(), 'description' => 'Доставка',
+            'file' => UploadedFile::fake()->image('schet.jpg'), // счёт менеджера — без него не подтвердить
         ]);
 
         return Expense::latest('id')->firstOrFail();
@@ -83,7 +84,7 @@ class ExpenseConfirmationTest extends TestCase
         $this->assertSame($this->financist->id, (int) $expense->confirmed_by);
         // Чек бухгалтера — отдельное поле; заявка менеджера (file_path) не трогается.
         $this->assertNotNull($expense->confirm_file_path);
-        $this->assertNull($expense->file_path);
+        $this->assertNotNull($expense->file_path, 'счёт менеджера сохранён');
         // Задача бухгалтера закрыта, автор уведомлён.
         $this->assertSame(0, Task::where('assignee_id', $this->financist->id)->where('status', '!=', 'done')->count());
         $this->assertSame(1, $this->manager->notifications()->count());

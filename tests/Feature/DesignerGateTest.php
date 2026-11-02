@@ -38,7 +38,8 @@ class DesignerGateTest extends TestCase
         DealStage::create(['name' => 'Оплата успешно', 'order' => 6, 'is_active' => true, 'stage_type' => 'payment_won', 'is_won' => true]);
 
         $deal = Deal::create(['number' => 'T-1', 'name' => 'X', 'company_name' => 'ТОО Дизайн', 'client_name' => 'И',
-            'budget' => 100, 'status' => 'active', 'deal_stage_id' => $contract->id, 'responsible_user_id' => $manager->id]);
+            'budget' => 100, 'status' => 'active', 'deal_stage_id' => $contract->id, 'responsible_user_id' => $manager->id,
+            'bin' => 'Д-1', 'contract_date' => '2026-11-01', 'lot_number' => '1']);
 
         // Сделка входит на «Дизайн и расчет» → дизайнеру задача + уведомление.
         app(StageTransitionService::class)->moveToStage($deal->fresh(), $design);
@@ -58,7 +59,8 @@ class DesignerGateTest extends TestCase
             // ожидаемо: гейт держит
         }
 
-        // Дизайнер ставит галочку → сделка проходит дальше.
+        // Дизайнер загрузил смету и ставит галочку → сделка проходит дальше.
+        $this->giveEstimate($deal);
         $this->actingAs($designer)->patch(route('deals.stageTask', $deal->id))->assertRedirect();
         app(StageTransitionService::class)->moveToStage($deal->fresh(), $next);
         $this->assertSame($next->id, $deal->fresh()->deal_stage_id);

@@ -29,9 +29,10 @@ class CexFinanceInheritTest extends TestCase
         $deal = Deal::create(['number' => 'D-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 500000, 'status' => 'active', 'deal_stage_id' => DealStage::orderBy('order')->first()->id, 'responsible_user_id' => $mgr->id]);
         $inv = Invoice::create(['number' => 'INV-1', 'invoiceable_type' => 'deal', 'invoiceable_id' => $deal->id, 'amount' => 300000, 'status' => 'sent']);
         Payment::create(['invoice_id' => $inv->id, 'amount' => 300000, 'payment_date' => now()->toDateString()]);
-        Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 120000, 'date' => now()->toDateString(), 'status' => 'confirmed']);
+        Expense::create(['expenseable_type' => 'deal', 'expenseable_id' => $deal->id, 'amount' => 120000, 'date' => now()->toDateString(), 'status' => 'confirmed', 'type' => 'purchase']);
 
         // transfer to Цех
+        $deal = $this->readyForWorkshop($deal, false); // закуп — сам расход выше
         $this->actingAs($mgr)->post(route('deals.toWorkshop', $deal))->assertRedirect();
         $project = Project::where('deal_id', $deal->id)->firstOrFail();
 

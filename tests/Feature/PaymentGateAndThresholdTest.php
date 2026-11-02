@@ -60,6 +60,7 @@ class PaymentGateAndThresholdTest extends TestCase
         $this->actingAs($admin)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $deal->id,
             'amount' => 50000, 'date' => now()->toDateString(), 'payment_method' => 'cash', 'status' => 'confirmed',
+            'file' => \Illuminate\Http\UploadedFile::fake()->image('chek.jpg'),
         ])->assertRedirect();
         $this->assertEquals(0, $fin->notifications()->count());
 
@@ -67,6 +68,7 @@ class PaymentGateAndThresholdTest extends TestCase
         $this->actingAs($admin)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $deal->id,
             'amount' => 15000, 'date' => now()->toDateString(), 'payment_method' => 'cash', 'status' => 'confirmed',
+            'file' => \Illuminate\Http\UploadedFile::fake()->image('chek.jpg'),
         ])->assertRedirect();
         $this->assertEquals(1, $fin->notifications()->count());
         $this->assertStringContainsString('60%', $fin->notifications()->first()->data['title']);
@@ -75,6 +77,7 @@ class PaymentGateAndThresholdTest extends TestCase
         $this->actingAs($admin)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $deal->id,
             'amount' => 5000, 'date' => now()->toDateString(), 'payment_method' => 'cash', 'status' => 'confirmed',
+            'file' => \Illuminate\Http\UploadedFile::fake()->image('chek.jpg'),
         ])->assertRedirect();
         $this->assertEquals(1, $fin->notifications()->count());
     }

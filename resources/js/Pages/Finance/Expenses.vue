@@ -154,7 +154,8 @@ const del = async (e) => {
                                 </div>
                             </div>
                             <div v-else class="flex items-center justify-between gap-2">
-                                <button v-if="e.can_confirm" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[.98]" @click="openConfirm(e)">
+                                <span v-if="e.can_confirm && e.missing_document" class="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 ring-1 ring-amber-200" title="ТЗ: без чека или счёта расход не подтверждается">📎 Нет чека/счёта — ждём документ от менеджера</span>
+                                <button v-else-if="e.can_confirm" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[.98]" @click="openConfirm(e)">
                                     {{ e.type === 'metal' ? '✓ Подтвердить металл' : '✓ Проверил, оплатить' }}
                                 </button>
                                 <button v-if="canManage" class="rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600" @click="del(e)">Удалить</button>
@@ -218,9 +219,9 @@ const del = async (e) => {
                                 class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 transition-colors duration-150 hover:bg-indigo-100">чек ↗</a>
                             <!-- Металл из цеха подтверждается без кассы (payment_method пуст) — это не «банк» -->
                             <span class="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                :class="!e.payment_method ? 'bg-slate-100 text-slate-500' : e.payment_method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'"
-                                :title="!e.payment_method ? 'Деньги ушли при закупе — касса не трогалась' : ''">
-                                {{ !e.payment_method ? '🏭 без кассы' : e.payment_method === 'cash' ? '💵 нал' : '🏦 банк' }}</span>
+                                :class="e.funding === 'debt' ? 'bg-orange-50 text-orange-700' : !e.payment_method ? 'bg-slate-100 text-slate-500' : e.payment_method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'"
+                                :title="e.funding === 'debt' ? 'Взято у поставщика в долг — гасится в «Долг сделкам»' : !e.payment_method ? 'Деньги ушли при закупе — касса не трогалась' : ''">
+                                {{ e.funding === 'debt' ? '🧾 в долг' : !e.payment_method ? '🏭 без кассы' : e.payment_method === 'cash' ? '💵 нал' : '🏦 банк' }}</span>
                         </div>
                         <!-- Сумма -->
                         <span class="w-28 shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</span>

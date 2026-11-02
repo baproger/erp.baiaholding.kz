@@ -188,9 +188,49 @@ class ExpenseController extends Controller
             return back()->with('success', 'Расход по материалам добавлен — остаток на складе списан.');
         }
 
+        // Расход «в долг» (ТЗ 02.11.2026, п.3): только по сделке/заказу. Сразу
+        // входит в затраты сделки, кассу не трогает, подтверждения бухгалтера
+        // не ждёт; автоматически создаётся долг поставщику («Долг сделкам»).
+        $debtFields = ['supplier_name', 'supplier_contact', 'debt_due_date'];
+        if (($data['funding'] ?? 'cash') === Expense::FUNDING_DEBT) {
+            if ($entity === null) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['funding' => '«В долг» — только расход по сделке.']);
+            }
+            $dealId = $entity instanceof Project ? $entity->deal_id : $entity->id;
+            $expense = \Illuminate\Support\Facades\DB::transaction(function () use ($data, $debtFields, $dealId, $request, $entity) {
+                $expense = Expense::create(collect($data)->except($debtFields)->merge([
+                    'funding' => Expense::FUNDING_DEBT, 'status' => 'confirmed', 'payment_method' => null,
+                    'confirmed_at' => now(), 'confirmed_by' => null,
+                ])->all());
+                \App\Models\SupplierDebt::create([
+                    'company_id' => $entity instanceof Project ? $entity->deal?->company_id : $entity->company_id,
+                    'deal_id' => $dealId, 'expense_id' => $expense->id,
+                    'supplier_name' => trim($data['supplier_name']), 'supplier_contact' => trim($data['supplier_contact']),
+                    'description' => $data['description'] ?? null, 'amount' => $expense->amount,
+                    'due_date' => $data['debt_due_date'], 'document_path' => $expense->file_path,
+                    'status' => 'active', 'created_by' => $request->user()->id,
+                ]);
+
+                return $expense;
+            });
+            $this->checkExpenseThreshold($entity, (float) $expense->amount);
+
+            return back()->with('success', 'Расход «в долг» добавлен: '.number_format((float) $expense->amount, 0, '.', ' ')
+                .' ₸ у «'.trim($data['supplier_name']).'» до '.\Illuminate\Support\Carbon::parse($data['debt_due_date'])->format('d.m.Y').' — долг виден в Финансы → «Долг сделкам».');
+        }
+        $data = collect($data)->except($debtFields)->all();
+        $data['funding'] = 'cash';
+
         // Прочий расход: бухгалтер/админ подтверждают сразу; расход менеджера
         // (и директора) ждёт подтверждения бухгалтера — чек + нал/банк.
         $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
+        // Без чека/счёта расход по сделке — только черновик (ТЗ 02.11.2026, п.3.2):
+        // даже бухгалтер не может сразу провести его подтверждённым.
+        $draftNoDoc = $isAccountant && $entity !== null && empty($data['file_path'])
+            && ! in_array($data['type'] ?? 'direct', ['metal', 'contractor'], true);
+        if ($draftNoDoc) {
+            $isAccountant = false;
+        }
         $data['status'] = $isAccountant ? 'confirmed' : 'pending';
         // Заявка сотрудника — это ещё не выдача денег: откуда платить, решает
         // бухгалтер при подтверждении. Иначе касса/банк уменьшились бы по
@@ -214,7 +254,9 @@ class ExpenseController extends Controller
         if (! $isAccountant) {
             $this->notifyAccountants($expense, $entity);
 
-            return back()->with('success', 'Расход отправлен бухгалтеру на подтверждение.');
+            return back()->with('success', $draftNoDoc
+                ? 'Расход сохранён без чека — подтвердить его можно только после того, как будет прикреплён чек или счёт.'
+                : 'Расход отправлен бухгалтеру на подтверждение.');
         }
 
         return back()->with('success', 'Расход добавлен.');
@@ -264,6 +306,10 @@ class ExpenseController extends Controller
 
         if ($expense->status === 'confirmed') {
             return back()->with('error', 'Расход уже подтверждён.');
+        }
+        // ТЗ 02.11.2026, п.3.2: без чека или счёта (от менеджера) расход не подтверждается.
+        if ($expense->needsDocument() && ! $expense->file_path) {
+            return back()->with('error', 'Нет чека или счёта на оплату — расход #'.$expense->id.' не подтверждается. Прикрепите документ («📎 прикрепить чек»).');
         }
 
         // Металл из цеха: деньги за него ушли раньше, при закупе — поэтому
@@ -395,7 +441,12 @@ class ExpenseController extends Controller
             abort_unless($expense->responsible_user_id === $request->user()->id, 403);
         }
 
-        $data = $request->validated();
+        // Расход «в долг» не редактируется (сумма связана с долгом поставщику) —
+        // удалите и внесите заново, пока по долгу не было погашений.
+        if ($expense->isDebt()) {
+            return back()->with('error', 'Расход «в долг» не редактируется — удалите его и внесите заново.');
+        }
+        $data = collect($request->validated())->except(['funding', 'supplier_name', 'supplier_contact', 'debt_due_date'])->all();
         unset($data['file']);
         // Материал/количество после создания не меняются (иначе разъедется склад) —
         // удалите расход (остаток вернётся) и создайте заново.
@@ -494,10 +545,17 @@ class ExpenseController extends Controller
         // Удаление подтверждённого расхода по материалам возвращает количество
         // на склад; pending склад ещё не трогал — возвращать нечего.
         $returned = $expense->material_id && $expense->qty && $expense->material && $expense->status === 'confirmed';
-        \Illuminate\Support\Facades\DB::transaction(function () use ($expense, $returned) {
+        // Долг поставщику, по которому уже платили, не удаляется вместе с расходом:
+        // деньги ушли из кассы — история погашений должна остаться.
+        $debt = $expense->isDebt() ? $expense->supplierDebt : null;
+        if ($debt && $debt->payments()->exists()) {
+            return back()->with('error', 'По этому долгу уже есть погашения — расход «в долг» удалить нельзя.');
+        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($expense, $returned, $debt) {
             if ($returned) {
                 $expense->material->increment('quantity', $expense->qty);
             }
+            $debt?->delete();
             $expense->delete();
         });
         // Расхода больше нет — «ждёт подтверждения» гасим у всех бухгалтеров.

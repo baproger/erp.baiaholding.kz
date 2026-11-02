@@ -54,4 +54,35 @@ class Task extends Model
     {
         return $this->hasMany(Task::class, 'parent_task_id');
     }
+
+    /**
+     * ТЗ 02.11.2026, п.2.2: задачу «Подтвердить дизайн и расчет» нельзя закрыть,
+     * пока в сделке нет сметы — ни из карточки, ни со страницы задач.
+     * Автозакрытие (ЭСФ) не проверяем: к нему смета уже обязана быть.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $task) {
+            if ($task->isDirty('status')) {
+                self::assertDesignGateCanClose($task);
+            }
+        });
+    }
+
+    public static function assertDesignGateCanClose(self $task): void
+    {
+        if ($task->status !== 'done' || $task->auto_completed || $task->taskable_type !== 'deal' || ! $task->taskable_id) {
+            return;
+        }
+        $titles = DealStage::where('stage_type', 'design')->whereNotNull('gate_task_title')->pluck('gate_task_title');
+        if (! $titles->contains(fn ($t) => $t !== '' && str_starts_with((string) $task->title, $t))) {
+            return;
+        }
+        $deal = Deal::find($task->taskable_id);
+        if ($deal && ! \App\Services\StageTransitionService::hasEstimate($deal)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'stage' => 'Дизайнер должен загрузить смету — без неё «'.$task->title.'» не закрывается.',
+            ]);
+        }
+    }
 }

@@ -10,6 +10,112 @@ use Illuminate\Validation\ValidationException;
 
 class StageTransitionService
 {
+    /** Подписи типов расходов — для понятного списка «что мешает» (ТЗ 02.11.2026). */
+    public const EXPENSE_TYPE_LABELS = [
+        'purchase' => 'Закуп', 'sheet' => 'Закуп (лист)', 'fittings' => 'Фурнитура', 'delivery' => 'Доставка',
+        'assembly' => 'Монтаж', 'metal' => 'Металл', 'contractor' => 'Подрядчику', 'direct' => 'Прочий расход', 'indirect' => 'Прочий расход',
+    ];
+
+    public static function hasEstimate(Deal $deal): bool
+    {
+        return \App\Models\Document::where('documentable_type', 'deal')->where('documentable_id', $deal->id)
+            ->where('kind', 'estimate')->where('is_active', true)->exists();
+    }
+
+    /**
+     * Что мешает уйти с «Закупа» (ТЗ 02.11.2026, п.4): нужен расход «Закуп», и
+     * КАЖДЫЙ расход сделки подтверждён бухгалтером (расход «в долг» с
+     * поставщиком/сроком/документом — этап 2).
+     *
+     * @return array<int, string>
+     */
+    public static function purchaseGateProblems(Deal $deal): array
+    {
+        $expenses = \App\Models\Expense::with(['material:id,name', 'supplierDebt'])
+            ->where('expenseable_type', 'deal')->where('expenseable_id', $deal->id)->orderBy('id')->get();
+        $problems = [];
+        if (! $expenses->contains(fn ($e) => in_array($e->type, ['purchase', 'sheet'], true))) {
+            $problems[] = 'Нет расхода «Закуп» — внесите его в блоке «Расходы» сделки';
+        }
+        $pending = $expenses->reject(fn ($e) => self::expenseSettled($e))->values();
+        foreach ($pending->take(10) as $e) {
+            $label = $e->material ? 'Материал со склада: '.$e->material->name : (self::EXPENSE_TYPE_LABELS[$e->type] ?? 'Расход');
+            $why = $e->isDebt() ? 'долг оформлен не полностью (поставщик/срок/документ)'
+                : ($e->needsDocument() && ! $e->file_path ? 'нет чека/счёта, прикрепите документ' : 'ждёт подтверждения бухгалтера');
+            $problems[] = 'Расход #'.$e->id.' '.$label.' '.number_format((float) $e->amount, 0, '.', ' ').' ₸ — '.$why;
+        }
+        if ($pending->count() > 10) {
+            $problems[] = 'и ещё '.($pending->count() - 10).' расход(ов) ждут подтверждения';
+        }
+
+        return $problems;
+    }
+
+    /** @return array<int, string> незаполненные поля договора */
+    public static function missingContractFields(Deal $deal): array
+    {
+        $missing = [];
+        if (trim((string) $deal->bin) === '') {
+            $missing[] = 'номер договора';
+        }
+        if (! $deal->contract_date) {
+            $missing[] = 'дату договора';
+        }
+        if (! $deal->isContractor() && trim((string) $deal->lot_number) === '') {
+            $missing[] = 'количество';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * Расход «закрыт» для гейта: «деньгами» — подтверждён бухгалтером; «в долг» —
+     * оформлен полностью (поставщик, срок, документ), бухгалтер не нужен (п.3.4).
+     */
+    public static function expenseSettled(\App\Models\Expense $e): bool
+    {
+        if ($e->isDebt()) {
+            $d = $e->supplierDebt;
+
+            return $d && trim((string) $d->supplier_name) !== '' && $d->due_date && $d->document_path;
+        }
+
+        return $e->status === 'confirmed';
+    }
+
+    /**
+     * Можно ли УЙТИ с этапа $stage вперёд (ТЗ 02.11.2026, п.1, 2, 4). Одна проверка
+     * для всех путей: «Далее», перетаскивание, выбор этапа, «Отправить в цех»,
+     * возврат из цеха. $checkGateTask — гейт-задача самого этапа (галочка роли).
+     *
+     * @throws ValidationException
+     */
+    public static function assertCanLeave(Deal $deal, DealStage $stage, bool $checkGateTask = true): void
+    {
+        $fail = fn (string $msg) => throw ValidationException::withMessages(['stage' => $msg]);
+
+        if (! $deal->responsible_user_id) {
+            $fail('Укажите ответственного менеджера — без него сделка дальше не идёт.');
+        }
+        if ($checkGateTask && $stage->hasGate()) {
+            $open = $deal->tasks()->where('title', 'like', $stage->gate_task_title.'%')->where('status', '!=', 'done')->count();
+            if ($open > 0) {
+                $fail("Сначала закройте задачу «{$stage->gate_task_title}…» — гейт этапа «{$stage->name}».");
+            }
+        }
+        // Договор (02.11.2026): с «Заключение договора» — только с номером, датой
+        // и количеством (у подрядной сделки количества нет — номер и дата).
+        if ($stage->stage_type === 'contract' && ($missing = self::missingContractFields($deal)) !== []) {
+            $fail('Заполните в сделке (кнопка «Изменить»): '.implode(', ', $missing).' — без этого сделка не уходит с этапа «'.$stage->name.'».');
+        }
+        if ($stage->stage_type === 'design' && ! self::hasEstimate($deal)) {
+            $fail('Дизайнер должен загрузить смету (вкладка «Документы» → «Загрузить смету»), иначе сделка не уходит с этапа «'.$stage->name.'».');
+        }
+        if ($stage->stage_type === 'shop_gate' && ($problems = self::purchaseGateProblems($deal)) !== []) {
+            $fail('С этапа «'.$stage->name.'» дальше нельзя: '.implode('; ', $problems).'.');
+        }
+    }
+
     /**
      * Move a deal to the target stage, enforcing the current stage's checklist,
      * and the special-stage flow: «Акт утверждение» (только из цеха) → «ЭСФ» →
@@ -87,19 +193,20 @@ class StageTransitionService
             // Этап перед «Оплата успешно»: ЭСФ, если он есть, иначе Акт.
             $preWon = $esfStage ?? $actStage;
 
-            // Гейт этапа настраивается в админке (Настройки → Этапы): пока
-            // гейт-задача не закрыта, сделка дальше не идёт. Прочие открытые
-            // задачи сделку не держат. Для этапов без гейта работает общий
-            // checklist-гейт (все задачи должны быть закрыты).
+            // Выход вперёд (ТЗ 02.11.2026): ответственный, гейт-задача, смета на
+            // «Дизайне», расходы на «Закупе». Перескочить этап с обязательной
+            // проверкой нельзя (раньше перетаскиванием обходили гейты).
             if ($isForward && $current) {
-                if ($current->hasGate()) {
-                    $open = $deal->tasks()->where('title', 'like', $current->gate_task_title.'%')->where('status', '!=', 'done')->count();
-                    if ($open > 0) {
-                        throw ValidationException::withMessages([
-                            'stage' => "Сначала закройте задачу «{$current->gate_task_title}…» — гейт этапа «{$current->name}».",
-                        ]);
-                    }
-                } elseif (! empty($current->checklist)) {
+                self::assertCanLeave($deal, $current);
+                $skipped = DealStage::funnel($companyId)
+                    ->filter(fn ($s) => $s->order > $current->order && $s->order < $target->order)
+                    ->filter(fn ($s) => $s->hasGate() || in_array($s->stage_type, ['design', 'shop_gate', 'logistics'], true));
+                if (! $deal->isContractor() && ($jump = $skipped->first())) {
+                    throw ValidationException::withMessages([
+                        'stage' => "Нельзя перескочить этап «{$jump->name}» — у него обязательная проверка. Пройдите этапы по порядку.",
+                    ]);
+                }
+                if (! $current->hasGate() && ! empty($current->checklist)) {
                     $openTasks = $deal->tasks()->where('status', '!=', 'done')->count();
                     if ($openTasks > 0) {
                         throw ValidationException::withMessages([
@@ -206,6 +313,18 @@ class StageTransitionService
         }
 
         $assignees = User::working()->role($stage->gate_task_role ?: 'financist')->get();
+        // Нет ни одного человека с ролью гейта (снабженца уволили, дизайнера ещё
+        // не наняли) — задача всё равно создаётся без исполнителя, и галочку
+        // ставит админ. Раньше гейт в этом случае тихо выключался (ТЗ 02.11.2026).
+        if ($assignees->isEmpty()) {
+            $deal->tasks()->create([
+                'title' => $title, 'status' => 'new', 'priority' => 'high', 'assignee_id' => null,
+                'creator_id' => $deal->responsible_user_id ?? auth()->id(),
+                'start_date' => now(), 'due_date' => now()->addDays((int) $stage->gate_task_days),
+            ]);
+
+            return;
+        }
         foreach ($assignees as $assignee) {
             $task = $deal->tasks()->create([
                 'title' => $title,

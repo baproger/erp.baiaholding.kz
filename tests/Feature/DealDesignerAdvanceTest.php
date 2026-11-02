@@ -37,7 +37,8 @@ class DealDesignerAdvanceTest extends TestCase
     private function deal(int $stageId): Deal
     {
         return Deal::create(['number' => 'D-'.uniqid(), 'name' => 'X', 'company_name' => 'ТОО',
-            'client_name' => 'И', 'budget' => 100000, 'status' => 'active', 'deal_stage_id' => $stageId]);
+            'client_name' => 'И', 'budget' => 100000, 'status' => 'active', 'deal_stage_id' => $stageId,
+            'responsible_user_id' => User::factory()->create()->id]);
     }
 
     public function test_designer_advances_deal_from_design_stage_to_next(): void
@@ -46,6 +47,7 @@ class DealDesignerAdvanceTest extends TestCase
         $stages[1]->update(['stage_type' => 'design']);
         $deal = $this->deal($stages[1]->id);
 
+        $this->giveEstimate($deal); // ТЗ 02.11.2026: без сметы с «Дизайна» не уйти
         $this->actingAs($this->designer())->patch(route('deals.advance', $deal))->assertRedirect();
 
         $this->assertSame($stages[2]->id, $deal->fresh()->deal_stage_id);

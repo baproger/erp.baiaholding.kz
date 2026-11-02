@@ -87,6 +87,9 @@ class ExpenseBoardController extends Controller
             // завсклад — только металл (правило от 22.09.2026).
             'can_confirm' => $user !== null && ($user->hasAnyRole(['admin', 'financist'])
                 || ($user->hasRole('supplier') && $e->type === 'metal')),
+            // ТЗ 02.11.2026: без чека/счёта расход не подтверждается; «в долг» — не через бухгалтера.
+            'funding' => $e->funding ?? 'cash',
+            'missing_document' => $e->needsDocument() && ! $e->file_path,
             'date' => optional($e->date)->toDateString(),
             'amount' => (float) $e->amount,
             'description' => $e->description,

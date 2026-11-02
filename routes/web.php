@@ -95,6 +95,8 @@ Route::middleware('auth')->group(function () {
     Route::resource('deals', DealController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage');
     Route::patch('deals/{deal}/advance', [DealController::class, 'advance'])->name('deals.advance');
+    // Переоткрыть закрытую сделку — только админ, с причиной (ТЗ 02.11.2026).
+    Route::patch('deals/{deal}/reopen', [DealController::class, 'reopen'])->name('deals.reopen');
     Route::post('deals/{deal}/to-workshop', [DealController::class, 'sendToWorkshop'])->name('deals.toWorkshop');
     Route::patch('deals/{deal}/responsible', [DealController::class, 'updateResponsible'])->name('deals.responsible');
     // Ручной % бонуса менеджера по сделке (финансист/админ).
@@ -165,6 +167,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
     // Рабочее место бухгалтера: заявки с открытыми чеками + оплаченные.
     Route::get('expenses-board', [\App\Http\Controllers\ExpenseBoardController::class, 'index'])->name('expenses.board');
+    // Долг сделкам — долги поставщикам из расходов «в долг» (ТЗ 02.11.2026, п.7).
+    Route::get('finance/supplier-debts', [\App\Http\Controllers\SupplierDebtController::class, 'index'])->name('supplierDebts.index');
+    Route::post('finance/supplier-debts/{debt}/repay', [\App\Http\Controllers\SupplierDebtController::class, 'repay'])->middleware('throttle:30,1')->name('supplierDebts.repay');
+    Route::get('finance/supplier-debts/{debt}/file/{payment?}', [\App\Http\Controllers\SupplierDebtController::class, 'file'])->name('supplierDebts.file');
     // «Мои расходы» — личная страница сотрудника: свои заявки и что ему выдали.
     Route::get('my-expenses', [\App\Http\Controllers\MyExpenseController::class, 'index'])->name('myExpenses.index');
     Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');

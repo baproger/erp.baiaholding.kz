@@ -95,6 +95,7 @@ class CashBookController extends Controller
 
         $out = (float) $this->expenses($kind, $companyId)
             ->whereDate('date', '<', $before)->sum('amount');
+        $out += (float) $this->debtPayments($kind, $companyId)->whereDate('date', '<', $before)->sum('amount');
 
         // Ручная корректировка (инвентаризация) есть только у кассы и даты не
         // имеет, поэтому относится к прошлому.
@@ -132,6 +133,13 @@ class CashBookController extends Controller
     private function receipts(string $kind, ?int $companyId)
     {
         return CashReceipt::where('method', $kind === 'cash' ? 'cash' : 'bank')
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
+    }
+
+    /** Погашения долгов поставщикам (ТЗ 02.11.2026) — выплаты из кассы/банка. */
+    private function debtPayments(string $kind, ?int $companyId)
+    {
+        return \App\Models\SupplierDebtPayment::query()->where('payment_method', $kind)
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c));
     }
 
@@ -228,7 +236,24 @@ class CashBookController extends Controller
                 'at' => optional($e->created_at)->toIso8601String(),
             ]);
 
-        $ops = $payments->concat($receipts)->concat($expenses);
+        $debtPays = $this->debtPayments($kind, $companyId)->whereDate('date', $on)
+            ->with('debt:id,deal_id,supplier_name')
+            ->get(['id', 'supplier_debt_id', 'amount', 'note', 'date', 'created_at', 'created_by'])
+            ->map(fn ($p) => [
+                'id' => 'sdp-'.$p->id,
+                'resp_uid' => $p->created_by,
+                'kind' => 'out',
+                'amount' => (float) $p->amount,
+                'title' => 'Погашение долга: '.($p->debt?->supplier_name ?? 'поставщик'),
+                'note' => $p->note,
+                'tag' => 'Долг поставщику',
+                'employee' => null,
+                'payout' => null,
+                'deal_id' => $p->debt?->deal_id,
+                'at' => optional($p->created_at)->toIso8601String(),
+            ]);
+
+        $ops = $payments->concat($receipts)->concat($expenses)->concat($debtPays);
 
         // Батчем: номер и ответственный сделки, имена ответственных по операциям —
         // колонки «Ответственный» и «Сделка» в кассовой книге.

@@ -90,7 +90,12 @@ class TaskController extends Controller
 
         $task->status = $validated['status'];
         $task->completed_at = $validated['status'] === 'done' ? now() : null;
-        $task->save();
+        try {
+            $task->save();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Гейт «Дизайн» без сметы (ТЗ 02.11.2026) — понятная ошибка, а не 422.
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
 
         // Задача закрыта — «Вам назначена задача»/«просрочена» больше не
         // требуют действий: гасим красный счётчик у получателей.

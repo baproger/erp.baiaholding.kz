@@ -141,12 +141,12 @@ class ProjectController extends Controller
         $source = $project->deal_id
             ? Deal::with([
                 'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
-                'expenses' => fn ($q) => $q->with('responsible:id,name,avatar')->latest(),
+                'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'supplierDebt'])->latest(),
             ])->find($project->deal_id)
             : null;
         $source ??= $project->load([
             'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')->with('payments')->latest(),
-            'expenses' => fn ($q) => $q->with('responsible:id,name,avatar')->latest(),
+            'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'supplierDebt'])->latest(),
         ]);
 
         // Merge audit history of the project and its deal.

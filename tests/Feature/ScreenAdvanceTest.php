@@ -76,7 +76,8 @@ class ScreenAdvanceTest extends TestCase
         $s2 = ProjectStage::create(['name' => 'Отправка', 'order' => 2, 'is_active' => true, 'workshop' => 'Металл цех']);
         $dealStage = \App\Models\DealStage::create(['name' => 'Закуп', 'order' => 1, 'is_active' => true]);
         $logistics = \App\Models\DealStage::create(['name' => 'Логистика', 'order' => 2, 'is_active' => true, 'stage_type' => 'logistics']);
-        $deal = \App\Models\Deal::create(['number' => 'T-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 100, 'status' => 'closed', 'deal_stage_id' => $dealStage->id]);
+        $deal = \App\Models\Deal::create(['number' => 'T-1', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 100, 'status' => 'closed', 'deal_stage_id' => $dealStage->id,
+            'responsible_user_id' => \App\Models\User::factory()->create()->id]);
         $project = Project::create(['number' => 'PRJ-3', 'name' => 'Стол', 'deal_id' => $deal->id, 'workshop' => 'Металл цех', 'project_stage_id' => $s1->id, 'status' => 'active']);
         // Правило 28.09.2026: Металл цех — Закуп + Фурнитура + материал со склада, иначе «Готово» не пройдёт.
         $material = \App\Models\Material::create(['name' => 'Труба', 'unit' => 'штук', 'quantity' => 10, 'price' => 100]);

@@ -31,7 +31,13 @@ class ExpenseRequest extends FormRequest
             'type' => ['nullable', Rule::in(['direct', 'indirect', 'delivery', 'purchase', 'assembly', 'metal', 'sheet', 'fittings', 'contractor'])],
             'status' => ['nullable', Rule::in(['draft', 'pending', 'confirmed'])],
             'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
-            'file' => [...$fileRule, 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
+            'file' => [...$fileRule, 'required_if:funding,debt', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
+            // «Оплачено деньгами» / «В долг» (ТЗ 02.11.2026, п.3.1). Для долга —
+            // поставщик, контакт (телефон/БИН), срок погашения и документ обязательны.
+            'funding' => ['nullable', Rule::in(['cash', 'debt'])],
+            'supplier_name' => ['nullable', 'required_if:funding,debt', 'string', 'max:255'],
+            'supplier_contact' => ['nullable', 'required_if:funding,debt', 'string', 'max:120'],
+            'debt_due_date' => ['nullable', 'required_if:funding,debt', 'date'],
         ];
     }
 
@@ -41,6 +47,10 @@ class ExpenseRequest extends FormRequest
             'file.required' => 'Прикрепите чек (фото или PDF).',
             'file.mimes' => 'Чек должен быть изображением или PDF.',
             'file.max' => 'Размер чека не должен превышать 10 МБ.',
+            'file.required_if' => 'Для расхода «в долг» прикрепите счёт или накладную поставщика.',
+            'supplier_name.required_if' => 'Укажите поставщика.',
+            'supplier_contact.required_if' => 'Укажите телефон или БИН поставщика.',
+            'debt_due_date.required_if' => 'Укажите срок погашения долга.',
         ];
     }
 }

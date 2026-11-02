@@ -40,11 +40,14 @@ class DocumentController extends Controller
         $id = (int) $request->input('documentable_id');
         $kind = $request->input('kind') ?: null;
         $this->assertEntityAccess($this->resolve($type, $id));
+        // Смету загружает дизайнер (и админ) — ТЗ 02.11.2026, п.2.3.
+        abort_if($kind === 'estimate' && ! $request->user()->hasAnyRole(['designer', 'admin']), 403, 'Смету загружает дизайнер.');
+        $amount = $kind === 'estimate' ? round((float) $request->input('amount'), 2) : null;
 
         // Store with a random name outside the public root (storage/app/private).
         $path = $file->store('documents', 'local');
 
-        DB::transaction(function () use ($type, $id, $name, $path, $file, $kind) {
+        DB::transaction(function () use ($type, $id, $name, $path, $file, $kind, $amount) {
             // Versioning: deactivate previous versions of the same-named document.
             $prev = Document::where('documentable_type', $type)
                 ->where('documentable_id', $id)
@@ -59,6 +62,7 @@ class DocumentController extends Controller
                 'documentable_id' => $id,
                 'name' => $name,
                 'kind' => $kind,
+                'amount' => $amount,
                 'file_path' => $path,
                 'version' => ($version ?? 0) + 1,
                 'size' => $file->getSize(),
@@ -68,7 +72,8 @@ class DocumentController extends Controller
             ]);
         });
 
-        return back()->with('success', $kind === 'estimate' ? 'Смета загружена — бухгалтер увидит её при подтверждении материалов.' : 'Документ загружен.');
+        return back()->with('success', $kind === 'estimate'
+            ? 'Смета загружена ('.number_format((float) $amount, 0, '.', ' ').' ₸) — теперь можно подтвердить дизайн.' : 'Документ загружен.');
     }
 
     public function download(Document $document): StreamedResponse

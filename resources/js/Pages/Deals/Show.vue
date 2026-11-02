@@ -37,7 +37,14 @@ const lastStage = computed(() => props.stages[props.stages.length - 1]);
 const isLastStage = computed(() => props.deal.deal_stage_id === lastStage.value?.id);
 // Спец-этапы ищем по названию/флагу — этапы можно перемещать в настройках.
 // "Отправить в цех" — на этапе «Закуп ЛДСП,МДФ».
-const workshopStage = computed(() => props.stages.find((s) => s.name?.toLowerCase().includes('закуп')) ?? props.stages[props.stages.length - 3]);
+// Этап «Закуп» — по типу (как на сервере), запасной вариант — по названию.
+const workshopStage = computed(() => props.stages.find((s) => s.stage_type === 'shop_gate') ?? props.stages.find((s) => s.name?.toLowerCase().includes('закуп')) ?? props.stages[props.stages.length - 3]);
+// Смета дизайнера (ТЗ 02.11.2026): без неё сделка не уходит с «Дизайн и расчет».
+const isDesignStage = computed(() => props.stages.find((s) => s.id === props.deal.deal_stage_id)?.stage_type === 'design');
+// Переоткрыть закрытую сделку (админ, с причиной).
+const reopening = ref(false);
+const reopenForm = useForm({ reason: '' });
+const submitReopen = () => reopenForm.patch(route('deals.reopen', props.deal.id), { preserveScroll: true, onSuccess: () => { reopening.value = false; reopenForm.reset(); } });
 const isWorkshopStage = computed(() => props.deal.deal_stage_id === workshopStage.value?.id);
 const actStage = computed(() => props.stages.find((s) => s.name?.toLowerCase().includes('акт')));
 const esfStage = computed(() => props.stages.find((s) => s.name?.toLowerCase().includes('эсф')));
@@ -173,6 +180,8 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16l-3.5.5L4 13z"/></svg>
                 Изменить
             </button>
+            <button v-if="can.reopen" @click="reopening = true" title="Вернуть закрытую сделку в работу (с причиной)"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors duration-150 hover:bg-amber-100">↺ Переоткрыть</button>
             <button v-if="can.delete" @click="destroy" class="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors duration-150 hover:bg-rose-100">
                 <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4h4v2M6 6l.5 10h7l.5-10M8.5 9v4M11.5 9v4"/></svg>
                 Удалить
@@ -232,6 +241,16 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div class="lg:col-span-2 space-y-6">
+                <!-- Смета дизайнера (ТЗ 02.11.2026): сумма + файл; на «Дизайн и расчет» без неё дальше нельзя -->
+                <div v-if="estimate" class="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-3 shadow-sm">
+                    <span class="text-sm font-semibold text-amber-800">📐 Смета дизайнера</span>
+                    <span v-if="estimate.amount" class="text-lg font-bold tabular-nums text-slate-900">{{ money(estimate.amount) }}</span>
+                    <a :href="route('documents.download', estimate.id)" target="_blank" class="text-sm font-medium text-indigo-600 hover:underline">{{ estimate.name }}</a>
+                    <span class="ml-auto text-xs text-slate-500">{{ estimate.user ?? '—' }} · {{ formatDate(estimate.at) }}</span>
+                </div>
+                <div v-else-if="isDesignStage && !isContractor" class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-700 shadow-sm">
+                    📐 <b>Сметы нет.</b> Дизайнер должен загрузить смету (вкладка «Документы» → «Загрузить смету») — без неё сделка не уйдёт с этапа «Дизайн и расчет».
+                </div>
                 <!-- Информация — компактная сетка -->
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
@@ -583,6 +602,20 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
                 <div class="mt-4 text-right">
                     <SecondaryButton @click="showWorkshopPick = false">Отмена</SecondaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Переоткрыть сделку (админ, ТЗ 02.11.2026): причина обязательна и попадает в Историю -->
+        <Modal :show="reopening" max-width="md" @close="reopening = false">
+            <div class="p-6">
+                <h2 class="text-lg font-semibold text-slate-900">Переоткрыть сделку {{ deal.number }}</h2>
+                <p class="mt-1 text-sm text-slate-500">Сделка вернётся в работу на текущем этапе, все проверки этапов продолжат действовать. Активный заказ цеха будет отменён.</p>
+                <textarea v-model="reopenForm.reason" rows="3" class="mt-4 w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="Причина переоткрытия (обязательно)"></textarea>
+                <div v-if="reopenForm.errors.reason" class="mt-1 text-sm text-rose-600">{{ reopenForm.errors.reason }}</div>
+                <div class="mt-5 flex justify-end gap-2">
+                    <SecondaryButton @click="reopening = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="reopenForm.processing || reopenForm.reason.trim().length < 5" @click="submitReopen">Переоткрыть</PrimaryButton>
                 </div>
             </div>
         </Modal>

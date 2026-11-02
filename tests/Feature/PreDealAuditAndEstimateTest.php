@@ -71,7 +71,7 @@ class PreDealAuditAndEstimateTest extends TestCase
 
         $this->actingAs($designer)->withSession(['company_id' => $this->baia->id])
             ->post(route('documents.store'), [
-                'documentable_type' => 'deal', 'documentable_id' => $deal->id, 'kind' => 'estimate',
+                'documentable_type' => 'deal', 'documentable_id' => $deal->id, 'kind' => 'estimate', 'amount' => 250000,
                 'file' => UploadedFile::fake()->image('smeta.jpg'),
             ])->assertRedirect()->assertSessionHasNoErrors();
 

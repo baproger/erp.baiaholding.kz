@@ -29,6 +29,17 @@ class ProjectService
             return [false, 'Не найден этап «Логистика».'];
         }
 
+        // ТЗ 02.11.2026: сделка возвращается из цеха только если с её этапа
+        // («Закуп») можно уйти — ответственный и все расходы подтверждены.
+        $deal->loadMissing('stage');
+        if ($deal->stage && $deal->stage->order < $returnStage->order) {
+            try {
+                \App\Services\StageTransitionService::assertCanLeave($deal, $deal->stage);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return [false, 'Заказ нельзя завершить: по сделке '.$deal->number.' — '.collect($e->errors())->flatten()->first()];
+            }
+        }
+
         // Без обязательных расходов (Закуп + Фурнитура, у Металл цеха ещё материал со склада) сделка на «Логистику» не идёт
         // (правило от 16.09.2026) — то же правило, что при ручном переводе.
         if (($missing = \App\Services\StageTransitionService::missingLogisticsExpenseTypes($deal)) !== []) {

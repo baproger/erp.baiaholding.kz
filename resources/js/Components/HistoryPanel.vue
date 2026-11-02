@@ -5,8 +5,8 @@ import { money } from '@/utils/format';
 
 defineProps({ history: { type: Array, default: () => [] } });
 
-const actionLabel = { created: 'создал(а)', updated: 'изменил(а)', deleted: 'удалил(а)' };
-const actionDot = { created: 'bg-emerald-500', updated: 'bg-amber-500', deleted: 'bg-rose-500' };
+const actionLabel = { created: 'создал(а)', updated: 'изменил(а)', deleted: 'удалил(а)', reopened: 'переоткрыл(а) сделку' };
+const actionDot = { created: 'bg-emerald-500', updated: 'bg-amber-500', deleted: 'bg-rose-500', reopened: 'bg-orange-500' };
 const fieldRu = {
     name: 'Название', number: '№', budget: 'Сумма договора', status: 'Статус', deal_stage_id: 'Этап',
     project_stage_id: 'Этап', responsible_user_id: 'Ответственный', deadline: 'Срок', contract_date: 'Дата договора',
@@ -16,7 +16,7 @@ const fieldRu = {
     // Предсделка (лот)
     product: 'Товар', customer: 'Заказчик', contract_sum: 'Сумма договора', purchase_price: 'Закуп',
     delivery: 'Доставка', assembly: 'Сборка', commission: 'Комиссия', tax: 'Налог', remainder: 'Остаток',
-    margin: 'Маржа', action: 'Действие', tender_deadline: 'Срок тендера', contract_number: '№ договора',
+    margin: 'Маржа', action: 'Действие', reason: 'Причина', tender_deadline: 'Срок тендера', contract_number: '№ договора',
     client_phone: 'Телефон', comment: 'Комментарий', deal_id: 'Сделка', user_id: 'Менеджер', partner_sum: 'Партнёр, сумма',
 };
 const MONEY_FIELDS = ['budget', 'contract_sum', 'purchase_price', 'delivery', 'assembly', 'commission', 'tax', 'remainder', 'partner_sum'];

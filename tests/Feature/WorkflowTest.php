@@ -53,7 +53,8 @@ class WorkflowTest extends TestCase
         $admin = $this->user('admin');
         $first = DealStage::orderBy('order')->first();
         $second = DealStage::orderBy('order')->skip(1)->first();
-        $deal = Deal::create(['number' => 'BAIA-W-1', 'name' => 'D', 'budget' => 1, 'status' => 'active', 'deal_stage_id' => $first->id]);
+        $deal = Deal::create(['number' => 'BAIA-W-1', 'name' => 'D', 'budget' => 1, 'status' => 'active', 'deal_stage_id' => $first->id,
+            'responsible_user_id' => $admin->id]);
 
         $this->actingAs($admin)->patch(route('deals.advance', $deal))->assertRedirect();
         $this->assertEquals($second->id, $deal->fresh()->deal_stage_id);
@@ -65,6 +66,7 @@ class WorkflowTest extends TestCase
         $admin = $this->user('admin');
         $deal = Deal::create(['number' => 'BAIA-W-2', 'name' => 'Заказ', 'budget' => 1000000, 'status' => 'active', 'deal_stage_id' => DealStage::orderBy('order')->first()->id]);
 
+        $deal = $this->readyForWorkshop($deal);
         $this->actingAs($admin)->post(route('deals.toWorkshop', $deal))->assertRedirect();
 
         $project = Project::first();
@@ -135,6 +137,7 @@ class WorkflowTest extends TestCase
             'company_id' => $asu->id, 'number' => 'ASU-W-1', 'name' => 'Швейный заказ', 'budget' => 100000,
             'status' => 'active', 'deal_stage_id' => DealStage::orderBy('order')->first()->id,
         ]);
+        $deal = $this->readyForWorkshop($deal);
         $this->actingAs($admin)->post(route('deals.toWorkshop', $deal))->assertRedirect();
 
         $project = Project::where('deal_id', $deal->id)->firstOrFail();

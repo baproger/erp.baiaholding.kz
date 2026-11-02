@@ -30,7 +30,7 @@ const firstStageId = computed(() => props.stages[0]?.id); // «Заключен�
 // Спец-этапы ищем по названию/флагу; в режиме «Все компании» воронок две,
 // поэтому работаем с МАССИВАМИ id, а не с одиночными значениями.
 const matchIds = (needle) => props.stages.filter((s) => s.name?.toLowerCase().includes(needle)).map((s) => s.id);
-const workshopIds = computed(() => { const ids = matchIds('закуп'); return ids.length ? ids : [props.stages[props.stages.length - 3]?.id].filter(Boolean); });
+const workshopIds = computed(() => { const typed = props.stages.filter((s) => s.stage_type === 'shop_gate').map((s) => s.id); if (typed.length) return typed; const ids = matchIds('закуп'); return ids.length ? ids : [props.stages[props.stages.length - 3]?.id].filter(Boolean); });
 const actIds = computed(() => matchIds('акт'));
 const esfIds = computed(() => matchIds('эсф'));
 const wonIds = computed(() => { const ids = props.stages.filter((s) => s.is_won).map((s) => s.id); return ids.length ? ids : [lastStageId.value].filter(Boolean); });

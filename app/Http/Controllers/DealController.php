@@ -178,7 +178,7 @@ class DealController extends Controller
             'tasks' => fn ($q) => $q->with('assignee:id,name,status')->latest(),
             'invoices' => fn ($q) => $q->withSum('payments as payments_sum_amount', 'amount')
                 ->with('payments')->latest(),
-            'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'material:id,name,unit'])->latest(),
+            'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'material:id,name,unit', 'supplierDebt'])->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
@@ -309,13 +309,15 @@ class DealController extends Controller
             'customFields' => app(\App\Services\CustomFieldService::class)->forEntity('deal', $deal->id),
             // Смета дизайнера (последняя активная): бухгалтер сверяет с ней материалы.
             'estimate' => ($est = $deal->documents->firstWhere('kind', 'estimate'))
-                ? ['id' => $est->id, 'name' => $est->name, 'user' => $est->user?->name, 'at' => $est->created_at?->toDateString()] : null,
+                ? ['id' => $est->id, 'name' => $est->name, 'user' => $est->user?->name, 'at' => $est->created_at?->toDateString(), 'amount' => $est->amount !== null ? (float) $est->amount : null] : null,
             'can' => [
                 'update' => request()->user()->can('update', $deal),
-                // Смету прикрепляет дизайнер (и руководство на всякий случай).
-                'estimate' => request()->user()->hasAnyRole(['designer', 'admin', 'financist']),
+                // Смету прикрепляет дизайнер (и админ) — ТЗ 02.11.2026, п.2.3.
+                'estimate' => request()->user()->hasAnyRole(['designer', 'admin']),
                 'advance' => request()->user()->can('advance', $deal),
                 'delete' => request()->user()->can('delete', $deal),
+                // Переоткрыть закрытую сделку — только админ, с причиной.
+                'reopen' => request()->user()->hasRole('admin') && in_array($deal->status, ['closed', 'cancelled'], true),
             ],
         ]);
     }
@@ -383,6 +385,10 @@ class DealController extends Controller
             'Галочку ставит только '.(self::GATE_ROLE_LABELS[$gateRole] ?? $gateRole).' или админ.'
         );
 
+        // ТЗ 02.11.2026: галочка «Дизайн» — только когда загружена смета.
+        if ($gateStage->stage_type === 'design' && ! StageTransitionService::hasEstimate($deal)) {
+            return back()->with('error', 'Дизайнер должен загрузить смету (вкладка «Документы» → «Загрузить смету»), потом ставить галочку.');
+        }
         $gateTasks = $deal->tasks()->where('title', 'like', $gateStage->gate_task_title.'%')->where('status', '!=', 'done')->get();
         $gateTasks->each(fn ($t) => $t->update(['status' => 'done', 'completed_at' => now()]));
         // Гейт закрыт — гасим красный счётчик уведомлений об этих задачах.
@@ -511,6 +517,18 @@ class DealController extends Controller
         if ($deal->project && $deal->project->status !== 'completed') {
             return back()->with('error', 'Заказ уже в цехе.');
         }
+        // ТЗ 02.11.2026: в цех — только с этапа «Закуп» и только когда с него можно
+        // уйти (ответственный, галочка снабженца, расходы подтверждены). Раньше
+        // «Отправить в цех» → «Готово» уводило сделку на «Логистику» в обход гейтов.
+        $deal->loadMissing('stage');
+        if (! $deal->stage || $deal->stage->stage_type !== 'shop_gate') {
+            return back()->with('error', 'В цех сделку отправляют с этапа «Закуп ЛДСП, МДФ».');
+        }
+        try {
+            StageTransitionService::assertCanLeave($deal, $deal->stage);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
         // У BAIA два цеха — при отправке нужно выбрать («Металл цех» / «Ағаш цех»).
         $available = \App\Models\ProjectStage::workshopsFor($deal->company_id ? (int) $deal->company_id : null);
         $workshop = $request->string('workshop')->toString() ?: null;
@@ -520,6 +538,39 @@ class DealController extends Controller
         $project = $projects->createFromDeal($deal, $workshop);
         $deal->update(['status' => 'closed', 'closed_at' => now()]);
         return back()->with('success', 'Отправлено в цех: '.$project->number.'.');
+    }
+
+    /**
+     * «Переоткрыть сделку» (ТЗ 02.11.2026, п.8): только админ и только с причиной.
+     * Этап не меняется — сделка возвращается в работу на том же этапе, все
+     * гейты дальше действуют. Активный заказ цеха отменяется (иначе сделка
+     * была бы одновременно «в цехе» и «в работе»). Причина — в Истории.
+     */
+    public function reopen(Request $request, Deal $deal): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin'), 403, 'Переоткрыть сделку может только администратор.');
+        $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:500']], [
+            'reason.required' => 'Укажите причину переоткрытия.',
+            'reason.min' => 'Причина — хотя бы несколько слов.',
+        ]);
+        if (! in_array($deal->status, ['closed', 'cancelled'], true)) {
+            return back()->with('error', 'Сделка и так в работе.');
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($deal, $data, $request) {
+            $project = \App\Models\Project::where('deal_id', $deal->id)->where('status', 'active')->first();
+            $project?->update(['status' => 'cancelled', 'completed_at' => now()]);
+            $deal->update(['status' => 'active', 'closed_at' => null]);
+            \App\Models\AuditLog::create([
+                'user_id' => $request->user()->id, 'ip' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 255),
+                'table_name' => 'deals', 'record_id' => $deal->id, 'action' => 'reopened',
+                'field_name' => 'reason', 'old_value' => null, 'new_value' => trim($data['reason']),
+                'created_at' => now(),
+            ]);
+        });
+
+        return back()->with('success', 'Сделка переоткрыта — она снова в работе на этапе «'.($deal->stage?->name ?? '—').'».');
     }
 
     /**

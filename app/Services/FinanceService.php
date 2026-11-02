@@ -58,6 +58,9 @@ class FinanceService
         $expSum = (float) ($kind === 'cash'
             ? (clone $exp)->where('payment_method', 'cash')->sum('amount')
             : (clone $exp)->where('payment_method', '!=', 'cash')->whereNotNull('payment_method')->sum('amount'));
+        // Погашения долгов поставщикам (ТЗ 02.11.2026) — реальные выплаты из кассы/банка.
+        $expSum += (float) \App\Models\SupplierDebtPayment::query()->where('payment_method', $kind)
+            ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))->sum('amount');
 
         // Корректировка кассы (инвентаризация): финансист задал фактический
         // остаток — разница хранится в Setting и прибавляется к расчёту.

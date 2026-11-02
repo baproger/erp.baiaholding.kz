@@ -25,6 +25,8 @@ const allTabs = [
     { name: 'Мои расходы', route: 'myExpenses.index', perm: 'expense.create', hideForRoles: ['admin', 'financist'] },
     { name: 'Зарплата', route: 'payroll.index', perm: 'payroll.view' },
     { name: 'Бонусы', route: 'payroll.bonuses', perm: 'payroll.view' },
+    // Долги поставщикам по сделкам (ТЗ 02.11.2026) — из расходов «в долг».
+    { name: 'Долг сделкам', route: 'supplierDebts.index', roles: ['admin', 'director', 'financist'] },
 ];
 const visible = (i) => (!i.perm || perms.value.includes(i.perm))
     && (!i.leadershipOnly || isLeadership.value)

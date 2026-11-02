@@ -56,6 +56,8 @@ class MetalConfirmationTest extends TestCase
             'amount' => 40000, 'date' => now()->toDateString(), 'status' => 'pending',
             'type' => $type, 'responsible_user_id' => $this->deal->responsible_user_id,
             'description' => $type === 'metal' ? 'Металл из цеха' : 'Прочий расход',
+            // Счёт менеджера у обычного расхода есть (ТЗ 02.11.2026) — проверяем чек бухгалтера.
+            'file_path' => $type === 'metal' ? null : 'receipts/schet.jpg',
         ]);
     }
 

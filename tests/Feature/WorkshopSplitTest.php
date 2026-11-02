@@ -50,6 +50,7 @@ class WorkshopSplitTest extends TestCase
         [$admin, $deal] = $this->baiaWithTwoWorkshops();
 
         // Без выбора цеха — ошибка, заказ не создан.
+        $deal = $this->readyForWorkshop($deal);
         $this->actingAs($admin)->post(route('deals.toWorkshop', $deal->id))->assertSessionHas('error');
         $this->assertNull($deal->fresh()->project);
 
@@ -73,6 +74,7 @@ class WorkshopSplitTest extends TestCase
         $admin->assignRole('admin');
         $deal = Deal::create(['number' => 'ASU-001', 'name' => 'X', 'company_name' => 'ТОО', 'client_name' => 'И', 'budget' => 100, 'status' => 'active', 'company_id' => $company->id, 'deal_stage_id' => DealStage::orderBy('order')->first()->id]);
 
+        $deal = $this->readyForWorkshop($deal);
         $this->actingAs($admin)->post(route('deals.toWorkshop', $deal->id))->assertSessionHas('success');
         $this->assertSame('Пошив', $deal->fresh()->project->stage->name);
         $this->assertNull($deal->fresh()->project->workshop);

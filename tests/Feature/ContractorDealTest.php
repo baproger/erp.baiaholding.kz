@@ -52,7 +52,7 @@ class ContractorDealTest extends TestCase
         return array_merge([
             'company_id' => Company::where('code', 'BAIA')->firstOrFail()->id,
             'company_name' => 'ТОО Заказчик', 'client_name' => 'Поставка окон', 'contractor_name' => 'ИП Подрядчик',
-            'budget' => 1000000, 'commission_pct' => 10,
+            'budget' => 1000000, 'commission_pct' => 10, 'bin' => 'П-12', 'contract_date' => '2026-11-01',
         ], $over);
     }
 

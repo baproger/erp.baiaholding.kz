@@ -112,6 +112,7 @@ class CashReceiptTest extends TestCase
         $this->actingAs($fin)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $deal->id,
             'amount' => 5000, 'date' => now()->toDateString(), 'payment_method' => 'cash', 'status' => 'confirmed',
+            'file' => \Illuminate\Http\UploadedFile::fake()->image('chek.jpg'),
         ])->assertRedirect();
         $this->assertEquals('confirmed', $deal->expenses()->first()->status);
 
