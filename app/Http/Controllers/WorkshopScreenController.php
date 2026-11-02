@@ -51,7 +51,7 @@ class WorkshopScreenController extends Controller
                 ->whereIn('project_stage_id', $stages->pluck('id'))
                 ->orWhere('workshop', $w)
                 ->orWhereNull('workshop')))
-            ->with(['stage:id,name', 'responsible:id,name', 'deal:id,number,company_name,client_name,address,deadline,description,note'])
+            ->with(['stage:id,name', 'responsible:id,name', 'deal:id,number,company_name,client_name,address,deadline,extended_deadline,description,note'])
             ->addSelect(['stage_entered_at' => \App\Models\ProjectStageLog::select('entered_at')
                 ->whereColumn('project_id', 'projects.id')->whereNull('left_at')
                 ->latest('entered_at')->limit(1)])
@@ -84,8 +84,9 @@ class WorkshopScreenController extends Controller
                 'deal_number' => $p->deal?->number,
                 'stage_id' => $p->project_stage_id,
                 'address' => $p->deal?->address,
-                'deadline' => optional($p->deal?->deadline ?? $p->deadline)->toDateString(),
-                'overdue' => ($p->deal?->deadline ?? $p->deadline)?->isPast() ?? false,
+                // Срок — эффективный (Доп. срок сделки, если продлили) — ТЗ 02.11.2026.
+                'deadline' => optional($p->deal?->effectiveDeadline() ?? $p->deadline)->toDateString(),
+                'overdue' => ($p->deal?->effectiveDeadline() ?? $p->deadline)?->isPast() ?? false,
                 'description' => $p->deal?->description,
                 'note' => $p->deal?->note,
                 'responsible' => $p->responsible?->name,

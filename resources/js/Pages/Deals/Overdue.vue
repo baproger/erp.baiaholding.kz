@@ -67,7 +67,7 @@ const dayLabel = (n) => {
                         <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
                             <span>{{ deal.number }}</span>
                             <StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" />
-                            <span class="whitespace-nowrap font-medium text-rose-600">срок {{ formatDate(deal.deadline) }}</span>
+                            <span class="whitespace-nowrap font-medium text-rose-600">срок {{ formatDate(deal.effective_deadline ?? deal.deadline) }}<template v-if="deal.extended_deadline"> (продлён)</template></span>
                             <span class="ml-auto">{{ deal.responsible?.name ?? '—' }}</span>
                         </div>
                     </button>

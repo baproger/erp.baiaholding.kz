@@ -74,8 +74,9 @@ class DealController extends Controller
             ->when($request->integer('stage'), fn ($q, $s) => $q->where('deal_stage_id', $s))
             // Вид: own — свои, contractor — подрядные (30.09.2026).
             ->when(in_array($request->string('kind')->toString(), ['own', 'contractor'], true), fn ($q) => $q->where('kind', $request->string('kind')->toString()))
-            ->when($request->date('date_from'), fn ($q, $d) => $q->whereDate('deadline', '>=', $d))
-            ->when($request->date('date_to'), fn ($q, $d) => $q->whereDate('deadline', '<=', $d))
+            // Фильтр «срок с—по» — по эффективному сроку (Доп. срок, если есть).
+            ->when($request->date('date_from'), fn ($q, $d) => $q->whereRaw('DATE('.Deal::EFFECTIVE_DEADLINE_SQL.') >= ?', [$d->toDateString()]))
+            ->when($request->date('date_to'), fn ($q, $d) => $q->whereRaw('DATE('.Deal::EFFECTIVE_DEADLINE_SQL.') <= ?', [$d->toDateString()]))
             ->when($request->date('contract_from'), fn ($q, $d) => $q->whereDate('contract_date', '>=', $d))
             ->when($request->date('contract_to'), fn ($q, $d) => $q->whereDate('contract_date', '<=', $d));
 
@@ -329,6 +330,13 @@ class DealController extends Controller
         $data = $request->validated();
         // Название сделки зеркалит название компании (поле убрано из UI).
         $data['name'] = $data['company_name'];
+        // ТЗ 02.11.2026, п.5.1: «Срок» — исходный по договору, не перезаписывается.
+        // Продлевают через «Доп. срок» с причиной; исправить сам срок может только админ.
+        if ($deal->deadline && array_key_exists('deadline', $data)
+            && (string) optional($deal->deadline)->toDateString() !== (string) ($data['deadline'] ? \Illuminate\Support\Carbon::parse($data['deadline'])->toDateString() : '')
+            && ! $request->user()->hasRole('admin')) {
+            return back()->withErrors(['deadline' => 'Срок по договору не меняется — продлите его кнопкой «Продлить срок» (с причиной).']);
+        }
         if ($deal->isContractor()) {
             // Подряд: партнёрской доли нет; наш % и подрядчик меняет бухгалтер/админ.
             $data['partner_pct'] = 0;
@@ -541,6 +549,43 @@ class DealController extends Controller
     }
 
     /**
+     * «Продлить срок» (ТЗ 02.11.2026, п.5): Доп. срок + обязательная причина.
+     * Исходный «Срок» не трогаем; продлить можно не дальше 60 дней от него
+     * (уточнение владельца). Каждое продление — в Истории (старое → новое,
+     * причина, кто, когда), счётчик продлений — для аналитики сопровождения.
+     */
+    public function extendDeadline(Request $request, Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        $this->assertNotFrozen($request, $deal);
+        if (! $deal->deadline) {
+            return back()->with('error', 'Сначала укажите «Срок» по договору (кнопка «Изменить»).');
+        }
+        $max = $deal->deadline->copy()->addDays(Deal::MAX_EXTENSION_DAYS);
+        $data = $request->validate([
+            'extended_deadline' => ['required', 'date', 'after:'.$deal->deadline->toDateString(), 'after_or_equal:today', 'before_or_equal:'.$max->toDateString()],
+            'extension_reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'extended_deadline.required' => 'Укажите новый срок.',
+            'extended_deadline.after' => 'Доп. срок должен быть позже срока по договору ('.$deal->deadline->format('d.m.Y').').',
+            'extended_deadline.after_or_equal' => 'Доп. срок не может быть в прошлом.',
+            'extended_deadline.before_or_equal' => 'Продлить можно не больше чем на '.Deal::MAX_EXTENSION_DAYS.' дней — до '.$max->format('d.m.Y').'.',
+            'extension_reason.required' => 'Укажите причину продления.',
+            'extension_reason.min' => 'Причина — хотя бы несколько слов.',
+        ]);
+
+        $deal->update([
+            'extended_deadline' => $data['extended_deadline'],
+            'extension_reason' => trim($data['extension_reason']),
+            'extensions_count' => (int) $deal->extensions_count + 1,
+        ]);
+        // Заказ цеха живёт по сроку сделки — двигаем и его (табло, «Просроченные»).
+        \App\Models\Project::where('deal_id', $deal->id)->where('status', 'active')->update(['deadline' => $data['extended_deadline']]);
+
+        return back()->with('success', 'Срок продлён до '.\Illuminate\Support\Carbon::parse($data['extended_deadline'])->format('d.m.Y').'.');
+    }
+
+    /**
      * «Переоткрыть сделку» (ТЗ 02.11.2026, п.8): только админ и только с причиной.
      * Этап не меняется — сделка возвращается в работу на том же этапе, все
      * гейты дальше действуют. Активный заказ цеха отменяется (иначе сделка
@@ -651,14 +696,14 @@ class DealController extends Controller
         $deals = Deal::query()
             ->with(['responsible:id,name,avatar', 'stage:id,name,color,order'])
             ->when(\App\Support\CurrentCompany::id(), fn ($q, $c) => $q->where('company_id', $c))
-            ->whereNotNull('deadline')
-            ->whereDate('deadline', '<', $today)
+            // Просрочка — по эффективному сроку (Доп. срок, если есть) — ТЗ 02.11.2026, п.5.3.
+            ->overdueBy($today)
             ->whereNotIn('status', ['closed', 'cancelled'])
             // ЭСФ и «Оплата успешно» — не просрочка; на «Акт утверждение»
             // просроченная сделка ПОКАЗЫВАЕТСЯ (по stage_type, имя ненадёжно).
             ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf'))
             ->tap(fn ($q) => $this->scopeOverdueDeals($q, $request->user()))
-            ->orderBy('deadline')
+            ->orderByRaw(Deal::EFFECTIVE_DEADLINE_SQL)
             ->get()
             ->filter(function ($d) use ($esfOrders) {
                 $esfOrder = $esfOrders[$d->company_id] ?? null;
@@ -667,7 +712,7 @@ class DealController extends Controller
             })
             ->values()
             ->map(function ($d) use ($today) {
-                $d->overdue_days = (int) \Illuminate\Support\Carbon::parse($d->deadline)->startOfDay()->diffInDays($today);
+                $d->overdue_days = (int) $d->effectiveDeadline()->copy()->startOfDay()->diffInDays($today);
 
                 return $d;
             });

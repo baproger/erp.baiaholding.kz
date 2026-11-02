@@ -162,11 +162,11 @@ class AnalyticsController extends Controller
             ->where(function ($w) use ($wonStageIds, $pendingIds, $today) {
                 $w->whereIn('deal_stage_id', $wonStageIds)
                     ->orWhereIn('deal_stage_id', $pendingIds)
-                    ->orWhere(fn ($o) => $o->whereNotNull('deadline')->whereDate('deadline', '<', $today)
+                    ->orWhere(fn ($o) => $o->overdueBy($today)
                         ->whereNotIn('status', ['closed', 'cancelled'])
                         ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf')));
             })
-            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'deal_stage_id', 'responsible_user_id', 'status']);
+            ->get(['id', 'number', 'company_name', 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'extended_deadline', 'deal_stage_id', 'responsible_user_id', 'status']);
 
         // Confirmed expenses per deal → per-deal margin (same formula as the deal card).
         $dealExpense = Expense::where('status', 'confirmed')->where('expenseable_type', 'deal')
@@ -193,7 +193,7 @@ class AnalyticsController extends Controller
                 'budget' => $budget,
                 'net' => $company,
                 'margin' => $budget > 0 ? round($company / $budget * 100, 1) : 0.0,
-                'deadline' => optional($d->deadline)->toDateString(),
+                'deadline' => $d->effective_deadline,
             ];
         };
 
@@ -201,10 +201,10 @@ class AnalyticsController extends Controller
             $deals = $empDeals->get($row['uid'], collect());
             $won = $deals->whereIn('deal_stage_id', $wonIdsList)->map($mapDeal)->values();
             $act = $deals->whereIn('deal_stage_id', $pendingIds->all())->map($mapDeal)->values();
-            $overdue = $deals->filter(fn ($d) => $d->deadline && $d->deadline->startOfDay() < $today
+            $overdue = $deals->filter(fn ($d) => $d->effectiveDeadline() && $d->effectiveDeadline()->copy()->startOfDay() < $today
                     && ! in_array($d->deal_stage_id, $wonIdsList) && ! $esfIds->contains($d->deal_stage_id)
                     && ! in_array($d->status, ['closed', 'cancelled']))
-                ->map(fn ($d) => array_merge($mapDeal($d), ['overdue_days' => (int) $d->deadline->startOfDay()->diffInDays($today)]))
+                ->map(fn ($d) => array_merge($mapDeal($d), ['overdue_days' => (int) $d->effectiveDeadline()->copy()->startOfDay()->diffInDays($today)]))
                 ->sortByDesc('overdue_days')->values();
 
             return [
@@ -286,7 +286,7 @@ class AnalyticsController extends Controller
         ];
 
         // ---- «Требует внимания» (без фильтров — это сигналы по всей компании) ----
-        $overdueDeals = Deal::forCurrentCompany()->whereNotNull('deadline')->whereDate('deadline', '<', $today)
+        $overdueDeals = Deal::forCurrentCompany()->overdueBy($today)
             ->whereNotIn('status', ['closed', 'cancelled'])
             // ЭСФ/Оплата — не просрочка; Акт утверждение — считается просрочкой.
             ->whereDoesntHave('stage', fn ($s) => $s->where('is_won', true)->orWhere('stage_type', 'esf'))->count();
@@ -344,7 +344,7 @@ class AnalyticsController extends Controller
             ->where('status', '!=', 'cancelled')
             ->forCurrentCompany()
             ->with('responsible:id,name')
-            ->get(['id', 'number', 'company_name', 'budget', 'deadline', 'deal_stage_id', 'responsible_user_id'])
+            ->get(['id', 'number', 'company_name', 'budget', 'deadline', 'extended_deadline', 'deal_stage_id', 'responsible_user_id'])
             ->keyBy('id');
 
         $gateTasks = Task::where('taskable_type', 'deal')

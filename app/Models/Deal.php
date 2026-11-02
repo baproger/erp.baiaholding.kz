@@ -26,7 +26,16 @@ class Deal extends Model
         'company_id', 'number', 'name', 'client_name', 'company_name', 'address', 'bin', 'contract_date', 'lot_number', 'unit', 'source', 'client_id', 'responsible_user_id', 'department_id',
         'deal_stage_id', 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'description', 'note', 'status', 'closed_at',
         'kind', 'contractor_name', 'commission_pct',
+        'extended_deadline', 'extension_reason', 'extensions_count',
     ];
+
+    /** Продлить можно не дальше 60 дней от исходного срока (уточнение владельца 02.11.2026). */
+    public const MAX_EXTENSION_DAYS = 60;
+
+    /** Эффективный срок в SQL: Доп. срок, если есть, иначе исходный. */
+    public const EFFECTIVE_DEADLINE_SQL = 'COALESCE(extended_deadline, deadline)';
+
+    protected $appends = ['effective_deadline'];
 
     /** Своя сделка (из предсделки, идёт в цех). */
     public const KIND_OWN = 'own';
@@ -37,10 +46,37 @@ class Deal extends Model
     protected $casts = [
         'budget' => 'decimal:2',
         'commission_pct' => 'decimal:2',
-        'deadline' => 'date',
-        'contract_date' => 'date',
+        // date:Y-m-d — во фронт без часового пояса: иначе полночь Алматы уходила
+        // как «вчера» по UTC (форма «Изменить» показывала срок на день раньше).
+        'deadline' => 'date:Y-m-d',
+        'extended_deadline' => 'date:Y-m-d',
+        'contract_date' => 'date:Y-m-d',
         'closed_at' => 'datetime',
     ];
+
+    /**
+     * Эффективный срок (ТЗ 02.11.2026, п.5.3): Доп. срок, если заполнен, иначе
+     * «Срок». По нему считаются просрочка, канбан, «Просроченные», аналитика.
+     */
+    public function effectiveDeadline(): ?\Illuminate\Support\Carbon
+    {
+        $ext = array_key_exists('extended_deadline', $this->attributes) ? $this->extended_deadline : null;
+
+        return $ext ?? (array_key_exists('deadline', $this->attributes) ? $this->deadline : null);
+    }
+
+    /** Для фронта — 'Y-m-d' без часового пояса. */
+    public function getEffectiveDeadlineAttribute(): ?string
+    {
+        return $this->effectiveDeadline()?->toDateString();
+    }
+
+    /** @param \Illuminate\Database\Eloquent\Builder<self> $q */
+    public function scopeOverdueBy($q, \DateTimeInterface|string $day)
+    {
+        return $q->whereRaw(self::EFFECTIVE_DEADLINE_SQL.' IS NOT NULL')
+            ->whereRaw('DATE('.self::EFFECTIVE_DEADLINE_SQL.') < ?', [\Illuminate\Support\Carbon::parse($day)->toDateString()]);
+    }
 
     public function isContractor(): bool
     {

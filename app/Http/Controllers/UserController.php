@@ -117,7 +117,7 @@ class UserController extends Controller
             ->with('stage:id,name,is_won')
             ->orderByDesc('created_at')
             ->limit(30)
-            ->get(['id', 'number', 'company_name', 'budget', 'deal_stage_id', 'status', 'deadline', 'created_at'])
+            ->get(['id', 'number', 'company_name', 'budget', 'deal_stage_id', 'status', 'deadline', 'extended_deadline', 'created_at'])
             ->map(fn ($d) => [
                 'id' => $d->id,
                 'number' => $d->number,
@@ -126,7 +126,7 @@ class UserController extends Controller
                 'stage' => $d->stage?->name,
                 'is_won' => (bool) $d->stage?->is_won,
                 'status' => $d->status,
-                'deadline' => $d->deadline?->toDateString(),
+                'deadline' => $d->effective_deadline,
             ]);
 
         $projects = \App\Models\Project::query()

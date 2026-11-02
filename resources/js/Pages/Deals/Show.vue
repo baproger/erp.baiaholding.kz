@@ -82,7 +82,25 @@ const pastEsf = computed(() => {
     const esfIdx = props.stages.findIndex((s) => s.id === esfStage.value?.id);
     return esfIdx !== -1 && currentStageIndex.value >= esfIdx;
 });
-const overdue = computed(() => !pastEsf.value && isPastDue(props.deal.deadline, props.deal.status === 'closed'));
+// Просрочка — по эффективному сроку: Доп. срок, если продлили (ТЗ 02.11.2026, п.5.3).
+const effDeadline = computed(() => props.deal.effective_deadline ?? props.deal.deadline);
+const overdue = computed(() => !pastEsf.value && isPastDue(effDeadline.value, props.deal.status === 'closed'));
+// Исходный срок уже прошёл, но продлили в будущее — показываем «(был просрочен)».
+const originalPast = computed(() => !!props.deal.extended_deadline && isPastDue(props.deal.deadline));
+// «Продлить срок»: не дальше 60 дней от срока договора, причина обязательна.
+const MAX_EXT_DAYS = 60;
+const ymd = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const extBounds = computed(() => {
+    if (!props.deal.deadline) return null;
+    const base = new Date(String(props.deal.deadline).slice(0, 10) + 'T00:00:00');
+    const min = new Date(Math.max(base.getTime() + 864e5, new Date(new Date().toDateString()).getTime()));
+    return { min: ymd(min), max: ymd(new Date(base.getTime() + MAX_EXT_DAYS * 864e5)) };
+});
+const extending = ref(false);
+const extForm = useForm({ extended_deadline: '', extension_reason: '' });
+const openExtend = () => { extForm.reset(); extForm.clearErrors(); extending.value = true; };
+const submitExtend = () => extForm.patch(route('deals.extend', props.deal.id), { preserveScroll: true, onSuccess: () => (extending.value = false) });
+const isAdmin = computed(() => (usePage().props.auth.user?.roles ?? []).includes('admin'));
 // Чисто визуальное: индекс текущего этапа для галочек пройденных шагов и % воронки.
 const currentStageIndex = computed(() => props.stages.findIndex((s) => s.id === props.deal.deal_stage_id));
 const funnelProgress = computed(() => (props.stages.length > 1 ? (Math.max(0, currentStageIndex.value) / (props.stages.length - 1)) * 100 : 0));
@@ -291,8 +309,22 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                             <div class="mt-1 text-sm font-medium text-slate-900">{{ deal.source || '—' }}</div>
                         </div>
                         <div>
-                            <div class="text-[11px] uppercase tracking-wide text-slate-400">Срок</div>
-                            <div class="mt-1 text-sm font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsf)">{{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span></div>
+                            <div class="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                                Срок
+                                <button v-if="can.update && deal.deadline && !pastEsf" type="button" @click="openExtend"
+                                    class="rounded-full px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal transition"
+                                    :class="overdue ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'">⏳ Продлить срок</button>
+                            </div>
+                            <!-- Исходный срок не перезаписывается; Доп. срок — рядом (ТЗ 02.11.2026, п.5) -->
+                            <template v-if="deal.extended_deadline">
+                                <div class="mt-1 text-sm text-slate-500"><span class="line-through decoration-slate-300">{{ formatDate(deal.deadline) }}</span><span v-if="originalPast" class="text-xs text-slate-400"> (был просрочен)</span></div>
+                                <div class="text-sm font-semibold" :class="deadlineClass(effDeadline, deal.status==='closed' || pastEsf) || 'text-indigo-700'" :title="'Причина: ' + (deal.extension_reason || '—')">
+                                    Доп. срок: {{ formatDate(deal.extended_deadline) }}<span v-if="overdue"> · просрочено</span>
+                                    <span v-if="deal.extensions_count > 1" class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">продлевали {{ deal.extensions_count }} раза</span>
+                                </div>
+                                <div class="mt-0.5 line-clamp-2 text-[11px] text-slate-400">{{ deal.extension_reason }}</div>
+                            </template>
+                            <div v-else class="mt-1 text-sm font-medium" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsf)">{{ formatDate(deal.deadline) }}<span v-if="overdue"> · просрочено</span></div>
                         </div>
                         <div>
                             <div class="text-[11px] uppercase tracking-wide text-slate-400">Ответственный</div>
@@ -537,7 +569,12 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <p v-if="Number(editForm.partner_pct) > 0 && Number(editForm.budget) > 0" class="mt-1 text-[11px] text-slate-400">= {{ money(Number(editForm.budget) * Number(editForm.partner_pct) / 100) }} партнёру (вычитается из остатка)</p>
                         <InputError :message="editForm.errors.partner_pct" class="mt-1" />
                     </div>
-                    <div><InputLabel value="Срок" /><TextInput v-model="editForm.deadline" type="date" class="mt-1 w-full" /></div>
+                    <div>
+                        <InputLabel value="Срок по договору" />
+                        <TextInput v-model="editForm.deadline" type="date" class="mt-1 w-full" :disabled="!!deal.deadline && !isAdmin" />
+                        <p v-if="deal.deadline && !isAdmin" class="mt-1 text-[11px] text-slate-400">Срок по договору не меняется — продлите кнопкой «⏳ Продлить срок».</p>
+                        <InputError :message="editForm.errors.deadline" class="mt-1" />
+                    </div>
                     <div class="sm:col-span-2"><InputLabel value="Описание" /><textarea v-model="editForm.description" rows="2" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
                     <div class="sm:col-span-2"><InputLabel value="Заметка (кратко)" /><textarea v-model="editForm.note" rows="2" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"></textarea></div>
                 </div>
@@ -602,6 +639,28 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                 </div>
                 <div class="mt-4 text-right">
                     <SecondaryButton @click="showWorkshopPick = false">Отмена</SecondaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Продлить срок (ТЗ 02.11.2026, п.5): Доп. срок + причина, не дальше 60 дней от срока договора -->
+        <Modal :show="extending" max-width="md" @close="extending = false">
+            <div v-if="extBounds" class="p-6">
+                <h2 class="text-lg font-semibold text-slate-900">Продлить срок — {{ deal.number }}</h2>
+                <p class="mt-1 text-sm text-slate-500">Срок по договору: <b>{{ formatDate(deal.deadline) }}</b> — он не меняется. Доп. срок — не позже <b>{{ formatDate(extBounds.max) }}</b> (максимум {{ MAX_EXT_DAYS }} дней).<template v-if="deal.extensions_count"> Уже продлевали: {{ deal.extensions_count }} раз(а).</template></p>
+                <div class="mt-4">
+                    <InputLabel value="Доп. срок *" />
+                    <TextInput v-model="extForm.extended_deadline" type="date" :min="extBounds.min" :max="extBounds.max" class="mt-1 w-full" />
+                    <InputError :message="extForm.errors.extended_deadline" class="mt-1" />
+                </div>
+                <div class="mt-3">
+                    <InputLabel value="Причина продления *" />
+                    <textarea v-model="extForm.extension_reason" rows="3" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm" placeholder="Например: заказчик перенёс приёмку, задержка поставки ЛДСП"></textarea>
+                    <InputError :message="extForm.errors.extension_reason" class="mt-1" />
+                </div>
+                <div class="mt-5 flex justify-end gap-2">
+                    <SecondaryButton @click="extending = false">Отмена</SecondaryButton>
+                    <PrimaryButton :disabled="extForm.processing || !extForm.extended_deadline || extForm.extension_reason.trim().length < 5" @click="submitExtend">Продлить</PrimaryButton>
                 </div>
             </div>
         </Modal>

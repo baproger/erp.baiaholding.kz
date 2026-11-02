@@ -268,7 +268,7 @@ const applyBinMatch = () => {
                                     </span>
                                     <span class="truncate text-[11px] text-slate-600">{{ deal.responsible?.name ?? 'не назначен' }}</span><span v-if="deal.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span>
                                 </span>
-                                <span v-if="deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsfDeal(deal)) || 'text-slate-400'">⏰ {{ formatDate(deal.deadline) }}</span>
+                                <span v-if="deal.effective_deadline ?? deal.deadline" class="shrink-0 text-[11px]" :class="deadlineClass(deal.effective_deadline ?? deal.deadline, deal.status==='closed' || pastEsfDeal(deal)) || 'text-slate-400'">⏰ {{ formatDate(deal.effective_deadline ?? deal.deadline) }}<template v-if="deal.extended_deadline"> ⏳</template></span>
                             </div>
                         </Link>
                         <div class="mt-2 flex items-center justify-between border-t border-slate-100 pt-1.5">
@@ -321,7 +321,7 @@ const applyBinMatch = () => {
                         <td class="px-4 py-2.5"><div class="max-w-40 truncate text-slate-500" :title="deal.client_name || deal.client?.name">{{ deal.client_name || deal.client?.name || '—' }}</div></td>
                         <td class="px-4 py-2.5"><StatusBadge :status="deal.stage?.name" :color="deal.stage?.color" /></td>
                         <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-800">{{ money(deal.budget) }}</td>
-                        <td class="px-4 py-2.5" :class="deadlineClass(deal.deadline, deal.status==='closed' || pastEsfDeal(deal))">{{ formatDate(deal.deadline) }}</td>
+                        <td class="px-4 py-2.5" :class="deadlineClass(deal.effective_deadline ?? deal.deadline, deal.status==='closed' || pastEsfDeal(deal))" :title="deal.extended_deadline ? 'Доп. срок; по договору ' + formatDate(deal.deadline) : ''">{{ formatDate(deal.effective_deadline ?? deal.deadline) }}<template v-if="deal.extended_deadline"> ⏳</template></td>
                         <td class="px-4 py-2.5 text-slate-500">{{ deal.responsible?.name ?? '—' }}<span v-if="deal.responsible?.status === 'fired'" class="ml-1 shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-medium text-slate-600">уволен</span></td>
                     </tr>
                 </tbody>

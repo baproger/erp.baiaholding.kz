@@ -158,6 +158,7 @@ class AuditController extends Controller
         'number' => 'Номер', 'bin' => '№ договора / БИН', 'address' => 'Адрес',
         'company_name' => 'Заказчик', 'client_name' => 'Товар', 'lot_number' => 'Кол-во (лот)',
         'unit' => 'Ед. изм.', 'source' => 'Источник', 'deadline' => 'Срок',
+        'extended_deadline' => 'Доп. срок', 'extension_reason' => 'Причина продления', 'extensions_count' => 'Продлений',
         'contract_date' => 'Дата договора', 'issue_date' => 'Дата счёта', 'due_date' => 'Срок оплаты',
         'date' => 'Дата', 'closed_at' => 'Закрыта', 'completed_at' => 'Завершена',
         'confirmed_at' => 'Подтверждён', 'started_at' => 'Начат',
