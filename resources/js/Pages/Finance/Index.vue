@@ -545,7 +545,7 @@ const delExpense = async (e) => {
                                 <span v-if="e.material" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">склад</span>
                                 <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">прочий</span>
                             </td>
-                            <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : e.payment_method === 'kaspi' ? 'Kaspi перевод' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
                             <td class="whitespace-nowrap px-4 py-2.5">
                                 <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Подтверждён</span>
                                 <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">Ждёт бухгалтера</span>
@@ -602,7 +602,7 @@ const delExpense = async (e) => {
                                             <span v-if="e.material" class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">склад</span>
                                             <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">прочий</span>
                                         </td>
-                                        <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
+                                        <td class="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">{{ e.payment_method === 'cash' ? 'наличные' : e.payment_method === 'kaspi' ? 'Kaspi перевод' : (e.payment_method === 'bank' ? 'банк' : '—') }}</td>
                                         <td class="whitespace-nowrap px-4 py-2.5">
                                             <span v-if="e.status === 'confirmed'" class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Подтверждён</span>
                                             <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">Ждёт бухгалтера</span>

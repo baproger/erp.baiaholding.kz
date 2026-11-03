@@ -158,11 +158,9 @@ class StageGatesTest extends TestCase
         $this->actingAs($designer)->patch(route('tasks.status', $task), ['status' => 'done'])->assertSessionHas('error');
         $this->assertNotSame('done', $task->fresh()->status);
 
-        // Дизайнер загружает смету: без суммы нельзя, с суммой — да.
+        // Дизайнер загружает смету просто файлом — сумму он не считает (03.11.2026).
         $this->actingAs($designer)->post(route('documents.store'), ['documentable_type' => 'deal', 'documentable_id' => $deal->id,
-            'kind' => 'estimate', 'file' => UploadedFile::fake()->create('smeta.pdf', 10, 'application/pdf')])->assertSessionHasErrors('amount');
-        $this->actingAs($designer)->post(route('documents.store'), ['documentable_type' => 'deal', 'documentable_id' => $deal->id,
-            'kind' => 'estimate', 'amount' => 850000, 'file' => UploadedFile::fake()->create('smeta.pdf', 10, 'application/pdf')])->assertSessionHasNoErrors();
+            'kind' => 'estimate', 'file' => UploadedFile::fake()->create('smeta.pdf', 10, 'application/pdf')])->assertSessionHasNoErrors();
 
         $this->actingAs($designer)->patch(route('deals.stageTask', $deal))->assertSessionHas('success');
         $this->actingAs($admin)->patch(route('deals.advance', $deal))->assertSessionHas('success');

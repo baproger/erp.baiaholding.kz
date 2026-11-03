@@ -20,6 +20,8 @@ class SettingsController extends Controller
         'tax_percent' => 3,
         // Код входа (второй фактор) — включать после того, как коды выпущены.
         'require_login_code' => false,
+        // «Пропуск этапов» в сопровождении: этап пройден быстрее N минут (ТЗ 02.11.2026).
+        'support_fast_stage_minutes' => 10,
     ];
 
     private function authorizeManage(Request $request): void
@@ -50,9 +52,13 @@ class SettingsController extends Controller
             'default_locale' => ['required', 'in:ru,kk'],
             'tax_percent' => ['required', 'numeric', 'min:0', 'max:100'],
             'require_login_code' => ['boolean'],
+            'support_fast_stage_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1440'],
         ]);
 
         foreach ($validated as $key => $value) {
+            if ($value === null && $key === 'support_fast_stage_minutes') {
+                continue; // не прислали — оставляем текущий порог
+            }
             Setting::set($key, $value);
         }
 

@@ -42,7 +42,7 @@ class DocumentController extends Controller
         $this->assertEntityAccess($this->resolve($type, $id));
         // Смету загружает дизайнер (и админ) — ТЗ 02.11.2026, п.2.3.
         abort_if($kind === 'estimate' && ! $request->user()->hasAnyRole(['designer', 'admin']), 403, 'Смету загружает дизайнер.');
-        $amount = $kind === 'estimate' ? round((float) $request->input('amount'), 2) : null;
+        $amount = $kind === 'estimate' && $request->filled('amount') ? round((float) $request->input('amount'), 2) : null;
 
         // Store with a random name outside the public root (storage/app/private).
         $path = $file->store('documents', 'local');
@@ -73,7 +73,8 @@ class DocumentController extends Controller
         });
 
         return back()->with('success', $kind === 'estimate'
-            ? 'Смета загружена ('.number_format((float) $amount, 0, '.', ' ').' ₸) — теперь можно подтвердить дизайн.' : 'Документ загружен.');
+            ? 'Смета загружена — теперь можно подтвердить дизайн.'
+            : ($kind === 'contract' ? 'Договор загружен.' : 'Документ загружен.'));
     }
 
     public function download(Document $document): StreamedResponse

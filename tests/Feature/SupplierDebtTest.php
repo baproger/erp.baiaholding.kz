@@ -101,32 +101,39 @@ class SupplierDebtTest extends TestCase
         $this->assertSame([], \App\Services\StageTransitionService::purchaseGateProblems($this->deal));
     }
 
-    public function test_cash_expense_without_document_cannot_be_confirmed(): void
+    /**
+     * Уточнение 03.11.2026: менеджер не обязан прикладывать чек — бухгалтер
+     * подтверждает всегда и прикладывает чек оплаты сам; есть «Kaspi перевод».
+     */
+    public function test_manager_expense_without_document_is_confirmed_by_accountant_with_receipt(): void
     {
         $this->actingAs($this->mgr)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id, 'type' => 'delivery',
-            'amount' => 20000, 'date' => now()->toDateString(), 'description' => 'Доставка',
+            'amount' => 20000, 'date' => now()->toDateString(), 'description' => 'Доставка', 'payment_method' => 'kaspi',
         ])->assertSessionHasNoErrors();
         $e = Expense::firstOrFail();
+        $this->assertSame('pending', $e->status);
+        $bankBefore = app(FinanceService::class)->companyBalances(null)['bank'];
 
-        $this->actingAs($this->fin)->patch(route('expenses.confirm', $e), ['payment_method' => 'cash', 'file' => UploadedFile::fake()->image('chek.jpg')])
-            ->assertSessionHas('error');
-        $this->assertSame('pending', $e->fresh()->status);
-
-        // Менеджер прикрепил счёт — теперь бухгалтер подтверждает.
-        $this->actingAs($this->mgr)->post(route('expenses.attachReceipt', $e), ['file' => UploadedFile::fake()->image('schet.jpg')])->assertSessionHas('success');
-        $this->actingAs($this->fin)->patch(route('expenses.confirm', $e), ['payment_method' => 'cash', 'file' => UploadedFile::fake()->image('chek.jpg')])
+        // Без чека бухгалтера — нельзя; с чеком (Kaspi) — подтверждён.
+        $this->actingAs($this->fin)->patch(route('expenses.confirm', $e), ['payment_method' => 'kaspi'])->assertSessionHasErrors('file');
+        $this->actingAs($this->fin)->patch(route('expenses.confirm', $e), ['payment_method' => 'kaspi', 'file' => UploadedFile::fake()->image('kaspi.jpg')])
             ->assertSessionHasNoErrors();
-        $this->assertSame('confirmed', $e->fresh()->status);
+        $e->refresh();
+        $this->assertSame('confirmed', $e->status);
+        $this->assertSame('kaspi', $e->payment_method);
+        $this->assertNotNull($e->confirm_file_path);
+        // Kaspi перевод — безнал: уменьшает банковский остаток.
+        $this->assertSame(round($bankBefore - 20000, 2), app(FinanceService::class)->companyBalances(null)['bank']);
     }
 
-    public function test_accountant_expense_without_document_is_only_a_draft(): void
+    public function test_accountant_expense_is_confirmed_immediately(): void
     {
         $this->actingAs($this->fin)->post(route('expenses.store'), [
             'expenseable_type' => 'deal', 'expenseable_id' => $this->deal->id, 'type' => 'delivery',
             'amount' => 15000, 'date' => now()->toDateString(), 'payment_method' => 'cash',
         ])->assertSessionHas('success');
-        $this->assertSame('pending', Expense::firstOrFail()->status);
+        $this->assertSame('confirmed', Expense::firstOrFail()->status);
     }
 
     public function test_repay_partially_then_fully_reduces_cash_once(): void

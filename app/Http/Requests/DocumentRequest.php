@@ -16,9 +16,10 @@ class DocumentRequest extends FormRequest
             'documentable_id' => ['required', 'integer'],
             'name' => ['nullable', 'string', 'max:255'],
             // 'estimate' — смета дизайнера (видна бухгалтеру при подтверждении материалов).
-            'kind' => ['nullable', Rule::in(['estimate'])],
-            // Сумма сметы (ТЗ 02.11.2026, п.2.1) — обязательна для сметы.
-            'amount' => ['nullable', 'required_if:kind,estimate', 'numeric', 'min:1', 'max:999999999999'],
+            // contract — файл договора (проверка «Договор» в сопровождении, ТЗ 02.11.2026).
+            'kind' => ['nullable', Rule::in(['estimate', 'contract'])],
+            // Сумма сметы — необязательна: дизайнер суммы не считает (уточнение владельца 03.11.2026).
+            'amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
             'file' => ['required', 'file', 'max:20480', // 20MB
                 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg,gif,zip,rar,txt,csv'],
         ];

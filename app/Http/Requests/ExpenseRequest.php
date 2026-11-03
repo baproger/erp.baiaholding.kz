@@ -30,7 +30,8 @@ class ExpenseRequest extends FormRequest
             // direct — прочий (чек), delivery — доставка, purchase — закуп
             'type' => ['nullable', Rule::in(['direct', 'indirect', 'delivery', 'purchase', 'assembly', 'metal', 'sheet', 'fittings', 'contractor'])],
             'status' => ['nullable', Rule::in(['draft', 'pending', 'confirmed'])],
-            'payment_method' => ['nullable', Rule::in(['cash', 'bank'])],
+            // kaspi — Kaspi перевод (безнал, считается в банковском остатке) — 03.11.2026.
+            'payment_method' => ['nullable', Rule::in(['cash', 'bank', 'kaspi'])],
             'file' => [...$fileRule, 'required_if:funding,debt', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
             // «Оплачено деньгами» / «В долг» (ТЗ 02.11.2026, п.3.1). Для долга —
             // поставщик, контакт (телефон/БИН), срок погашения и документ обязательны.

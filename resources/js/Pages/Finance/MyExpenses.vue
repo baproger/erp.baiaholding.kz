@@ -110,7 +110,7 @@ const submit = () => form.post(route('expenses.store'), {
                         <div class="min-w-0 flex-1 truncate text-sm text-slate-600">{{ e.description || '—' }}</div>
                         <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
                             :class="e.payment_method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'">
-                            {{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
+                            {{ e.payment_method === 'cash' ? 'наличные' : e.payment_method === 'kaspi' ? 'Kaspi перевод' : 'банк' }}</span>
                         <span class="w-28 shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</span>
                     </div>
                 </div>

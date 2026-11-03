@@ -89,7 +89,7 @@ class ExpenseBoardController extends Controller
                 || ($user->hasRole('supplier') && $e->type === 'metal')),
             // ТЗ 02.11.2026: без чека/счёта расход не подтверждается; «в долг» — не через бухгалтера.
             'funding' => $e->funding ?? 'cash',
-            'missing_document' => $e->needsDocument() && ! $e->file_path,
+            'missing_document' => false, // документ прикладывает бухгалтер при подтверждении (03.11.2026)
             'date' => optional($e->date)->toDateString(),
             'amount' => (float) $e->amount,
             'description' => $e->description,

@@ -72,6 +72,8 @@ class DealController extends Controller
                 ->orWhere('company_name', 'like', "%{$s}%")))
             ->when($request->string('responsible')->toString(), fn ($q, $r) => $q->where('responsible_user_id', $r))
             ->when($request->integer('stage'), fn ($q, $s) => $q->where('deal_stage_id', $s))
+            // Сопровождение: green | yellow | red (ТЗ 02.11.2026, п.6.2).
+            ->when(in_array($request->string('support')->toString(), ['green', 'yellow', 'red'], true), fn ($q) => $q->where('support_status', $request->string('support')->toString()))
             // Вид: own — свои, contractor — подрядные (30.09.2026).
             ->when(in_array($request->string('kind')->toString(), ['own', 'contractor'], true), fn ($q) => $q->where('kind', $request->string('kind')->toString()))
             // Фильтр «срок с—по» — по эффективному сроку (Доп. срок, если есть).
@@ -105,7 +107,7 @@ class DealController extends Controller
             'deals' => $deals,
             'stages' => $stages,
             'view' => $view,
-            'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to', 'kind'),
+            'filters' => $request->only('search', 'responsible', 'stage', 'date_from', 'date_to', 'contract_from', 'contract_to', 'kind', 'support'),
             'isLeadership' => $request->user()->hasAnyRole(['admin', 'director', 'financist']),
             // Роль/отдел — для фильтра: менеджеры сверху, остальные по отделам.
             'users' => User::working()->ofCompany(\App\Support\CurrentCompany::id() ?: null)->with(['roles:id,name', 'department:id,name'])
@@ -183,6 +185,12 @@ class DealController extends Controller
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
             'comments' => fn ($q) => $q->with('user:id,name')->latest(),
         ]);
+
+        // Сопровождение — живой расчёт; итог в сделке поправляем, если устарел.
+        $support = app(\App\Services\DealSupportService::class)->check($deal);
+        if ($deal->support_status !== $support['status']) {
+            Deal::whereKey($deal->id)->update(['support_status' => $support['status'], 'support_checked_at' => now()]);
+        }
 
         $dealChat = \App\Models\Chat::firstOrCreate(
             ['deal_id' => $deal->id],
@@ -311,6 +319,8 @@ class DealController extends Controller
             // Смета дизайнера (последняя активная): бухгалтер сверяет с ней материалы.
             'estimate' => ($est = $deal->documents->firstWhere('kind', 'estimate'))
                 ? ['id' => $est->id, 'name' => $est->name, 'user' => $est->user?->name, 'at' => $est->created_at?->toDateString(), 'amount' => $est->amount !== null ? (float) $est->amount : null] : null,
+            // «Сопровождение сделки» (ТЗ 02.11.2026, п.6): 12 проверок + итог.
+            'support' => $support,
             'can' => [
                 'update' => request()->user()->can('update', $deal),
                 // Смету прикрепляет дизайнер (и админ) — ТЗ 02.11.2026, п.2.3.
@@ -546,6 +556,19 @@ class DealController extends Controller
         $project = $projects->createFromDeal($deal, $workshop);
         $deal->update(['status' => 'closed', 'closed_at' => now()]);
         return back()->with('success', 'Отправлено в цех: '.$project->number.'.');
+    }
+
+    /** «Логистика/Сборка не требуется» — для проверки «Этап без расхода» (ТЗ п.6). */
+    public function updateSupportFlags(Request $request, Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        $data = $request->validate([
+            'logistics_not_required' => ['sometimes', 'boolean'],
+            'assembly_not_required' => ['sometimes', 'boolean'],
+        ]);
+        $deal->update($data);
+
+        return back()->with('success', 'Отметка сохранена.');
     }
 
     /**

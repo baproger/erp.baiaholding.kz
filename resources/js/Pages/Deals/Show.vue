@@ -22,7 +22,7 @@ import { UNITS, SOURCES } from '@/utils/dealOptions';
 import { formatDate, formatDateTime, formatDuration, money } from '@/utils/format';
 import { confirmDialog } from '@/composables/useConfirm';
 
-const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null }, estimate: { type: Object, default: null }, companyCode: { type: String, default: null } });
+const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null }, estimate: { type: Object, default: null }, companyCode: { type: String, default: null } , support: { type: Object, default: null } });
 
 const tab = ref('tasks');
 // Подрядная сделка (30.09.2026): работу делает подрядчик, наш доход — %;
@@ -101,6 +101,16 @@ const extForm = useForm({ extended_deadline: '', extension_reason: '' });
 const openExtend = () => { extForm.reset(); extForm.clearErrors(); extending.value = true; };
 const submitExtend = () => extForm.patch(route('deals.extend', props.deal.id), { preserveScroll: true, onSuccess: () => (extending.value = false) });
 const isAdmin = computed(() => (usePage().props.auth.user?.roles ?? []).includes('admin'));
+// «Сопровождение сделки» (ТЗ 02.11.2026, п.6): 12 проверок и итог 🟢/🟡/🔴.
+const SUPPORT_META = {
+    green: { icon: '🟢', label: 'Правильно', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+    yellow: { icon: '🟡', label: 'Есть замечания', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+    red: { icon: '🔴', label: 'Нарушения', cls: 'bg-rose-50 text-rose-700 ring-rose-200' },
+};
+const CHECK_ICON = { ok: '✓', warn: '!', bad: '✗', na: '–' };
+const CHECK_CLS = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-rose-100 text-rose-700', na: 'bg-slate-100 text-slate-400' };
+const supportOpen = ref(false);
+const setFlag = (key, value) => router.patch(route('deals.supportFlags', props.deal.id), { [key]: value }, { preserveScroll: true });
 // Чисто визуальное: индекс текущего этапа для галочек пройденных шагов и % воронки.
 const currentStageIndex = computed(() => props.stages.findIndex((s) => s.id === props.deal.deal_stage_id));
 const funnelProgress = computed(() => (props.stages.length > 1 ? (Math.max(0, currentStageIndex.value) / (props.stages.length - 1)) * 100 : 0));
@@ -259,6 +269,30 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div class="lg:col-span-2 space-y-6">
+                <!-- Сопровождение сделки (ТЗ 02.11.2026, п.6): итог и 12 проверок -->
+                <div v-if="support" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <button type="button" class="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left" @click="supportOpen = !supportOpen">
+                        <span class="text-sm font-semibold text-slate-800">Сопровождение сделки</span>
+                        <span class="rounded-full px-2.5 py-0.5 text-xs font-bold ring-1" :class="SUPPORT_META[support.status].cls">{{ SUPPORT_META[support.status].icon }} {{ SUPPORT_META[support.status].label }}</span>
+                        <span class="text-xs text-slate-500">
+                            факт. маржа <b class="tabular-nums text-slate-700">{{ support.margin.fact_pct }}%</b> по всем расходам
+                            <template v-if="support.margin.unconfirmed > 0"> · из них не подтверждено: <b class="text-amber-700">{{ money(support.margin.unconfirmed) }}</b></template>
+                            <template v-if="support.margin.debt > 0"> · в долг: <b class="text-orange-700">{{ money(support.margin.debt) }}</b></template>
+                        </span>
+                        <span class="ml-auto text-xs text-slate-400">{{ supportOpen ? 'свернуть ▲' : 'подробно ▼' }}</span>
+                    </button>
+                    <div v-if="supportOpen" class="divide-y divide-slate-100 border-t border-slate-100">
+                        <div v-for="c in support.checks" :key="c.key" class="flex flex-wrap items-start gap-3 px-5 py-2 text-sm">
+                            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold" :class="CHECK_CLS[c.state]">{{ CHECK_ICON[c.state] }}</span>
+                            <span class="w-48 shrink-0 font-medium text-slate-700">{{ c.label }}</span>
+                            <span class="min-w-0 flex-1 text-slate-500">{{ c.note || (c.state === 'ok' ? 'в порядке' : '') }}</span>
+                            <span v-if="c.key === 'stage_expense' && can.update" class="flex w-full flex-wrap gap-3 pl-8 text-xs text-slate-500">
+                                <label class="flex items-center gap-1.5"><input type="checkbox" class="rounded border-slate-300" :checked="deal.logistics_not_required" @change="setFlag('logistics_not_required', $event.target.checked)" /> Логистика не требуется</label>
+                                <label class="flex items-center gap-1.5"><input type="checkbox" class="rounded border-slate-300" :checked="deal.assembly_not_required" @change="setFlag('assembly_not_required', $event.target.checked)" /> Сборка не требуется</label>
+                            </span>
+                        </div>
+                    </div>
+                </div>
                 <!-- Смета дизайнера (ТЗ 02.11.2026): сумма + файл; на «Дизайн и расчет» без неё дальше нельзя -->
                 <div v-if="estimate" class="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-3 shadow-sm">
                     <span class="text-sm font-semibold text-amber-800">📐 Смета дизайнера</span>
@@ -413,7 +447,7 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
                         <button :class="tab==='history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'" class="whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-150" @click="tab='history'">История</button>
                     </nav>
                     <TaskPanel v-if="tab==='tasks'" :tasks="deal.tasks" taskable-type="deal" :taskable-id="deal.id" :users="users" />
-                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" :can-estimate="can.estimate" />
+                    <DocumentPanel v-else-if="tab==='docs'" :documents="deal.documents" entity-type="deal" :entity-id="deal.id" :can-estimate="can.estimate" :can-contract="can.update" />
                     <CustomFieldsPanel v-else-if="tab==='custom'" :fields="customFields" entity-type="deal" :entity-id="deal.id" />
                     <div v-else>
                         <!-- Тайминг этапов сделки: каждый шаг — когда, сколько заняло и кто перевёл -->

@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('deals/{deal}/reopen', [DealController::class, 'reopen'])->name('deals.reopen');
     // Доп. срок с причиной, не больше 60 дней от срока договора (ТЗ 02.11.2026, п.5).
     Route::patch('deals/{deal}/extend', [DealController::class, 'extendDeadline'])->name('deals.extend');
+    Route::patch('deals/{deal}/support-flags', [DealController::class, 'updateSupportFlags'])->name('deals.supportFlags');
     Route::post('deals/{deal}/to-workshop', [DealController::class, 'sendToWorkshop'])->name('deals.toWorkshop');
     Route::patch('deals/{deal}/responsible', [DealController::class, 'updateResponsible'])->name('deals.responsible');
     // Ручной % бонуса менеджера по сделке (финансист/админ).

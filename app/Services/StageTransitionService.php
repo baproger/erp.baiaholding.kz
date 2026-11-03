@@ -40,8 +40,7 @@ class StageTransitionService
         $pending = $expenses->reject(fn ($e) => self::expenseSettled($e))->values();
         foreach ($pending->take(10) as $e) {
             $label = $e->material ? 'Материал со склада: '.$e->material->name : (self::EXPENSE_TYPE_LABELS[$e->type] ?? 'Расход');
-            $why = $e->isDebt() ? 'долг оформлен не полностью (поставщик/срок/документ)'
-                : ($e->needsDocument() && ! $e->file_path ? 'нет чека/счёта, прикрепите документ' : 'ждёт подтверждения бухгалтера');
+            $why = $e->isDebt() ? 'долг оформлен не полностью (поставщик/срок/документ)' : 'ждёт подтверждения бухгалтера';
             $problems[] = 'Расход #'.$e->id.' '.$label.' '.number_format((float) $e->amount, 0, '.', ' ').' ₸ — '.$why;
         }
         if ($pending->count() > 10) {

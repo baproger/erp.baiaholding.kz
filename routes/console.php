@@ -17,3 +17,5 @@ Schedule::command('pre-deals:notify-tender-deadline')->dailyAt('09:00');
 // Долги сотрудников: 1-го числа гасим за ПРОШЛЫЙ месяц (его бонусы уже
 // начислены целиком). Команда идемпотентна — повторный прогон не удвоит.
 Schedule::command('debts:charge')->monthlyOn(1, '03:00');
+// «Сопровождение сделки»: проверки по времени (просрочка, 48 ч, долг) — каждое утро.
+Schedule::command('deals:support-refresh')->dailyAt('06:00');

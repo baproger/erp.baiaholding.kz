@@ -96,6 +96,10 @@ const fTo = ref(props.filters?.date_to ?? '');
 const fContractFrom = ref(props.filters?.contract_from ?? '');
 const fContractTo = ref(props.filters?.contract_to ?? '');
 const fKind = ref(props.filters?.kind ?? ''); // '' | own | contractor
+// Сопровождение (ТЗ 02.11.2026, п.6.2): руководитель видит все «красные» сделки.
+const fSupport = ref(props.filters?.support ?? ''); // '' | green | yellow | red
+const SUPPORT_DOT = { green: '🟢', yellow: '🟡', red: '🔴' };
+const SUPPORT_TITLE = { green: 'Сопровождение: правильно', yellow: 'Сопровождение: есть замечания', red: 'Сопровождение: нарушения' };
 const applyFilters = () => router.get(route('deals.index'), {
     view: props.view,
     search: search.value || undefined,
@@ -106,21 +110,22 @@ const applyFilters = () => router.get(route('deals.index'), {
     contract_from: fContractFrom.value || undefined,
     contract_to: fContractTo.value || undefined,
     kind: fKind.value || undefined,
+    support: fSupport.value || undefined,
 }, { preserveState: true, preserveScroll: true, replace: true });
 let searchTimer = null;
 const onSearch = () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 350); };
-const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value || fContractFrom.value || fContractTo.value || fKind.value);
+const hasFilters = computed(() => search.value || fResponsible.value || fStage.value || fFrom.value || fTo.value || fContractFrom.value || fContractTo.value || fKind.value || fSupport.value);
 // При фильтре по этапу канбан показывает ТОЛЬКО выбранную колонку —
 // остальные этапы скрываются (а не пустеют).
 const visibleStages = computed(() => fStage.value ? props.stages.filter((s) => String(s.id) === String(fStage.value)) : props.stages);
 const resetFilters = () => {
     search.value = ''; fResponsible.value = ''; fStage.value = ''; fFrom.value = ''; fTo.value = '';
-    fContractFrom.value = ''; fContractTo.value = ''; fKind.value = '';
+    fContractFrom.value = ''; fContractTo.value = ''; fKind.value = ''; fSupport.value = '';
     clearStickyFilters('deals');
     applyFilters();
 };
 // Фильтр страницы запоминается: вернулся в сделки — тот же менеджер/этап/период.
-useStickyFilters('deals', { search, fResponsible, fStage, fFrom, fTo, fContractFrom, fContractTo, fKind }, applyFilters);
+useStickyFilters('deals', { search, fResponsible, fStage, fFrom, fTo, fContractFrom, fContractTo, fKind, fSupport }, applyFilters);
 
 // Массовое удаление (вид «Список», только admin): чекбоксы + подтверждение.
 const selected = ref(new Set());
@@ -210,6 +215,12 @@ const applyBinMatch = () => {
                 <option value="own">Свои</option>
                 <option value="contractor">🤝 Подряд</option>
             </select>
+            <select v-if="isLeadership" v-model="fSupport" @change="applyFilters" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" title="Сопровождение сделки">
+                <option value="">Сопровождение: все</option>
+                <option value="red">🔴 Нарушения</option>
+                <option value="yellow">🟡 Есть замечания</option>
+                <option value="green">🟢 Правильно</option>
+            </select>
             <SearchSelect v-model="fStage" :options="stages" placeholder="Все этапы" width="w-full sm:w-52" @change="applyFilters" />
             <label class="flex items-center gap-1 text-xs text-slate-400">срок с
                 <input v-model="fFrom" @change="applyFilters" type="date" class="rounded-lg border-slate-200 py-1.5 text-xs shadow-sm" />
@@ -247,7 +258,7 @@ const applyBinMatch = () => {
                                 <div class="truncate text-sm font-bold text-slate-900">{{ deal.company_name || deal.name }}</div>
                                 <!-- Номер сделки виден ВСЕГДА, «Просрочена» — дополнительным бейджем -->
                                 <span class="flex shrink-0 flex-col items-end gap-0.5">
-                                    <span class="text-[11px] text-slate-400">{{ deal.number }}</span>
+                                    <span class="text-[11px] text-slate-400"><span v-if="deal.support_status" :title="SUPPORT_TITLE[deal.support_status]">{{ SUPPORT_DOT[deal.support_status] }} </span>{{ deal.number }}</span>
                                     <span v-if="deal.kind === 'contractor'" class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">🤝 Подряд</span>
                                     <span v-if="deal.overdue_count" class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-600">ПРОСРОЧЕНА</span>
                                 </span>
@@ -312,7 +323,7 @@ const applyBinMatch = () => {
                             <input type="checkbox" :checked="selected.has(deal.id)" @change="toggleSel(deal.id)"
                                 class="rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
                         </td>
-                        <td class="px-4 py-2.5 text-slate-400 first:px-6">{{ deal.number }}</td>
+                        <td class="px-4 py-2.5 text-slate-400 first:px-6"><span v-if="deal.support_status" :title="SUPPORT_TITLE[deal.support_status]">{{ SUPPORT_DOT[deal.support_status] }} </span>{{ deal.number }}</td>
                         <td class="px-4 py-2.5">
                             <div class="line-clamp-2 max-w-md font-medium leading-snug text-slate-900" :title="deal.company_name || deal.name">{{ deal.company_name || deal.name }}
                                 <span v-if="deal.kind === 'contractor'" class="ml-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200" :title="`Подрядчик: ${deal.contractor_name || '—'}, наши ${Number(deal.commission_pct)}%`">🤝 Подряд</span>

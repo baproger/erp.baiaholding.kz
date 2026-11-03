@@ -81,6 +81,20 @@ class AppServiceProvider extends ServiceProvider
             $model::deleted($forget);
         }
 
+        // «Сопровождение сделки» (ТЗ 02.11.2026, п.6): итог 🟢/🟡/🔴 пересчитывается
+        // сразу, как меняется что-то, что проверяется. Пересчёт пишет в сделку
+        // query builder'ом — без событий, цикла нет.
+        $support = fn (?int $dealId) => $dealId ? app(\App\Services\DealSupportService::class)->refresh($dealId) : null;
+        Deal::saved(fn ($d) => $support($d->id));
+        $expenseDeal = fn ($e) => $e->expenseable_type === 'deal' ? (int) $e->expenseable_id
+            : ($e->expenseable_type === 'project' ? Project::whereKey($e->expenseable_id)->value('deal_id') : null);
+        \App\Models\Expense::saved(fn ($e) => $support($expenseDeal($e)));
+        \App\Models\Expense::deleted(fn ($e) => $support($expenseDeal($e)));
+        \App\Models\Document::saved(fn ($d) => $d->documentable_type === 'deal' ? $support((int) $d->documentable_id) : null);
+        \App\Models\Document::deleted(fn ($d) => $d->documentable_type === 'deal' ? $support((int) $d->documentable_id) : null);
+        \App\Models\SupplierDebt::saved(fn ($d) => $support($d->deal_id ? (int) $d->deal_id : null));
+        \App\Models\DealStageLog::saved(fn ($l) => $support((int) $l->deal_id));
+
         // Живые обновления без WebSocket (LiveStamp): события двигают штамп
         // пользователя, фронт опрашивает /live/version — см. useLive.js.
         \App\Models\ChatMessage::saved(fn ($m) => \App\Support\LiveStamp::bump(

@@ -14,6 +14,7 @@ const form = useForm({
     default_locale: props.settings.default_locale,
     tax_percent: props.settings.tax_percent,
     require_login_code: !!props.settings.require_login_code,
+    support_fast_stage_minutes: props.settings.support_fast_stage_minutes ?? 10,
 });
 const save = () => form.put(route('settings.update'), { preserveScroll: true });
 </script>
@@ -68,6 +69,11 @@ const save = () => form.put(route('settings.update'), { preserveScroll: true });
                             <input type="checkbox" v-model="form.auto_create_project" class="rounded border-slate-300 text-indigo-600" />
                             Автоматически создавать проект при выигрыше сделки
                         </label>
+                        <div class="sm:col-span-2">
+                            <InputLabel value="Сопровождение: этап пройден быстрее, минут" />
+                            <TextInput v-model="form.support_fast_stage_minutes" type="number" min="1" max="1440" class="mt-1 w-40 rounded-md border-slate-300 text-sm tabular-nums shadow-sm" />
+                            <p class="mt-1 text-xs text-slate-500">Если сделка прошла этап быстрее — замечание «Пропуск этапов» в блоке «Сопровождение сделки».</p>
+                        </div>
                         <div class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:col-span-2">
                             <label class="flex items-start gap-2 text-sm text-slate-700">
                                 <input type="checkbox" v-model="form.require_login_code" class="mt-0.5 rounded border-slate-300 text-indigo-600" />

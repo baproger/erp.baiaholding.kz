@@ -27,6 +27,7 @@ class Deal extends Model
         'deal_stage_id', 'budget', 'partner_pct', 'bonus_rate_override', 'deadline', 'description', 'note', 'status', 'closed_at',
         'kind', 'contractor_name', 'commission_pct',
         'extended_deadline', 'extension_reason', 'extensions_count',
+        'logistics_not_required', 'assembly_not_required',
     ];
 
     /** Продлить можно не дальше 60 дней от исходного срока (уточнение владельца 02.11.2026). */
@@ -50,6 +51,9 @@ class Deal extends Model
         // как «вчера» по UTC (форма «Изменить» показывала срок на день раньше).
         'deadline' => 'date:Y-m-d',
         'extended_deadline' => 'date:Y-m-d',
+        'logistics_not_required' => 'boolean',
+        'assembly_not_required' => 'boolean',
+        'support_checked_at' => 'datetime',
         'contract_date' => 'date:Y-m-d',
         'closed_at' => 'datetime',
     ];

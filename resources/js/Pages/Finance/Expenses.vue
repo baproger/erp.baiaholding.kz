@@ -134,7 +134,7 @@ const del = async (e) => {
                         <div v-if="e.can_confirm || canManage" class="mt-3 border-t border-slate-200/60 pt-3">
                             <div v-if="confirmFor === e.id" class="space-y-2">
                                 <div class="flex gap-2">
-                                    <button v-for="m in [['cash','💵 Наличные'],['bank','🏦 Банк']]" :key="m[0]" type="button"
+                                    <button v-for="m in [['cash','💵 Наличные'],['bank','🏦 Банк'],['kaspi','📱 Kaspi перевод']]" :key="m[0]" type="button"
                                         @click="cForm.payment_method = m[0]"
                                         class="rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-150"
                                         :class="cForm.payment_method === m[0] ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
@@ -221,7 +221,7 @@ const del = async (e) => {
                             <span class="rounded-full px-2 py-0.5 text-[11px] font-medium"
                                 :class="e.funding === 'debt' ? 'bg-orange-50 text-orange-700' : !e.payment_method ? 'bg-slate-100 text-slate-500' : e.payment_method === 'cash' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'"
                                 :title="e.funding === 'debt' ? 'Взято у поставщика в долг — гасится в «Долг сделкам»' : !e.payment_method ? 'Деньги ушли при закупе — касса не трогалась' : ''">
-                                {{ e.funding === 'debt' ? '🧾 в долг' : !e.payment_method ? '🏭 без кассы' : e.payment_method === 'cash' ? '💵 нал' : '🏦 банк' }}</span>
+                                {{ e.funding === 'debt' ? '🧾 в долг' : !e.payment_method ? '🏭 без кассы' : e.payment_method === 'cash' ? '💵 нал' : e.payment_method === 'kaspi' ? '📱 Kaspi' : '🏦 банк' }}</span>
                         </div>
                         <!-- Сумма -->
                         <span class="w-28 shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums text-slate-800">{{ money(e.amount) }}</span>

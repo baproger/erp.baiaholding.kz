@@ -224,13 +224,10 @@ class ExpenseController extends Controller
         // Прочий расход: бухгалтер/админ подтверждают сразу; расход менеджера
         // (и директора) ждёт подтверждения бухгалтера — чек + нал/банк.
         $isAccountant = $request->user()->hasAnyRole(['admin', 'financist']);
-        // Без чека/счёта расход по сделке — только черновик (ТЗ 02.11.2026, п.3.2):
-        // даже бухгалтер не может сразу провести его подтверждённым.
-        $draftNoDoc = $isAccountant && $entity !== null && empty($data['file_path'])
-            && ! in_array($data['type'] ?? 'direct', ['metal', 'contractor'], true);
-        if ($draftNoDoc) {
-            $isAccountant = false;
-        }
+        // Уточнение владельца 03.11.2026: чек/счёт менеджер прикладывает по
+        // возможности (или выбирает «Kaspi перевод»); документ может приложить и
+        // бухгалтер — подтверждает расход всегда бухгалтер (с чеком оплаты).
+        $draftNoDoc = false;
         $data['status'] = $isAccountant ? 'confirmed' : 'pending';
         // Заявка сотрудника — это ещё не выдача денег: откуда платить, решает
         // бухгалтер при подтверждении. Иначе касса/банк уменьшились бы по
@@ -307,10 +304,6 @@ class ExpenseController extends Controller
         if ($expense->status === 'confirmed') {
             return back()->with('error', 'Расход уже подтверждён.');
         }
-        // ТЗ 02.11.2026, п.3.2: без чека или счёта (от менеджера) расход не подтверждается.
-        if ($expense->needsDocument() && ! $expense->file_path) {
-            return back()->with('error', 'Нет чека или счёта на оплату — расход #'.$expense->id.' не подтверждается. Прикрепите документ («📎 прикрепить чек»).');
-        }
 
         // Металл из цеха: деньги за него ушли раньше, при закупе — поэтому
         // подтверждение без чека и без кассы (payment_method остаётся пустым,
@@ -355,13 +348,13 @@ class ExpenseController extends Controller
         }
 
         $data = $request->validate([
-            'payment_method' => ['required', \Illuminate\Validation\Rule::in(['cash', 'bank'])],
+            'payment_method' => ['required', \Illuminate\Validation\Rule::in(['cash', 'bank', 'kaspi'])],
             'file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,heic,pdf', 'max:10240'],
             // День ОПЛАТЫ выбирает бухгалтер (правило от 25.08.2026): расход
             // ложится в кассу/книгу этой датой, а не датой заявки менеджера.
             'date' => ['nullable', 'date', 'before_or_equal:today'],
         ], [
-            'payment_method.required' => 'Выберите способ оплаты: наличные или банк.',
+            'payment_method.required' => 'Выберите способ оплаты: наличные, банк или Kaspi перевод.',
             'date.before_or_equal' => 'Дата оплаты не может быть в будущем.',
         ]);
 

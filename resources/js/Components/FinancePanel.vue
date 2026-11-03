@@ -144,8 +144,6 @@ const addExpense = () => expenseForm
         preserveScroll: true, forceFormData: true,
         onSuccess: () => { expenseForm.reset('amount', 'description', 'file', 'material_id', 'qty', 'funding', 'supplier_name', 'supplier_contact', 'debt_due_date'); if (receiptInput.value) receiptInput.value.value = ''; showExpense.value = false; },
     });
-// Документ нужен ручным расходам сделки (не склад/металл/подрядчик) — ТЗ 02.11.2026, п.3.2.
-const needsDoc = (e) => !e.material && !e.material_id && !e.employee_id && !['metal', 'contractor'].includes(e.type) && e.funding !== 'debt';
 const fmtDay = (v) => (v ? String(v).slice(0, 10).split('-').reverse().join('.') : '—');
 const fmtDateTime = (v) => v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 const isImage = (path) => /\.(jpe?g|png|webp|heic)$/i.test(path ?? '');
@@ -358,6 +356,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <button type="button" @click="expenseForm.payment_method = 'bank'"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                         :class="expenseForm.payment_method === 'bank' ? 'border-sky-500 bg-sky-100 text-sky-700 ring-1 ring-sky-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">Банк (счёт)</button>
+                    <button type="button" @click="expenseForm.payment_method = 'kaspi'"
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                        :class="expenseForm.payment_method === 'kaspi' ? 'border-rose-500 bg-rose-50 text-rose-700 ring-1 ring-rose-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">Kaspi перевод</button>
                 </div>
                 <!-- Остатки из поступлений (видит бухгалтер): расход списывается отсюда -->
                 <div v-if="balances" class="mt-1.5 text-[11px]" :class="overBalance ? 'font-semibold text-rose-600' : 'text-slate-400'">
@@ -365,7 +366,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                     <template v-if="overBalance"> — расход превышает остаток {{ expenseForm.payment_method === 'cash' ? 'кассы' : 'счёта' }}!</template>
                 </div>
                 <div v-if="expenseMode !== 'material'" class="mt-2">
-                    <label class="mb-1 block text-xs font-medium" :class="isDebtMode ? 'text-orange-700' : 'text-slate-500'">{{ isDebtMode ? 'Счёт или накладная поставщика * (фото или PDF)' : 'Чек или счёт на оплату (фото или PDF) — без него бухгалтер расход не подтвердит' }}</label>
+                    <label class="mb-1 block text-xs font-medium" :class="isDebtMode ? 'text-orange-700' : 'text-slate-500'">{{ isDebtMode ? 'Счёт или накладная поставщика * (фото или PDF)' : 'Чек или счёт (фото или PDF) — если есть; иначе приложит бухгалтер при подтверждении' }}</label>
                     <input ref="receiptInput" type="file" accept="image/*,.pdf" @change="onReceipt"
                         class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" />
                     <div v-if="expenseForm.errors.file" class="mt-1 text-xs text-red-600">{{ expenseForm.errors.file }}</div>
@@ -389,7 +390,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                                 <!-- Материал сверяется со сметой дизайнера -->
                                 <a v-if="e.material && estimate" :href="route('documents.download', estimate.id)" target="_blank" class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-200" :title="'Смета: ' + estimate.name">📐 смета</a>
                                 <span v-else-if="e.material && e.status !== 'confirmed'" class="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-600" title="Дизайнер ещё не прикрепил смету к сделке">⚠ нет сметы</span>
-                                <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : 'банк' }}</span>
+                                <span v-if="e.payment_method" class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">{{ e.payment_method === 'cash' ? 'наличные' : e.payment_method === 'kaspi' ? 'Kaspi перевод' : 'банк' }}</span>
                                 <span v-if="e.funding === 'debt' && e.supplier_debt" class="rounded-full px-2 py-0.5 font-semibold"
                                     :class="e.supplier_debt.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'"
                                     :title="'Поставщик: ' + e.supplier_debt.supplier_name + (e.supplier_debt.supplier_contact ? ' · ' + e.supplier_debt.supplier_contact : '')">
@@ -397,7 +398,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                                     <template v-if="e.supplier_debt.status === 'paid'">погашен</template>
                                     <template v-else>остаток {{ money(Number(e.supplier_debt.amount) - Number(e.supplier_debt.paid)) }} · до {{ fmtDay(e.supplier_debt.due_date) }}</template>
                                 </span>
-                                <span v-else-if="needsDoc(e) && !e.file_path && e.status !== 'confirmed'" class="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700" title="ТЗ: без чека или счёта расход не подтверждается">📎 нет чека/счёта</span>
+
                                 <span v-if="e.responsible">{{ e.responsible.name }}</span>
                                 <span>· {{ fmtDateTime(e.created_at) }}</span>
                             </div>
@@ -421,8 +422,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             <span v-else-if="e.status === 'confirmed'" class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Подтверждён</span>
                             <span v-else-if="e.status === 'pending'" class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{{ e.type === 'metal' ? 'Ждёт завсклада' : 'Ждёт бухгалтера' }}</span>
                             <span v-else class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Черновик</span>
-                            <button v-if="canConfirmRow(e) && e.status !== 'confirmed' && confirmFor !== e.id" :disabled="needsDoc(e) && !e.file_path"
-                                :title="needsDoc(e) && !e.file_path ? 'Сначала прикрепите чек или счёт («➕ добавить»)' : ''"
+                            <button v-if="canConfirmRow(e) && e.status !== 'confirmed' && confirmFor !== e.id"
                                 class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                                 @click="openConfirm(e)">✓ Подтвердить</button>
                             <!-- Подтверждённый расход проведён по кассе — удалить его
@@ -442,6 +442,9 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                             <button type="button" @click="confirmForm.payment_method = 'bank'"
                                 class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
                                 :class="confirmForm.payment_method === 'bank' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Банк (счёт)</button>
+                            <button type="button" @click="confirmForm.payment_method = 'kaspi'"
+                                class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all"
+                                :class="confirmForm.payment_method === 'kaspi' ? 'border-emerald-500 bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500' : 'border-slate-200 bg-white text-slate-500'">Kaspi перевод</button>
                             <label class="ml-auto flex items-center gap-1.5 text-xs font-medium text-slate-500" title="Каким днём расход ляжет в кассу / кассовую книгу">Дата оплаты
                                 <input v-model="confirmForm.date" type="date" :max="today()" class="rounded-lg border-slate-200 py-1 text-xs shadow-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20" />
                             </label>
