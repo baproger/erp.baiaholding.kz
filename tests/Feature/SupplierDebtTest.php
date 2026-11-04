@@ -197,4 +197,32 @@ class SupplierDebtTest extends TestCase
         $this->actingAs($this->fin)->get(route('cashBook.index', ['kind' => 'cash']))
             ->assertInertia(fn (Assert $p) => $p->where('operations', fn ($ops) => collect($ops)->contains(fn ($o) => $o['tag'] === 'Долг поставщику' && (float) $o['amount'] === 5000.0)));
     }
+
+    /** Админ удаляет тестовый долг целиком: погашения, расход «в долг»; касса пересчитывается (04.11.2026). */
+    public function test_admin_deletes_debt_with_payments_and_cash_is_restored(): void
+    {
+        $admin = $this->user('admin');
+        $before = $this->cash();
+        $this->debtExpense();
+        $debt = SupplierDebt::firstOrFail();
+        $this->actingAs($this->fin)->post(route('supplierDebts.repay', $debt), ['amount' => 50000, 'payment_method' => 'cash', 'date' => now()->toDateString(), 'file' => UploadedFile::fake()->image('c.jpg')]);
+        $this->assertSame(round($before - 50000, 2), $this->cash());
+
+        // Бухгалтер удалить не может — только админ.
+        $this->actingAs($this->fin)->delete(route('supplierDebts.destroy', $debt))->assertForbidden();
+
+        $this->actingAs($admin)->delete(route('supplierDebts.destroy', $debt))->assertSessionHas('success');
+        $this->assertSame(0, SupplierDebt::count());
+        $this->assertSame(0, \App\Models\SupplierDebtPayment::count());
+        $this->assertSame(0, Expense::where('expenseable_id', $this->deal->id)->count(), 'расход «в долг» тоже удалён');
+        $this->assertSame($before, $this->cash(), 'касса вернулась');
+    }
+
+    public function test_debt_of_deleted_deal_shows_deal_number(): void
+    {
+        $this->debtExpense();
+        $this->deal->delete();
+        $this->actingAs($this->fin)->get(route('supplierDebts.index'))
+            ->assertInertia(fn (Assert $p) => $p->where('groups.0.deal.number', 'BAIA-777')->where('groups.0.deal.deleted', true));
+    }
 }

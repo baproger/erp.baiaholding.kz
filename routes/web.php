@@ -174,6 +174,7 @@ Route::middleware('auth')->group(function () {
     Route::get('finance/supplier-debts', [\App\Http\Controllers\SupplierDebtController::class, 'index'])->name('supplierDebts.index');
     Route::post('finance/supplier-debts/{debt}/repay', [\App\Http\Controllers\SupplierDebtController::class, 'repay'])->middleware('throttle:30,1')->name('supplierDebts.repay');
     Route::get('finance/supplier-debts/{debt}/file/{payment?}', [\App\Http\Controllers\SupplierDebtController::class, 'file'])->name('supplierDebts.file');
+    Route::delete('finance/supplier-debts/{debt}', [\App\Http\Controllers\SupplierDebtController::class, 'destroy'])->name('supplierDebts.destroy');
     // «Мои расходы» — личная страница сотрудника: свои заявки и что ему выдали.
     Route::get('my-expenses', [\App\Http\Controllers\MyExpenseController::class, 'index'])->name('myExpenses.index');
     Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');

@@ -21,9 +21,10 @@ class SupplierDebt extends Model
     // date:Y-m-d — без часового пояса: иначе полночь Алматы уходила в браузер как «вчера» (UTC).
     protected $casts = ['amount' => 'decimal:2', 'paid' => 'decimal:2', 'due_date' => 'date:Y-m-d', 'paid_at' => 'datetime'];
 
+    /** И удалённая сделка — долг остаётся обязательством, номер виден (04.11.2026). */
     public function deal(): BelongsTo
     {
-        return $this->belongsTo(Deal::class);
+        return $this->belongsTo(Deal::class)->withTrashed();
     }
 
     public function expense(): BelongsTo

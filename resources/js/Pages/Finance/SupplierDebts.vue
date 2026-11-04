@@ -8,6 +8,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import ResetFiltersButton from '@/Components/ResetFiltersButton.vue';
 import { money } from '@/utils/format';
+import { confirmDialog } from '@/composables/useConfirm';
 
 // Финансы → «Долг сделкам» (ТЗ 02.11.2026, п.7): долги поставщикам из расходов
 // «в долг» — сгруппированы по сделке, итог «Всего должны». Гасит бухгалтер/админ.
@@ -16,6 +17,7 @@ const props = defineProps({
     totals: Object,
     filters: Object,
     canRepay: Boolean,
+    canDelete: Boolean,
     balances: { type: Object, default: null },
 });
 
@@ -43,6 +45,13 @@ const repaying = ref(null);
 const today = () => new Date().toISOString().slice(0, 10);
 const repayForm = useForm({ amount: '', payment_method: 'bank', date: today(), file: null, note: '' });
 const openRepay = (row) => { repayForm.reset(); repayForm.clearErrors(); repayForm.amount = row.remaining; repayForm.date = today(); repaying.value = row; };
+// Удалить долг (только админ): тестовые/ошибочные записи вместе с погашениями и расходом.
+const removeDebt = async (row) => {
+    const paid = row.paid > 0 ? ` Погашения на ${money(row.paid)} тоже удалятся — касса пересчитается.` : '';
+    if (await confirmDialog({ title: 'Удалить долг', message: `«${row.supplier}» на ${money(row.amount)} будет удалён вместе с расходом «в долг» в сделке.${paid}`, confirmText: 'Удалить', danger: true })) {
+        router.delete(route('supplierDebts.destroy', row.id), { preserveScroll: true });
+    }
+};
 const onFile = (e) => { repayForm.file = e.target.files[0] ?? null; };
 const submitRepay = () => repayForm.post(route('supplierDebts.repay', repaying.value.id), {
     preserveScroll: true, forceFormData: true, onSuccess: () => (repaying.value = null),
@@ -88,7 +97,8 @@ const submitRepay = () => repayForm.post(route('supplierDebts.repay', repaying.v
 
             <div v-for="g in groups" :key="g.deal?.id ?? 0" class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
-                    <Link v-if="g.deal" :href="route('deals.show', g.deal.id)" class="font-semibold text-indigo-600 hover:underline">{{ g.deal.number }}</Link>
+                    <Link v-if="g.deal && !g.deal.deleted" :href="route('deals.show', g.deal.id)" class="font-semibold text-indigo-600 hover:underline">{{ g.deal.number }}</Link>
+                    <span v-else-if="g.deal" class="font-semibold text-slate-500">{{ g.deal.number }} <span class="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">сделка удалена</span></span>
                     <span class="text-sm text-slate-700">{{ g.deal?.customer ?? 'Без сделки' }}</span>
                     <span class="ml-auto text-xs text-slate-500">долг {{ money(g.amount) }} · оплачено {{ money(g.paid) }} ·
                         <b :class="g.remaining > 0 ? 'text-rose-600' : 'text-emerald-600'">остаток {{ money(g.remaining) }}</b></span>
@@ -116,6 +126,8 @@ const submitRepay = () => repayForm.post(route('supplierDebts.repay', repaying.v
                                     <td class="whitespace-nowrap px-5 py-2.5 text-right">
                                         <button v-if="canRepay && r.state !== 'paid'" @click="openRepay(r)"
                                             class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">Погасить</button>
+                                        <button v-if="canDelete" @click="removeDebt(r)" title="Удалить долг (только админ)"
+                                            class="ml-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-rose-500 transition hover:bg-rose-50 hover:text-rose-700">Удалить</button>
                                     </td>
                                 </tr>
                                 <tr v-for="p in r.payments" :key="'p' + p.id" class="bg-emerald-50/40 text-xs text-slate-500">

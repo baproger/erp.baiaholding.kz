@@ -35,7 +35,7 @@ class SupplierDebtController extends Controller
         ];
 
         $debts = SupplierDebt::query()
-            ->with(['deal:id,number,company_name', 'expense:id,file_path', 'payments' => fn ($q) => $q->with('creator:id,name')->orderBy('date')])
+            ->with(['deal:id,number,company_name,deleted_at', 'expense:id,file_path', 'payments' => fn ($q) => $q->with('creator:id,name')->orderBy('date')])
             ->when($companyId, fn ($q, $c) => $q->where('company_id', $c))
             ->when($f['search'] !== '', fn ($q) => $q->whereHas('deal', fn ($d) => $d->where('number', 'like', "%{$f['search']}%")->orWhere('company_name', 'like', "%{$f['search']}%")))
             ->when($f['supplier'] !== '', fn ($q) => $q->where('supplier_name', 'like', "%{$f['supplier']}%"))
@@ -48,7 +48,7 @@ class SupplierDebtController extends Controller
 
         $rows = $debts->map(fn (SupplierDebt $d) => [
             'id' => $d->id,
-            'deal' => $d->deal ? ['id' => $d->deal->id, 'number' => $d->deal->number, 'customer' => $d->deal->company_name] : null,
+            'deal' => $d->deal ? ['id' => $d->deal->id, 'number' => preg_replace('/#del\d*$/', '', (string) $d->deal->number), 'customer' => $d->deal->company_name, 'deleted' => $d->deal->trashed()] : null,
             'supplier' => $d->supplier_name,
             'contact' => $d->supplier_contact,
             'description' => $d->description,
@@ -82,6 +82,8 @@ class SupplierDebtController extends Controller
             ],
             'filters' => $f,
             'canRepay' => $request->user()->hasAnyRole(['admin', 'financist']),
+            // Удалить долг целиком (тестовые/ошибочные записи) — только супер-админ.
+            'canDelete' => $request->user()->isSuperAdmin(),
             'balances' => app(\App\Services\FinanceService::class)->companyBalances($companyId),
         ]);
     }
@@ -128,6 +130,33 @@ class SupplierDebtController extends Controller
                 ? 'Долг «'.$locked->supplier_name.'» погашен полностью.'
                 : 'Погашено '.number_format($amount, 0, '.', ' ').' ₸, остаток '.number_format($locked->remaining(), 0, '.', ' ').' ₸.');
         });
+    }
+
+    /**
+     * Удалить долг (04.11.2026): только супер-админ — для тестовых и ошибочных
+     * записей. Удаляются долг, его погашения (касса пересчитается сама) и расход
+     * «в долг» в сделке; файлы чеков тоже. Руководству — уведомление, в Аудите — след.
+     */
+    public function destroy(Request $request, SupplierDebt $debt): RedirectResponse
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403, 'Удалить долг может только администратор.');
+
+        $label = 'Долг «'.$debt->supplier_name.'» '.number_format((float) $debt->amount, 0, '.', ' ').' ₸'
+            .($debt->deal ? ' по сделке '.$debt->deal->number : '')
+            .((float) $debt->paid > 0 ? ' (с погашениями '.number_format((float) $debt->paid, 0, '.', ' ').' ₸)' : '');
+        $files = collect([$debt->document_path])->merge($debt->payments->pluck('receipt_path'))->filter();
+
+        DB::transaction(function () use ($debt) {
+            $debt->payments()->delete();
+            $expense = $debt->expense_id ? \App\Models\Expense::find($debt->expense_id) : null;
+            $debt->delete();
+            $expense?->delete();
+        });
+        $files->each(fn ($p) => Storage::disk('local')->delete($p));
+        \App\Support\ReportCache::bump();
+        \App\Support\FinanceAudit::notifyDeleted($label);
+
+        return back()->with('success', $label.' удалён.');
     }
 
     /** Документ долга (счёт/накладная) или чек погашения — руководству. */
