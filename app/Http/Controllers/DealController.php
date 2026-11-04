@@ -183,7 +183,8 @@ class DealController extends Controller
                 ->with('payments')->latest(),
             'expenses' => fn ($q) => $q->with(['responsible:id,name,avatar', 'material:id,name,unit', 'supplierDebt'])->latest(),
             'documents' => fn ($q) => $q->where('is_active', true)->with('user:id,name')->latest(),
-            'comments' => fn ($q) => $q->with('user:id,name')->latest(),
+            // Комментарии сделки скрыты (решение владельца 04.11.2026) — в страницу
+            // не отдаём вовсе, чтобы их не было видно даже через инструменты браузера.
         ]);
 
         // Сопровождение — живой расчёт; итог в сделке поправляем, если устарел.

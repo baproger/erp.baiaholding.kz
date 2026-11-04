@@ -486,7 +486,10 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                 </div>
                 <div class="max-h-[75vh] overflow-auto p-3 text-center">
                     <img v-if="receiptView?.image" :src="receiptView.url" alt="Чек" class="mx-auto max-w-full rounded" />
-                    <iframe v-else :src="receiptView?.url" class="h-[70vh] w-full rounded border" title="Чек"></iframe>
+                    <!-- PDF — только сам документ, одной колонкой: без миниатюр страниц и панели
+                         инструментов встроенного просмотрщика (Chrome/Edge: toolbar/navpanes,
+                         Firefox: pagemode/zoom). Скачать/распечатать — «Открыть в новой вкладке». -->
+                    <iframe v-else :src="receiptView?.url + '#toolbar=0&navpanes=0&pagemode=none&view=FitH&zoom=page-width'" class="h-[70vh] w-full rounded border" title="Чек"></iframe>
                 </div>
             </div>
         </Modal>

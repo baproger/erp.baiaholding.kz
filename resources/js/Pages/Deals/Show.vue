@@ -25,6 +25,8 @@ import { confirmDialog } from '@/composables/useConfirm';
 const props = defineProps({ deal: Object, stages: Array, users: Array, finance: Object, profit: Object, customFields: Array, history: Array, chatId: Number, can: Object, stageTask: Object, materials: { type: Array, default: () => [] }, balances: { type: Object, default: null }, workshops: { type: Array, default: () => [] }, stageLogs: { type: Array, default: () => [] }, preDeal: { type: Object, default: null }, estimate: { type: Object, default: null }, companyCode: { type: String, default: null } , support: { type: Object, default: null } });
 
 const tab = ref('tasks');
+// Блок «Комментарии» скрыт (04.11.2026) — включить обратно: true.
+const SHOW_COMMENTS = false;
 // Подрядная сделка (30.09.2026): работу делает подрядчик, наш доход — %;
 // производственные этапы пропускаются, бонусов нет, заявка подрядчику — в расходах.
 const isContractor = computed(() => props.deal.kind === 'contractor');
@@ -474,16 +476,17 @@ const confirmStageTask = () => router.patch(route('deals.stageTask', props.deal.
 
 
 
-                <!-- Комментарии -->
-                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <!-- Комментарии — скрыты (решение владельца 04.11.2026); данные в базе
+                     не удалены, вернуть — SHOW_COMMENTS = true и отдать comments в DealController::show -->
+                <div v-if="SHOW_COMMENTS" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
                         <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
                             <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                            Комментарии <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.comments.length }}</span>
+                            Комментарии <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium tabular-nums text-indigo-700">{{ deal.comments?.length ?? 0 }}</span>
                         </h3>
                     </div>
                     <div class="p-6">
-                        <CommentPanel :comments="deal.comments" entity-type="deal" :entity-id="deal.id" />
+                        <CommentPanel :comments="deal.comments ?? []" entity-type="deal" :entity-id="deal.id" />
                     </div>
                 </div>
             </div>
