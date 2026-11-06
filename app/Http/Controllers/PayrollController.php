@@ -21,6 +21,12 @@ class PayrollController extends Controller
         return $request->user()->hasAnyRole(['admin', 'financist']);
     }
 
+    /** Удаление денежных записей — только админ (правило владельца 06.11.2026); бухгалтер вводит и правит. */
+    private function canDelete(Request $request): bool
+    {
+        return $request->user()->hasRole('admin');
+    }
+
     public function index(Request $request, PayrollService $payroll, \App\Services\EmployeeDebtService $debts): Response
     {
         abort_unless($request->user()->can('payroll.view'), 403);
@@ -116,8 +122,11 @@ class PayrollController extends Controller
         $typeRu = ['advance' => 'Аванс из бонуса', 'payout' => 'Выплата бонуса'];
         $payoutRows = PayrollAdjustment::whereIn('type', ['advance', 'payout'])->where('source', 'bonus')
             ->where('user_id', $uid)
-            ->orderByDesc('date')->get(['type', 'amount', 'date', 'note'])
+            ->orderByDesc('date')->get(['id', 'type', 'amount', 'date', 'note'])
             ->map(fn ($a) => [
+                // id/kind — для кнопки удаления в модалке Бонусов (только админ).
+                'id' => $a->id,
+                'kind' => 'adjustment',
                 'label' => $typeRu[$a->type] ?? $a->type,
                 'date' => $a->date->toDateString(),
                 'amount' => (float) $a->amount,
@@ -129,6 +138,7 @@ class PayrollController extends Controller
             ->orderByDesc('employee_debt_payments.month')
             ->get(['employee_debt_payments.amount', 'employee_debt_payments.month', 'employee_debts.note'])
             ->map(fn ($d) => [
+                'kind' => 'debt',
                 'label' => 'Погашение долга из бонуса',
                 'date' => $d->month.'-01',
                 'amount' => (float) $d->amount,
@@ -251,6 +261,7 @@ class PayrollController extends Controller
             'year' => $year,
             'leadership' => $leadership,
             'canManage' => $this->canManage($request),
+            'canDelete' => $this->canDelete($request),
             'totals' => [
                 'year_earned' => (float) $rows->sum('year_earned'),
                 'year_paid' => (float) $rows->sum('year_paid'),
@@ -738,24 +749,20 @@ class PayrollController extends Controller
         return back()->with('success', 'Долг выдан и зафиксирован в Расходах на Финансах.');
     }
 
-    /** Удалить долг: вместе с ним уходит расход (деньги вернулись в кассу). */
+    /** Удалить долг: вместе с ним уходит расход (деньги вернулись в кассу) — см. EmployeeDebt::booted. Только админ. */
     public function destroyDebt(Request $request, \App\Models\EmployeeDebt $debt): RedirectResponse
     {
-        abort_unless($this->canManage($request), 403);
+        abort_unless($this->canDelete($request), 403, 'Удалить долг может только администратор.');
 
-        \App\Models\Expense::find($debt->expense_id)?->delete();
-        $debt->delete(); // погашения уходят каскадом
+        $debt->delete(); // расход и погашения уходят вместе с долгом
 
         return back()->with('success', 'Долг удалён — расход на Финансах убран.');
     }
 
+    /** Удалить корректировку — только админ. Аванс/выплата: расход на Финансах уходит вместе с ней (PayrollAdjustment::booted). */
     public function destroyAdjustment(Request $request, PayrollAdjustment $adjustment): RedirectResponse
     {
-        abort_unless($this->canManage($request), 403);
-        // Аванс: удаляем и его расход на Финансах (деньги вернулись в кассу).
-        if ($adjustment->expense_id) {
-            \App\Models\Expense::find($adjustment->expense_id)?->delete();
-        }
+        abort_unless($this->canDelete($request), 403, 'Удалить корректировку может только администратор.');
         $adjustment->delete();
 
         return back()->with('success', 'Корректировка удалена.');

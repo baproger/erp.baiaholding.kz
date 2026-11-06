@@ -152,9 +152,13 @@ class ExpenseConfirmationTest extends TestCase
         $admin = User::factory()->create();
         $admin->assignRole('admin');
         $admin->companies()->attach($this->deal->company_id);
+        // Удаляет другой админ (только админ и может): сам удаливший уведомление не получает.
+        $actor = User::factory()->create();
+        $actor->assignRole('admin');
+        $actor->companies()->attach($this->deal->company_id);
 
         $expense = $this->createPendingExpense();
-        $this->actingAs($this->financist)->delete(route('expenses.destroy', $expense->id))->assertRedirect();
+        $this->actingAs($actor)->delete(route('expenses.destroy', $expense->id))->assertRedirect();
 
         $data = $admin->notifications()->latest('id')->firstOrFail()->data;
         $this->assertSame('finance_deleted', $data['type']);
@@ -167,6 +171,9 @@ class ExpenseConfirmationTest extends TestCase
         $admin = User::factory()->create();
         $admin->assignRole('admin');
         $admin->companies()->attach($this->deal->company_id);
+        $actor = User::factory()->create();
+        $actor->assignRole('admin');
+        $actor->companies()->attach($this->deal->company_id);
 
         $expense = \App\Models\Expense::create([
             'company_id' => $this->deal->company_id,
@@ -176,17 +183,25 @@ class ExpenseConfirmationTest extends TestCase
             'confirmed_at' => now(),
         ]);
 
-        $this->actingAs($this->financist)->delete(route('expenses.destroy', $expense->id))->assertRedirect();
+        $this->actingAs($actor)->delete(route('expenses.destroy', $expense->id))->assertRedirect();
 
         $data = $admin->notifications()->latest('id')->firstOrFail()->data;
         $this->assertSame(route('finance.index', absolute: false), $data['url']);
     }
 
-    public function test_accountant_deletes_pending_expense(): void
+    public function test_only_admin_deletes_pending_expense(): void
     {
+        // 06.11.2026: удаление — только админ; бухгалтер подтверждает и правит.
         $expense = $this->createPendingExpense();
 
         $this->actingAs($this->financist)
+            ->delete(route('expenses.destroy', $expense->id))->assertForbidden();
+        $this->assertModelExists($expense);
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->deal->company_id);
+        $this->actingAs($admin)
             ->delete(route('expenses.destroy', $expense->id))->assertRedirect();
 
         $this->assertSoftDeleted($expense);
@@ -217,11 +232,18 @@ class ExpenseConfirmationTest extends TestCase
         $this->assertEqualsWithDelta(5000, (float) $expense->fresh()->amount, 0.01);
     }
 
-    public function test_accountant_still_deletes_confirmed_expense(): void
+    public function test_accountant_cannot_delete_confirmed_expense_but_admin_can(): void
     {
         $expense = $this->confirm($this->createPendingExpense());
 
         $this->actingAs($this->financist)
+            ->delete(route('expenses.destroy', $expense->id))->assertForbidden();
+        $this->assertModelExists($expense);
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->deal->company_id);
+        $this->actingAs($admin)
             ->delete(route('expenses.destroy', $expense->id))->assertRedirect();
 
         $this->assertSoftDeleted($expense);

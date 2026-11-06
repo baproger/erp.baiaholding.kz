@@ -24,6 +24,16 @@ class EmployeeDebt extends Model
         'closed_at' => 'datetime',
     ];
 
+    /** Долг выдан из кассы: удалили долг — уходит и расход. Обратная связь — Expense::booted. */
+    protected static function booted(): void
+    {
+        static::deleting(function (EmployeeDebt $d) {
+            if ($d->expense_id) {
+                Expense::find($d->expense_id)?->delete();
+            }
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

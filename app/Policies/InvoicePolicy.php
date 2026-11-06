@@ -11,5 +11,6 @@ class InvoicePolicy
     public function view(User $u, Invoice $i): bool { return $u->can('invoice.view'); }
     public function create(User $u): bool { return $u->can('invoice.create'); }
     public function update(User $u, Invoice $i): bool { return $u->can('invoice.update'); }
-    public function delete(User $u, Invoice $i): bool { return $u->can('invoice.delete'); }
+    /** Удаление счёта (и его платежей) — только админ (06.11.2026); править может менеджер/бухгалтер. */
+    public function delete(User $u, Invoice $i): bool { return $u->hasRole('admin') && $u->can('invoice.delete'); }
 }

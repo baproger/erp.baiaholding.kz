@@ -50,9 +50,10 @@ class DebtController extends Controller
         return back()->with('success', 'Задолженность обновлена.');
     }
 
+    /** Удаление — только админ (06.11.2026); бухгалтер заводит и правит. */
     public function destroy(Request $request, Debt $debt): RedirectResponse
     {
-        abort_unless($this->canManage($request), 403);
+        abort_unless($request->user()->hasRole('admin'), 403, 'Удалить задолженность может только администратор.');
         $this->assertCompany($debt);
 
         $label = ($debt->type === 'payable' ? 'Кредиторская' : 'Дебиторская').' задолженность «'

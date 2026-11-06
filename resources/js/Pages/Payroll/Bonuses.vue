@@ -4,6 +4,7 @@
 // «К выплате» = накопленный баланс за всё время (заработано − выплачено).
 import { ref, computed } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { confirmDialog } from '@/composables/useConfirm';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import Avatar from '@/Components/Avatar.vue';
@@ -13,7 +14,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { money } from '@/utils/format';
 import { useStickyFilters } from '@/composables/useStickyFilters';
 
-const props = defineProps({ rows: Array, year: Number, leadership: Boolean, canManage: Boolean, totals: Object });
+const props = defineProps({ rows: Array, year: Number, leadership: Boolean, canManage: Boolean, canDelete: Boolean, totals: Object });
 
 const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const MONTHS_FULL = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
@@ -45,6 +46,20 @@ const openCarry = async (r) => {
     } finally {
         carryLoading.value = false;
     }
+};
+
+// Удалить выплату из бонуса (только админ): вместе с ней уходит расход в
+// кассе — PayrollAdjustment::booted. После удаления раскладка перечитывается.
+const delPaid = async (pp) => {
+    if (!(await confirmDialog({
+        title: 'Удалить выплату',
+        message: `«${pp.label} ${money(pp.amount)}» от ${pp.date} будет удалена. Расход в кассе тоже исчезнет — деньги вернутся в остаток.`,
+        confirmText: 'Удалить', danger: true,
+    }))) return;
+    router.delete(route('payroll.adjustments.destroy', pp.id), {
+        preserveScroll: true,
+        onSuccess: () => { if (carryFor.value) openCarry(carryFor.value); },
+    });
 };
 
 const search = ref('');
@@ -145,7 +160,8 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                                     :class="isCurrent(c.m) ? 'bg-indigo-50/40' : ''" :title="cellTitle(r, c)">
                                     <template v-if="c.bonus || c.paid">
                                         <div :class="c.bonus > 0 ? 'font-semibold text-emerald-700' : 'text-slate-300'">{{ c.bonus ? short(c.bonus) : '—' }}</div>
-                                        <div v-if="c.paid" class="text-xs text-rose-500">−{{ short(c.paid) }}</div>
+                                        <button v-if="c.paid" type="button" class="block w-full text-right text-xs text-rose-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-rose-700"
+                                            title="Выплачено в этом месяце — нажмите, чтобы увидеть список выплат" @click="openCarry(r)">−{{ short(c.paid) }}</button>
                                     </template>
                                 </td>
                                 <td class="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">{{ money(r.year_earned) }}</td>
@@ -289,6 +305,8 @@ const submitPay = () => payForm.post(route('payroll.adjustments.store'), { prese
                                     <span class="min-w-0 truncate text-slate-600">{{ pp.label }}<span v-if="pp.note" class="ml-1 text-xs text-slate-400">· {{ pp.note }}</span></span>
                                     <span class="flex-shrink-0 text-xs tabular-nums text-slate-400">{{ pp.date }}</span>
                                     <span class="flex-shrink-0 font-semibold tabular-nums text-rose-600">−{{ money(pp.amount) }}</span>
+                                    <!-- Удаление — только админ; погашения долга удаляются вместе с долгом в Зарплате -->
+                                    <button v-if="canDelete && pp.kind === 'adjustment'" class="flex-shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:text-rose-600" title="Удалить выплату (расход в кассе тоже уйдёт)" @click="delPaid(pp)">✕</button>
                                 </div>
                                 <div v-if="!carryData.paid.length" class="px-3 py-4 text-center text-xs text-slate-400">Выплат не было</div>
                             </div>

@@ -322,7 +322,7 @@ const delExpense = async (e) => {
                             <th class="px-4 py-2.5">Откуда поступили</th>
                             <th class="px-4 py-2.5">Комментарий</th>
                             <th class="px-4 py-2.5">Внёс</th>
-                            <th v-if="canManage" class="px-4 py-2.5"></th>
+                            <th v-if="isAdmin" class="px-4 py-2.5"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
@@ -335,7 +335,7 @@ const delExpense = async (e) => {
                             <td class="max-w-56 truncate px-4 py-2.5 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
                             <td class="max-w-56 truncate px-4 py-2.5 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
                             <td class="px-4 py-2.5 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
-                            <td v-if="canManage" class="whitespace-nowrap px-4 py-2.5 text-right">
+                            <td v-if="isAdmin" class="whitespace-nowrap px-4 py-2.5 text-right">
                                 <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
                             </td>
                         </tr>
@@ -377,7 +377,7 @@ const delExpense = async (e) => {
                                         <td class="max-w-56 truncate px-4 py-2.5 font-medium text-slate-800" :title="r.source">{{ r.source }}</td>
                                         <td class="max-w-56 truncate px-4 py-2.5 text-slate-500" :title="r.note">{{ r.note || '—' }}</td>
                                         <td class="px-4 py-2.5 text-xs text-slate-400">{{ r.creator?.name ?? '—' }}</td>
-                                        <td v-if="canManage" class="whitespace-nowrap px-4 py-2.5 text-right">
+                                        <td v-if="isAdmin" class="whitespace-nowrap px-4 py-2.5 text-right">
                                             <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить поступление" @click="delReceipt(r)">✕</button>
                                         </td>
                                     </tr>
@@ -432,7 +432,7 @@ const delExpense = async (e) => {
                                         <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать" @click="openDebt(acc.type, d)">
                                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                         </button>
-                                        <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить (СЕО и директор получат уведомление)" @click="delDebt(d)">
+                                        <button v-if="isAdmin" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить (СЕО и директор получат уведомление)" @click="delDebt(d)">
                                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                                         </button>
                                     </template>
@@ -557,7 +557,7 @@ const delExpense = async (e) => {
                                 <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
                                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                 </button>
-                                <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
+                                <button v-if="isAdmin" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
                                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                                 </button>
                             </td>
@@ -614,7 +614,7 @@ const delExpense = async (e) => {
                                             <button class="rounded p-1 text-slate-300 transition-colors hover:text-indigo-600" title="Редактировать расход" @click="openEditExp(e)">
                                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                                             </button>
-                                            <button class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
+                                            <button v-if="isAdmin" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить расход" @click="delExpense(e)">
                                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                                             </button>
                                         </td>

@@ -20,6 +20,8 @@ const me = computed(() => props.rows[0] ?? null);
 // Шкала бонусов — коммерческая информация: видят только отдел продаж
 // (менеджеры), финансисты и админ; цеху и прочим сотрудникам не показываем.
 const myRoles = usePage().props.auth.user?.roles ?? [];
+// Удаление денежных записей (корректировки, долги) — только админ (06.11.2026).
+const isAdmin = myRoles.includes('admin');
 const seesBonusScale = ['manager', 'financist', 'admin'].some((r) => myRoles.includes(r));
 const BONUS_TIERS = [
     { m: 'до 10%', b: 'бонуса нет', muted: true },
@@ -736,7 +738,7 @@ const delAdj = async (a) => {
                                                             <td class="px-3 py-2 text-right tabular-nums text-emerald-600">{{ money(d.paid) }}</td>
                                                             <td class="px-3 py-2 text-right font-semibold tabular-nums" :class="d.remaining > 0 ? 'text-amber-700' : 'text-slate-300'">{{ money(d.remaining) }}</td>
                                                             <td v-if="canManage" class="px-3 py-2 text-right">
-                                                                <button class="text-slate-300 transition-colors hover:text-rose-600" title="Удалить долг" @click="delDebt(d)">✕</button>
+                                                                <button v-if="isAdmin" class="text-slate-300 transition-colors hover:text-rose-600" title="Удалить долг" @click="delDebt(d)">✕</button>
                                                             </td>
                                                         </tr>
                                                     </tbody>
@@ -780,7 +782,7 @@ const delAdj = async (a) => {
                                                 </div>
                                                 <div class="flex items-center gap-2">
                                                     <span class="font-semibold tabular-nums" :class="a.type === 'bonus' ? 'text-emerald-600' : 'text-rose-600'">{{ a.type === 'bonus' ? '+' : '−' }} {{ money(a.amount) }}</span>
-                                                    <button v-if="canManage" class="text-slate-300 hover:text-rose-600" title="Удалить" @click="delAdj(a)">✕</button>
+                                                    <button v-if="isAdmin" class="text-slate-300 hover:text-rose-600" title="Удалить" @click="delAdj(a)">✕</button>
                                                 </div>
                                             </div>
                                         </div>

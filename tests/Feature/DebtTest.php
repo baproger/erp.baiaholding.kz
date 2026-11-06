@@ -50,6 +50,10 @@ class DebtTest extends TestCase
                 ->where('summary.payables', 250000)
                 ->has('debts.payables', 1)
                 ->has('summary.dealsIncome'));
+
+        // Удаление — только админ (06.11.2026).
+        $this->actingAs($fin)->delete(route('finance.debts.destroy', $debt))->assertForbidden();
+        $this->assertEquals(1, Debt::count());
     }
 
     public function test_manager_cannot_manage_debts(): void
@@ -63,12 +67,13 @@ class DebtTest extends TestCase
 
     public function test_deleting_debt_notifies_ceo_and_director(): void
     {
-        $fin = $this->user('financist');
+        // Удаляет админ (только ему можно); другой админ и директор получают уведомление.
+        $actor = $this->user('admin');
         $ceo = $this->user('admin');
         $director = $this->user('director');
         $debt = Debt::create(['type' => 'receivable', 'counterparty' => 'ИП Клиент', 'amount' => 90000]);
 
-        $this->actingAs($fin)->delete(route('finance.debts.destroy', $debt))->assertRedirect();
+        $this->actingAs($actor)->delete(route('finance.debts.destroy', $debt))->assertRedirect();
 
         $this->assertEquals(0, Debt::count());
         // СЕО и директор получили уведомление об удалении финансовой записи.
@@ -80,10 +85,14 @@ class DebtTest extends TestCase
     public function test_deleting_receipt_notifies_leadership_too(): void
     {
         $fin = $this->user('financist');
+        $actor = $this->user('admin');
         $ceo = $this->user('admin');
         $r = \App\Models\CashReceipt::create(['amount' => 5000, 'method' => 'cash', 'source' => 'Учредитель', 'date' => now()->toDateString()]);
 
-        $this->actingAs($fin)->delete(route('finance.receipts.destroy', $r))->assertRedirect();
+        // Бухгалтер поступление не удаляет — только админ.
+        $this->actingAs($fin)->delete(route('finance.receipts.destroy', $r))->assertForbidden();
+
+        $this->actingAs($actor)->delete(route('finance.receipts.destroy', $r))->assertRedirect();
         $this->assertEquals(1, $ceo->notifications()->count());
     }
 }

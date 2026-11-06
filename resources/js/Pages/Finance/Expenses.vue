@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -17,6 +17,8 @@ const props = defineProps({
     canManage: { type: Boolean, default: false },
 });
 
+// Удалять расходы может только админ (06.11.2026); бухгалтер подтверждает и правит.
+const isAdmin = computed(() => (usePage().props.auth.user?.roles ?? []).includes('admin'));
 const monthSel = ref(props.month);
 const setMonth = () => router.get(route('expenses.board'), { month: monthSel.value || undefined },
     { preserveState: true, preserveScroll: true, replace: true });
@@ -158,7 +160,7 @@ const del = async (e) => {
                                 <button v-else-if="e.can_confirm" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 active:scale-[.98]" @click="openConfirm(e)">
                                     {{ e.type === 'metal' ? '✓ Подтвердить металл' : '✓ Проверил, оплатить' }}
                                 </button>
-                                <button v-if="canManage" class="rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600" @click="del(e)">Удалить</button>
+                                <button v-if="isAdmin" class="rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600" @click="del(e)">Удалить</button>
                             </div>
                         </div>
                     </div>

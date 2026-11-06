@@ -95,9 +95,10 @@ const canConfirm = computed(() => (usePage().props.auth.user?.roles ?? []).some(
 // Завсклад (supplier) подтверждает ТОЛЬКО металл из цеха — правило от 22.09.2026.
 const isSupplier = computed(() => (usePage().props.auth.user?.roles ?? []).includes('supplier'));
 const canConfirmRow = (e) => canConfirm.value || (isSupplier.value && e.type === 'metal');
-// Удалять расходы может только бухгалтер/админ — любые, включая ещё не
-// подтверждённые (та же проверка в ExpensePolicy::delete).
-const canManageExpense = () => canConfirm.value;
+// Удалять счета и расходы может ТОЛЬКО админ (06.11.2026; ExpensePolicy /
+// InvoicePolicy::delete) — менеджер и бухгалтер правят, но не стирают.
+const isAdmin = computed(() => (usePage().props.auth.user?.roles ?? []).includes('admin'));
+const canManageExpense = () => isAdmin.value;
 const confirmFor = ref(null); // id расхода, открытого на подтверждение
 const confirmInput = ref(null);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -248,7 +249,7 @@ const delExpense = async (e) => { if (await confirmDialog({ title: 'Удалит
                         <div class="flex items-center gap-2">
                             <StatusBadge :status="inv.status" />
                             <button class="text-xs font-semibold text-indigo-600 transition-colors duration-150 hover:text-indigo-800" @click="openPay(inv)">Оплата</button>
-                            <button class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="delInvoice(inv)">
+                            <button v-if="isAdmin" class="rounded p-1 text-slate-400 transition-colors duration-150 hover:text-rose-600" title="Удалить" @click="delInvoice(inv)">
                                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>
                             </button>
                         </div>

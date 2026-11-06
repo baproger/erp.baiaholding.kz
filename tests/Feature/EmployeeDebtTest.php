@@ -228,7 +228,15 @@ class EmployeeDebtTest extends TestCase
         $debt = $this->giveDebt(300000, 50000);
         $expenseId = $debt->expense_id;
 
+        // Удаление — только админ (06.11.2026).
         $this->actingAs($this->financist)
+            ->delete(route('payroll.debts.destroy', $debt->id))->assertForbidden();
+        $this->assertNotNull(EmployeeDebt::find($debt->id));
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->company->id);
+        $this->actingAs($admin)
             ->delete(route('payroll.debts.destroy', $debt->id))->assertRedirect();
 
         $this->assertNull(EmployeeDebt::find($debt->id));

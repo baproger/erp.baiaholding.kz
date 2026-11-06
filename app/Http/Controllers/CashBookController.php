@@ -71,6 +71,9 @@ class CashBookController extends Controller
             'expense' => $expense,
             'closing' => round($opening + $income - $expense, 2),
             'operations' => $operations->values(),
+            // Удаление операций прямо из книги — только админ (06.11.2026).
+            // Связанные записи (корректировка ЗП, долг, платежи счёта) уходят сами.
+            'canDelete' => $request->user()->hasRole('admin'),
             // Итог кассы «за всё время» — сверка с плиткой на Финансах.
             'liveBalance' => round(collect($kinds)->sum(
                 fn ($k) => app(\App\Services\FinanceService::class)
@@ -175,6 +178,7 @@ class CashBookController extends Controller
             ->get(['id', 'invoice_id', 'amount', 'payment_date', 'reference', 'note', 'created_at'])
             ->map(fn ($p) => [
                 'id' => 'pay-'.$p->id,
+                'del' => ['route' => 'payments.destroy', 'id' => $p->id],
                 'kind' => 'in',
                 'amount' => (float) $p->amount,
                 'title' => 'Оплата по счёту '.($p->invoice?->number ?? '—'),
@@ -191,6 +195,7 @@ class CashBookController extends Controller
             ->get(['id', 'amount', 'source', 'note', 'date', 'created_at', 'created_by'])
             ->map(fn ($r) => [
                 'id' => 'rec-'.$r->id,
+                'del' => ['route' => 'finance.receipts.destroy', 'id' => $r->id],
                 'resp_uid' => $r->created_by,
                 'kind' => 'in',
                 'amount' => (float) $r->amount,
@@ -209,6 +214,7 @@ class CashBookController extends Controller
                 'employee_id', 'employee_payout', 'date', 'created_at', 'company_id', 'responsible_user_id', 'confirmed_by'])
             ->map(fn ($e) => [
                 'id' => 'exp-'.$e->id,
+                'del' => ['route' => 'expenses.destroy', 'id' => $e->id],
                 // Ответственный: кто подал расход; у выплат — сам сотрудник; иначе кто подтвердил.
                 'resp_uid' => $e->responsible_user_id ?: ($e->employee_id ?: $e->confirmed_by),
                 'kind' => 'out',
@@ -241,6 +247,7 @@ class CashBookController extends Controller
             ->get(['id', 'supplier_debt_id', 'amount', 'note', 'date', 'created_at', 'created_by'])
             ->map(fn ($p) => [
                 'id' => 'sdp-'.$p->id,
+                'del' => ['route' => 'supplierDebts.payments.destroy', 'id' => $p->id],
                 'resp_uid' => $p->created_by,
                 'kind' => 'out',
                 'amount' => (float) $p->amount,

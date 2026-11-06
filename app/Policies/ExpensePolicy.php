@@ -38,8 +38,9 @@ class ExpensePolicy
      */
     public function delete(User $u, Expense $e): Response
     {
-        if (! $u->hasAnyRole(['admin', 'financist'])) {
-            return Response::deny('Удалять расходы может только бухгалтер или админ.');
+        // 06.11.2026: удаление — только админ; бухгалтер и менеджер правят.
+        if (! $u->hasRole('admin')) {
+            return Response::deny('Удалять расходы может только администратор.');
         }
 
         return $u->can('expense.delete') ? Response::allow() : Response::deny();

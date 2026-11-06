@@ -25,6 +25,19 @@ class PayrollAdjustment extends Model
         'date' => 'date',
     ];
 
+    /**
+     * Аванс/выплата — реальные деньги: вместе с корректировкой уходит и её
+     * расход на Финансах (касса возвращается). Обратная связь — в Expense::booted.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (PayrollAdjustment $a) {
+            if ($a->expense_id) {
+                Expense::find($a->expense_id)?->delete();
+            }
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

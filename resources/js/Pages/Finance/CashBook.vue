@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FinanceLayout from '@/Layouts/FinanceLayout.vue';
 import { useStickyFilters } from '@/composables/useStickyFilters';
+import { confirmDialog } from '@/composables/useConfirm';
 import { money } from '@/utils/format';
 
 const props = defineProps({
@@ -15,7 +16,22 @@ const props = defineProps({
     closing: Number,
     operations: { type: Array, default: () => [] },
     liveBalance: Number,
+    canDelete: Boolean,
 });
+
+// Удаление операции прямо из книги — только админ. Касса пересчитается сама,
+// связанные записи (выплата в ЗП/Бонусах, долг сотрудника, долг поставщику)
+// уходят вместе с операцией.
+const delOp = async (op) => {
+    if (!op.del) return;
+    const sign = op.kind === 'in' ? '+ ' : '− ';
+    if (!(await confirmDialog({
+        title: 'Удалить операцию',
+        message: `«${op.title}» ${sign}${money(op.amount)} будет удалена из кассы.` + (op.payout ? ' Запись о выплате в Зарплате/Бонусах тоже исчезнет.' : ''),
+        confirmText: 'Удалить', danger: true,
+    }))) return;
+    router.delete(route(op.del.route, op.del.id), { preserveScroll: true });
+};
 
 // День книги и вид денег (наличные / банк). Запоминаются, как остальные фильтры.
 const day = ref(props.date);
@@ -115,6 +131,7 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
                                 <th class="px-4 py-2.5 font-medium">Операция</th>
                                 <th class="px-4 py-2.5 text-right font-medium">Сумма</th>
                                 <th class="hidden px-4 py-2.5 text-right font-medium sm:table-cell" title="Остаток в кассе после операции">Остаток</th>
+                                <th v-if="canDelete" class="px-3 py-2.5"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
@@ -155,12 +172,15 @@ const time = (iso) => iso ? new Date(iso).toLocaleTimeString('ru-RU', { hour: '2
                                 <td class="hidden whitespace-nowrap px-4 py-2.5 text-right align-top text-xs tabular-nums sm:table-cell"
                                     :class="op.balance < 0 ? 'font-semibold text-rose-600' : 'text-slate-400'"
                                     title="Остаток в кассе после этой операции">{{ money(op.balance) }}</td>
+                                <td v-if="canDelete" class="whitespace-nowrap px-3 py-2.5 text-right align-top">
+                                    <button v-if="op.del" class="rounded p-1 text-slate-300 transition-colors hover:text-rose-600" title="Удалить операцию (только админ)" @click="delOp(op)">✕</button>
+                                </td>
                             </tr>
                         </tbody>
                         <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
                             <tr>
                                 <td class="whitespace-nowrap px-6 py-3 text-slate-500" colspan="4">Итого за день</td>
-                                <td class="px-4 py-3 text-right" colspan="2">
+                                <td class="px-4 py-3 text-right" :colspan="canDelete ? 3 : 2">
                                     <span class="inline-flex flex-wrap items-center justify-end gap-x-4 gap-y-1 tabular-nums">
                                         <span class="whitespace-nowrap text-emerald-600">+ {{ money(income) }}</span>
                                         <span class="whitespace-nowrap text-rose-600">− {{ money(expense) }}</span>

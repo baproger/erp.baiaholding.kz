@@ -17,6 +17,23 @@ class Expense extends Model
     /** Перечисление подрядчику по подрядной сделке (ContractorDealService). */
     public const TYPE_CONTRACTOR = 'contractor';
 
+    /**
+     * Синхронизация с ЗП/Бонусами (06.11.2026): выплата сотруднику существует
+     * в двух местах — расход в кассе и корректировка/долг в ЗП. Удалили расход
+     * с любой страницы (Финансы, Касса, сделка) — исчезает и запись в ЗП, иначе
+     * «выплачено» в Бонусах остаётся, а деньги в кассу уже вернулись.
+     * Удаляем через билдер (без событий): обратный хук в PayrollAdjustment /
+     * EmployeeDebt тоже удаляет расход — модельные события зациклились бы.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Expense $e) {
+            PayrollAdjustment::where('expense_id', $e->id)->delete();
+            // Погашения долга уходят каскадом по FK.
+            EmployeeDebt::where('expense_id', $e->id)->delete();
+        });
+    }
+
     protected $fillable = [
         'expenseable_type', 'expenseable_id', 'company_id', 'category_id', 'material_id', 'qty', 'amount', 'date',
         'responsible_user_id', 'employee_id', 'employee_payout', 'description', 'file_path', 'confirm_file_path', 'type', 'status',

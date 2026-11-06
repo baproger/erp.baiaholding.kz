@@ -50,7 +50,7 @@ class CashReceiptController extends Controller
 
     public function destroy(Request $request, CashReceipt $receipt): RedirectResponse
     {
-        abort_unless($this->canManage($request), 403);
+        abort_unless($request->user()->hasRole('admin'), 403, 'Удалить поступление может только администратор.');
         // Изоляция фирм: поступление чужой компании не удалить по прямой ссылке.
         $companyId = CurrentCompany::id();
         abort_if($companyId && $receipt->company_id && (int) $receipt->company_id !== $companyId, 403);

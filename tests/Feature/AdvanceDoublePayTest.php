@@ -74,7 +74,15 @@ class AdvanceDoublePayTest extends TestCase
         ]);
         $this->assertSame(100000.0, $this->bank());
 
+        // Удаление счёта — только админ (06.11.2026): бухгалтеру 403, касса не трогается.
         $this->actingAs($this->fin)->withSession(['company_id' => $this->baia->id])
+            ->delete(route('invoices.destroy', $inv->id))->assertForbidden();
+        $this->assertSame(100000.0, $this->bank());
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->baia->id);
+        $this->actingAs($admin)->withSession(['company_id' => $this->baia->id])
             ->delete(route('invoices.destroy', $inv->id));
 
         $this->assertSame(0.0, $this->bank(), 'после удаления оплаченного счёта касса должна вернуться');

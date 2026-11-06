@@ -159,6 +159,33 @@ class SupplierDebtController extends Controller
         return back()->with('success', $label.' удалён.');
     }
 
+    /**
+     * Удалить одно погашение (06.11.2026): ошибочная/тестовая выплата из кассы.
+     * Только админ. Долг возвращается в «активен», касса пересчитается сама.
+     */
+    public function destroyPayment(Request $request, SupplierDebtPayment $payment): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin'), 403, 'Удалить погашение может только администратор.');
+
+        $debt = $payment->debt;
+        $label = 'Погашение '.number_format((float) $payment->amount, 0, '.', ' ').' ₸ по долгу «'.($debt?->supplier_name ?? '—').'»';
+        DB::transaction(function () use ($payment, $debt) {
+            $payment->delete();
+            if ($debt) {
+                $paid = round((float) $debt->payments()->sum('amount'), 2);
+                $done = $paid >= (float) $debt->amount - 0.009;
+                $debt->update(['paid' => $paid, 'status' => $done ? 'paid' : 'active', 'paid_at' => $done ? $debt->paid_at : null]);
+            }
+        });
+        if ($payment->receipt_path) {
+            Storage::disk('local')->delete($payment->receipt_path);
+        }
+        \App\Support\ReportCache::bump();
+        \App\Support\FinanceAudit::notifyDeleted($label, $debt?->deal ? \App\Support\FinanceAudit::linkTo($debt->deal) : null);
+
+        return back()->with('success', $label.' удалено.');
+    }
+
     /** Документ долга (счёт/накладная) или чек погашения — руководству. */
     public function file(Request $request, SupplierDebt $debt, ?SupplierDebtPayment $payment = null): StreamedResponse
     {

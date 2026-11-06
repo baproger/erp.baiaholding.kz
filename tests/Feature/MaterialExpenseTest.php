@@ -145,6 +145,10 @@ class MaterialExpenseTest extends TestCase
         $financist = User::factory()->create();
         $financist->assignRole('financist');
         $financist->companies()->attach($this->deal->company_id);
+        // Удаляет админ — только ему можно (06.11.2026).
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $admin->companies()->attach($this->deal->company_id);
 
         // Pending-списание склад не трогало — удаление ничего не возвращает.
         $this->actingAs($this->manager)->post(route('expenses.store'), [
@@ -153,7 +157,7 @@ class MaterialExpenseTest extends TestCase
             'amount' => 10000, 'date' => now()->toDateString(),
         ]);
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
-        $this->actingAs($financist)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
+        $this->actingAs($admin)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
 
         // Подтверждённое списание: склад списан, удаление возвращает остаток.
@@ -163,7 +167,7 @@ class MaterialExpenseTest extends TestCase
             'amount' => 10000, 'date' => now()->toDateString(),
         ]);
         $this->assertEquals(12.0, (float) $this->material->fresh()->quantity);
-        $this->actingAs($financist)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
+        $this->actingAs($admin)->delete(route('expenses.destroy', Expense::first()->id))->assertRedirect();
         $this->assertEquals(20.0, (float) $this->material->fresh()->quantity);
     }
 
